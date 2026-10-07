@@ -11,7 +11,7 @@ export default function Login() {
     e.preventDefault(); setBusy(true); setMsg('')
     const { error } = mode === 'in'
       ? await supabase.auth.signInWithPassword({ email, password: pw })
-      : await supabase.auth.signUp({ email, password: pw })
+      : await supabase.auth.signUp({ email, password: pw, options: { emailRedirectTo: window.location.origin + window.location.pathname } })
     setBusy(false)
     if (error) setMsg(error.message)
     else if (mode === 'up') setMsg('Đã tạo tài khoản. Nếu Supabase bật xác nhận email, hãy mở email để kích hoạt rồi đăng nhập.')
