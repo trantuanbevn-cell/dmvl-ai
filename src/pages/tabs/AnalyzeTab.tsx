@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { aiInfo } from '../../lib/ai'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { analyzeRoom, enrichEntries } from '../../lib/pipeline'
+import { analyzeRoom, applyInference, writeSpecs, fillColors } from '../../lib/pipeline'
 import { roomTypeLabel } from '../../lib/codes'
 import type { ProjectData } from '../../lib/useProject'
 import LogBox, { useLog } from '../../components/LogBox'
@@ -13,7 +13,6 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
   const p = d.project!
   const [lines, setLines] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
-  const [review, setReview] = useState(true)
   const log = useLog(setLines)
   const nav = useNavigate()
   const [info, setInfo] = useState<{ provider: string; model: string } | null>(null)
@@ -28,24 +27,29 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
     for (const id of ids) {
       const room = d.rooms.find(r => r.id === id)!
       log(`▶ ${room.code} ${room.name_vn}`)
-      try { await analyzeRoom(p, room, log, { review }); log(`✓ ${room.code} xong`) } catch (e) { log(`✗ ${room.code}: ${String(e)}`) }
+      try { await analyzeRoom(p, room, log); log(`✓ ${room.code} xong`) } catch (e) { log(`✗ ${room.code}: ${String(e)}`) }
       await d.reload()
     }
-    log('▶ AI viết mô tả kỹ thuật, tính chất theo không gian cho các mã mới...')
-    await enrichEntries(p, log)
     await supabase.from('projects').update({ status: 'analyzed' }).eq('id', p.id)
     log('HOÀN TẤT. Chuyển sang tab "Theo phòng" hoặc "Theo nhóm vật liệu" để rà soát.')
   })
+
+  const reapply = () => run(async () => {
+    for (const r of d.rooms) { const n = await applyInference(p, r); log(`${r.code}: quy tắc suy luận → ${n} hạng mục`) }
+    await fillColors(p)
+    const n = await writeSpecs(p, { force: true })
+    log(`Đã viết lại thông số cho ${n} mã theo mẫu (không dùng AI).`)
+  })
+  const renders = d.pages.filter(pg => pg.kind === 'render' && pg.room_id).length
 
   return (
     <div className="stack">
       <div className="card">
         <div className="row between"><h3>Phân tích bằng AI</h3><span className="pill">{info ? `AI: ${info.provider === 'gemini' ? 'Google Gemini' : 'Anthropic Claude'} · ${info.model}` : 'AI: đang kiểm tra…'}</span></div>
-        <p className="muted">Với mỗi phòng: AI đọc từng ảnh phối cảnh/mặt bằng → bóc tách sàn, tường, trần, đồ liền tường (tách vật liệu cấu thành), đồ rời, đèn, thiết bị, decor, artwork, đầu chờ MEP → gộp với mã đã có → suy luận hạng mục bắt buộc không thể hiện (nền vàng) → <b>soát lại lần 2</b> theo checklist loại phòng → viết thông số kỹ thuật. Mỗi phòng mất vài phút; có thể để chạy và quay lại sau (giữ tab trình duyệt mở).</p>
+        <p className="muted"><b>AI chỉ làm một việc:</b> nhìn từng ảnh phối cảnh và liệt kê vật liệu, đồ đạc kèm khung vị trí (1 lần gọi/ảnh, dùng Gemini Flash – nằm trong hạn mức miễn phí). Phần mềm tự làm phần còn lại, không tốn phí: ghép mã trùng, lấy màu từ điểm ảnh, suy luận hạng mục thiếu theo bộ quy tắc (nắp thăm trần, phụ kiện cửa, len, thoát sàn…), viết thông số – tính chất – tiêu chuẩn theo mẫu. Dự án này cần khoảng <b>{renders} lần gọi AI</b>; giữa các lần có giãn cách vài giây để không vượt giới hạn tốc độ miễn phí.</p>
         <div className="row gap">
           <button className="btn primary" disabled={busy || !d.rooms.length} onClick={() => doRooms(d.rooms.map(r => r.id))}>▶ Phân tích tất cả phòng</button>
-          <button className="btn" disabled={busy} onClick={() => run(() => enrichEntries(p, log))}>Viết thông số cho mã chưa có</button>
-          <label className="row sm-gap"><input type="checkbox" checked={review} onChange={e => setReview(e.target.checked)} /> Soát lại lần 2 (khuyến nghị)</label>
+          <button className="btn" disabled={busy || !d.entries.length} onClick={reapply}>Áp lại quy tắc & viết lại thông số (không AI)</button>
           {busy && <span className="spinner" />}
         </div>
         <LogBox lines={lines} />
@@ -69,7 +73,7 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
               </tr>)
           })}</tbody>
         </table>
-        <p className="muted small">Chạy lại một phòng sẽ xoá kết quả AI cũ của phòng đó (mã đã xác nhận hoặc thêm tay được giữ lại).</p>
+        <p className="muted small">Chạy lại một phòng sẽ gọi lại AI cho các ảnh của phòng đó (mã đã xác nhận hoặc thêm tay được giữ lại). Sửa quy tắc/checklist xong chỉ cần bấm “Áp lại quy tắc” – không tốn lượt AI.</p>
       </div>
     </div>
   )

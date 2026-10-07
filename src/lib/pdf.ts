@@ -31,7 +31,12 @@ export async function renderPdf(file: File, onPage?: (i: number, n: number) => v
     const large = await canvasBlob(canvas, 0.85)
     const thumb = await canvasBlob(downscale(canvas, 900), 0.8)
     let text = ''
-    try { const tc = await page.getTextContent(); text = tc.items.map((it: any) => it.str).join(' ').replace(/\s+/g, ' ').trim() } catch { /* */ }
+    try {
+      // giữ xuống dòng (hasEOL) để tách được tiêu đề trang và ô số liệu
+      const tc = await page.getTextContent()
+      text = tc.items.map((it: any) => (it.str ?? '') + (it.hasEOL ? '\n' : ' ')).join('')
+        .split('\n').map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n')
+    } catch { /* */ }
     out.push({ page_no: i, large, thumb, width: canvas.width, height: canvas.height, text })
     page.cleanup()
   }

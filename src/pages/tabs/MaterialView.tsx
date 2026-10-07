@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { GROUPS } from '../../lib/codes'
-import { suggestProducts } from '../../lib/pipeline'
 import type { ProjectData } from '../../lib/useProject'
 import type { Entry } from '../../lib/types'
 import Crop from '../../components/Crop'
@@ -29,17 +28,6 @@ export default function MaterialView({ d }: { d: ProjectData }) {
   if (filter === 'nocode') list = list.filter(e => !e.product_code)
 
   const quick = async (e: Entry, status: Entry['status'], ev: React.MouseEvent) => { ev.stopPropagation(); await supabase.from('entries').update({ status }).eq('id', e.id); d.reload() }
-  const findAll = async () => {
-    const todo = (cur?.list ?? []).filter(e => !e.product_code && !(e.candidates?.length) && e.status !== 'rejected')
-    if (!todo.length) return alert('Tất cả mã trong nhóm đã có đề xuất hoặc đã chọn mã.')
-    if (!confirm(`AI sẽ tìm trên web cho ${todo.length} mã (mỗi mã ~30–60 giây). Tiếp tục?`)) return
-    for (const [i, e] of todo.entries()) {
-      setBusy(`Đang tìm ${e.code} (${i + 1}/${todo.length})…`)
-      try { await suggestProducts(e) } catch (err) { console.error(err) }
-    }
-    setBusy(''); d.reload()
-  }
-
   if (!groups.length) return <div className="card muted">Chưa có dữ liệu – hãy chạy phân tích ở bước 2.</div>
   return (
     <div className={'mat-layout' + (selEntry ? ' with-panel' : '')}>
@@ -60,7 +48,6 @@ export default function MaterialView({ d }: { d: ProjectData }) {
               <select value={filter} onChange={e => setFilter(e.target.value as any)}>
                 <option value="all">Tất cả</option><option value="pending">Chờ duyệt</option><option value="inferred">Suy luận</option><option value="nocode">Chưa có mã hãng</option>
               </select>
-              <button className="btn sm" disabled={!!busy} onClick={findAll}>🔎 AI tìm mã cho cả nhóm</button>
             </div>
           </div>
           {busy && <div className="note">{busy}</div>}
@@ -78,7 +65,7 @@ export default function MaterialView({ d }: { d: ProjectData }) {
                   <td><b className="code">{e.code}</b></td>
                   <td><b>{e.name_vn}</b><div className="small muted">{e.material_vn}</div></td>
                   <td className="small">{rooms}</td>
-                  <td className="small">{e.brand ? <>{e.brand}<br />{e.product_code}</> : e.candidates?.length ? <span className="note-text">{e.candidates.length} đề xuất – chọn</span> : <span className="muted">—</span>}</td>
+                  <td className="small">{e.brand ? <>{e.brand}<br />{e.product_code}</> : <span className="muted">—</span>}</td>
                   <td><span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></td>
                   <td className="row sm-gap nowrap">
                     <StatusDot s={e.status} />

@@ -1,6 +1,20 @@
 # DMVL AI – Danh mục vật liệu hoàn thiện tự động
 
-Web app nội bộ: tải file concept nội thất (PDF) → AI gom ảnh theo phòng → bóc tách toàn bộ vật liệu trần/tường/sàn, đồ liền tường (kèm vật liệu cấu thành & phụ kiện), đồ rời, đèn, thiết bị, decor, artwork, đầu chờ MEP → suy luận hạng mục bắt buộc không thể hiện → soát lại theo checklist loại phòng → đề xuất mã thực tế (AI tìm trên web hãng) → người dùng rà soát, xác nhận → xuất Excel (VN/EN) và PDF theo nhóm vật liệu.
+Web app nội bộ: tải file concept nội thất (PDF) → bóc tách toàn bộ vật liệu trần/tường/sàn, đồ liền tường (kèm vật liệu cấu thành & phụ kiện), đồ rời, đèn, thiết bị, decor, artwork, đầu chờ MEP → suy luận hạng mục bắt buộc không thể hiện → kiểm tra đủ theo checklist → gợi ý mã từ thư viện công ty → rà soát, xác nhận → xuất Excel (VN/EN) và PDF theo nhóm vật liệu.
+
+## Nguyên tắc chi phí: AI chỉ làm việc phần mềm không tự làm được
+| Việc | Ai làm | Chi phí |
+|---|---|---|
+| Tách trang, đọc tiêu đề, gom phòng, đọc ô số liệu, phát hiện số liệu chép nhầm | Phần mềm (đọc chữ trong PDF) | 0 |
+| **Nhìn ảnh phối cảnh → liệt kê vật liệu/đồ đạc + khung vị trí** | **AI – 1 lần/ảnh** (Gemini 3.8 Flash, có hạn mức miễn phí) | 0 trong hạn mức |
+| Ghép mã trùng giữa các ảnh/phòng | Phần mềm (so khớp từ khóa) + AI gợi ý mã trùng | 0 |
+| Lấy màu chủ đạo | Phần mềm (điểm ảnh) | 0 |
+| Suy luận hạng mục thiếu (nắp thăm trần, phụ kiện cửa, len, thoát sàn…) | Phần mềm (bộ quy tắc `src/lib/infer.ts`) | 0 |
+| Mô tả kỹ thuật, tính chất theo không gian, tiêu chuẩn (VN/EN) | Phần mềm (mẫu `src/lib/specs.ts`) | 0 |
+| Gợi ý mã hãng | Thư viện công ty (xếp theo ΔE màu) + nút tìm nhanh trên web hãng | 0 |
+| Phân loại trang cho PDF scan không có chữ | AI (tùy chọn, bấm tay) | 0 trong hạn mức |
+
+Lưu ý: gói miễn phí của Gemini API cho phép Google dùng dữ liệu gửi lên để cải thiện sản phẩm; gói trả phí thì không.
 
 ## Kiến trúc
 | Thành phần | Công nghệ | Vai trò |
@@ -16,7 +30,7 @@ Web app nội bộ: tải file concept nội thất (PDF) → AI gom ảnh theo 
 1. **Supabase** – chạy `supabase/migrations/0001_init.sql` (SQL Editor) → tạo bảng, RLS, bucket `concept`.
 2. **Edge Function** – deploy `supabase/functions/ai` (CLI: `supabase functions deploy ai`).
 3. **Secrets** (Supabase → Edge Functions → Secrets) – chọn MỘT nhà cung cấp AI, đổi lúc nào cũng được, không cần sửa code:
-   - **Google Gemini:** `GEMINI_API_KEY` (aistudio.google.com/apikey), tuỳ chọn `GEMINI_MODEL` (mặc định `gemini-3.1-pro-preview`, có thể đổi `gemini-3.8-flash` cho rẻ/nhanh hơn)
+   - **Google Gemini:** `GEMINI_API_KEY` (aistudio.google.com/apikey), tuỳ chọn `GEMINI_MODEL` (mặc định `gemini-3.8-flash` – có hạn mức miễn phí; `gemini-3.1-pro-preview` chính xác hơn nhưng phải trả phí), `GEMINI_THINKING` (`low` mặc định)
    - **Anthropic Claude:** `ANTHROPIC_API_KEY` (console.anthropic.com), tuỳ chọn `ANTHROPIC_MODEL` (mặc định `claude-sonnet-5-5`)
    - `AI_PROVIDER` = `gemini` hoặc `anthropic` (bỏ trống: có khoá Claude thì dùng Claude, không thì dùng Gemini)
    - Tab "Phân tích AI" hiển thị nhà cung cấp & model đang dùng.

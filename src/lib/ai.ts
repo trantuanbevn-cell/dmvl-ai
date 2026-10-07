@@ -1,6 +1,6 @@
 import { supabase, FUNCTIONS_URL } from './supabase'
 
-export type AIResult = { tool: Record<string, any> | null; toolName: string | null; text: string; stop_reason: string | null }
+export type AIResult = { tool: Record<string, any> | null; toolName: string | null; text: string; stop_reason: string | null; usage: { input_tokens?: number; output_tokens?: number } | null }
 
 /**
  * Gọi Edge Function "ai" và đọc luồng SSE của Claude.
@@ -31,6 +31,7 @@ export async function callAI(task: string, payload: unknown, onProgress?: (chars
   let lastTool: { name: string; input: any } | null = null
   let text = ''
   let errMsg: string | null = null
+  let usage: { input_tokens?: number; output_tokens?: number } | null = null
 
   const handle = (ev: any) => {
     switch (ev.type) {
@@ -52,8 +53,12 @@ export async function callAI(task: string, payload: unknown, onProgress?: (chars
         if (b.type === 'text') text += b.text
         break
       }
+      case 'message_start':
+        if (ev.message?.usage) usage = { ...(usage ?? {}), ...ev.message.usage }
+        break
       case 'message_delta':
         if (ev.delta?.stop_reason) stop = ev.delta.stop_reason
+        if (ev.usage) usage = { ...(usage ?? {}), ...ev.usage }
         break
       case 'error':
         errMsg = ev.error?.message ?? 'AI stream error'
@@ -78,7 +83,7 @@ export async function callAI(task: string, payload: unknown, onProgress?: (chars
   if (errMsg) throw new Error(errMsg)
   if (stop === 'max_tokens') console.warn('AI output truncated (max_tokens) for', task)
   const lt = lastTool as { name: string; input: any } | null
-  return { tool: lt?.input ?? null, toolName: lt?.name ?? null, text, stop_reason: stop }
+  return { tool: lt?.input ?? null, toolName: lt?.name ?? null, text, stop_reason: stop, usage }
 }
 
 /** Nhà cung cấp AI đang dùng (đổi bằng Secrets AI_PROVIDER trong Supabase) */

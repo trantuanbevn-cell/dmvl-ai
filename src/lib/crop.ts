@@ -36,3 +36,17 @@ export function swatchBase64(hex: string, w = 120, h = 90): string {
   const g = c.getContext('2d')!; g.fillStyle = /^#[0-9a-f]{6}$/i.test(hex) ? hex : '#cccccc'; g.fillRect(0, 0, w, h)
   return c.toDataURL('image/png').split(',')[1]
 }
+
+/** Màu chủ đạo của vùng bbox (lấy trung vị phần lõi 50% để tránh viền) – thay cho việc hỏi AI */
+export async function sampleColor(url: string, bbox: number[]): Promise<string | null> {
+  try {
+    const c = await cropCanvas(url, bbox, 120)
+    const g = c.getContext('2d')!
+    const x0 = Math.floor(c.width / 4), y0 = Math.floor(c.height / 4), w = Math.max(1, Math.floor(c.width / 2)), h = Math.max(1, Math.floor(c.height / 2))
+    const d = g.getImageData(x0, y0, w, h).data
+    const R: number[] = [], G: number[] = [], B: number[] = []
+    for (let i = 0; i < d.length; i += 4) { R.push(d[i]); G.push(d[i + 1]); B.push(d[i + 2]) }
+    const med = (a: number[]) => { a.sort((p, q) => p - q); return a[Math.floor(a.length / 2)] }
+    return '#' + [med(R), med(G), med(B)].map(v => v.toString(16).padStart(2, '0')).join('')
+  } catch { return null }
+}

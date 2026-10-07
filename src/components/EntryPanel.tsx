@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { GROUPS, CATEGORIES } from '../lib/codes'
-import { suggestProducts, chooseCandidate, enrichEntries } from '../lib/pipeline'
-import type { Entry, Candidate } from '../lib/types'
+import { writeSpecs, applyProduct } from '../lib/pipeline'
+import { librarySuggestions, saveToLibrary, searchLinks, LibProduct } from '../lib/library'
+import type { Entry } from '../lib/types'
 import type { ProjectData } from '../lib/useProject'
 import Crop from './Crop'
 
@@ -36,13 +37,11 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
   const children = d.entries.filter(x => x.parent_id === entry.id)
   const parent = d.entries.find(x => x.id === entry.parent_id)
 
-  const find = async () => {
-    setBusy('search')
-    try { await suggestProducts(entry); await d.reload() } catch (e) { alert(String(e)) }
-    setBusy('')
-  }
-  const choose = async (c: Candidate) => { await chooseCandidate(entry, c); d.reload() }
-  const rewrite = async () => { setBusy('enrich'); try { await enrichEntries(d.project!, () => {}, [entry.id]); await d.reload() } catch (e) { alert(String(e)) } setBusy('') }
+  const [lib, setLib] = useState<(LibProduct & { dE: number | null })[]>([])
+  useEffect(() => { librarySuggestions(entry).then(setLib) }, [entry.id, entry.color_hex, entry.group_code])
+  const choose = async (c: LibProduct) => { await applyProduct(entry, c); d.reload() }
+  const save = async () => { try { await saveToLibrary(entry); setLib(await librarySuggestions(entry)); alert('Đã lưu vào thư viện công ty – lần sau sẽ được gợi ý tự động.') } catch (e) { alert(String(e)) } }
+  const rewrite = async () => { setBusy('enrich'); try { await writeSpecs(d.project!, { ids: [entry.id] }); await d.reload() } catch (e) { alert(String(e)) } setBusy('') }
   const del = async () => { if (confirm(`Xoá mã ${entry.code}?`)) { await supabase.from('entries').delete().eq('id', entry.id); onClose(); d.reload() } }
   const renameCode = async (code: string) => {
     if (!code || code === entry.code) return
@@ -106,7 +105,7 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
         {parent && <>Thuộc: <b>{parent.code}</b> {parent.name_vn}. </>}
         {children.length > 0 && <>Thành phần: {children.map(c => c.code).join(', ')}</>}
       </div>}
-      <button className="btn sm" disabled={!!busy} onClick={rewrite}>{busy === 'enrich' ? 'AI đang viết…' : '↻ AI viết lại thông số'}</button>
+      <button className="btn sm" disabled={!!busy} onClick={rewrite}>{busy === 'enrich' ? 'Đang viết…' : '↻ Viết lại thông số theo mẫu'}</button>
 
       <h4>Mã thực tế</h4>
       <div className="grid2">
@@ -118,19 +117,19 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
       <Field e={entry} k="product_url" label="Link hãng" onSaved={saved} />
       <Field e={entry} k="product_image_url" label="Link ảnh map (ảnh mẫu hãng)" onSaved={saved} />
       {entry.product_url && <a className="small" href={entry.product_url} target="_blank" rel="noreferrer">Mở trang hãng ↗</a>}
-      <button className="btn primary sm" disabled={!!busy} onClick={find}>{busy === 'search' ? 'AI đang tìm trên web hãng…' : '🔎 AI tìm 3 mã thực tế gần nhất'}</button>
-      {entry.candidates?.length > 0 && <div className="cands">
-        {entry.candidates.map((c, i) => (
-          <div key={i} className={'cand' + (entry.product_code === c.product_code && entry.brand === c.brand ? ' chosen' : '')}>
-            {c.image_url && <img src={c.image_url} alt="" referrerPolicy="no-referrer" onError={e => ((e.target as HTMLImageElement).style.display = 'none')} />}
-            <div>
-              <b>{c.brand} · {c.product_code}</b> {c.product_name}<br />
-              <span className="small">{c.reason_vn}</span><br />
-              <a className="small" href={c.url} target="_blank" rel="noreferrer">{c.url}</a>
-            </div>
+      <div className="row gap sm-gap">
+        <button className="btn sm" onClick={save} disabled={!entry.brand || !entry.product_code}>💾 Lưu mã này vào thư viện</button>
+      </div>
+      <div className="small muted">Tìm nhanh trên web hãng (mở tab mới, miễn phí):</div>
+      <div className="row gap sm-gap">{searchLinks(entry).map(l => <a key={l.label} className="btn ghost sm" href={l.url} target="_blank" rel="noreferrer">🔎 {l.label}</a>)}</div>
+      {lib.length > 0 && <div className="cands">
+        <div className="small muted">Gợi ý từ thư viện công ty (xếp theo độ gần màu & từ khóa):</div>
+        {lib.map(c => (
+          <div key={c.id} className={'cand' + (entry.product_code === c.product_code && entry.brand === c.brand ? ' chosen' : '')}>
+            {c.color_hex ? <span className="swatch sm" style={{ background: c.color_hex, height: 40 }} /> : <span />}
+            <div><b>{c.brand} · {c.product_code}</b> {c.product_name}{c.dE != null && <span className="small muted"> · ΔE {c.dE.toFixed(0)}</span>}<br />{c.url && <a className="small" href={c.url} target="_blank" rel="noreferrer">{c.url}</a>}</div>
             <button className="btn sm" onClick={() => choose(c)}>Chọn</button>
           </div>))}
-        <p className="small muted">Đề xuất do AI tìm trên web – hãy mở link kiểm tra trước khi chọn. Mã đã chọn được lưu vào thư viện để gợi ý cho dự án sau.</p>
       </div>}
 
       <h4>Số lượng</h4>

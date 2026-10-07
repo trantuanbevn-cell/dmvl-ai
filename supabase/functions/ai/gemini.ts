@@ -36,7 +36,7 @@ export async function toGemini(a: any) {
     systemInstruction: { parts: [{ text: a.system }] },
     contents: [{ role: 'user', parts }],
     tools,
-    generationConfig: { maxOutputTokens: Math.max(a.max_tokens ?? 8000, 8000) + 16000 },
+    generationConfig: { maxOutputTokens: Math.max(a.max_tokens ?? 8000, 8000) + 8000 } as any,
   }
   if (fns.length) {
     body.toolConfig = a.tool_choice?.type === 'tool' && !wantsSearch
@@ -57,11 +57,20 @@ function jsonFromText(t: string): any | null {
 export async function callGemini(anthropicReq: any, key: string, model: string): Promise<Response> {
   const body = await toGemini(anthropicReq)
   const fallbackTool = anthropicReq.tool_choice?.name ?? (anthropicReq.tools ?? []).find((t: any) => t.input_schema)?.name ?? 'result'
-  const r = await fetch(`${GEMINI_BASE}/v1beta/models/${model}:streamGenerateContent?alt=sse`, {
+  // Gemini 3: giảm mức "suy nghĩ" để bớt token đầu ra (tiết kiệm hạn mức); nếu model không hỗ trợ thì gửi lại không có tham số này
+  const thinking = (Deno.env.get('GEMINI_THINKING') ?? 'low').toLowerCase()
+  if (thinking !== 'default' && /gemini-3/.test(model)) body.generationConfig.thinkingConfig = { thinkingLevel: thinking }
+  const send = () => fetch(`${GEMINI_BASE}/v1beta/models/${model}:streamGenerateContent?alt=sse`, {
     method: 'POST',
     headers: { 'x-goog-api-key': key, 'content-type': 'application/json' },
     body: JSON.stringify(body),
   })
+  let r = await send()
+  if (r.status === 400 && body.generationConfig.thinkingConfig) {
+    const t = await r.text()
+    if (/thinking/i.test(t)) { delete body.generationConfig.thinkingConfig; r = await send() }
+    else throw new Error(`Gemini API 400: ${t.slice(0, 1500)}`)
+  }
   if (!r.ok || !r.body) {
     const t = await r.text()
     throw new Error(`Gemini API ${r.status}: ${t.slice(0, 1500)}`)
@@ -75,6 +84,7 @@ export async function callGemini(anthropicReq: any, key: string, model: string):
   let text = ''
   let toolEmitted = false
   let stop = 'end_turn'
+  let usage: any = null
 
   const stream = new ReadableStream({
     async start(ctrl) {
@@ -102,6 +112,7 @@ export async function callGemini(anthropicReq: any, key: string, model: string):
             let chunk: any
             try { chunk = JSON.parse(line.slice(5).trim()) } catch { continue }
             if (chunk.error) { ev({ type: 'error', error: { message: `Gemini: ${chunk.error.message ?? JSON.stringify(chunk.error)}` } }); continue }
+            if (chunk.usageMetadata) usage = chunk.usageMetadata
             const cand = chunk.candidates?.[0]
             for (const part of cand?.content?.parts ?? []) {
               if (part.thought) continue
@@ -120,7 +131,7 @@ export async function callGemini(anthropicReq: any, key: string, model: string):
         closeText()
         // Model trả JSON bằng chữ → chuyển thành kết quả công cụ
         if (!toolEmitted && text) { const j = jsonFromText(text); if (j) emitTool(fallbackTool, j) }
-        ev({ type: 'message_delta', delta: { stop_reason: toolEmitted ? 'tool_use' : stop } })
+        ev({ type: 'message_delta', delta: { stop_reason: toolEmitted ? 'tool_use' : stop }, usage: usage ? { input_tokens: usage.promptTokenCount, output_tokens: (usage.candidatesTokenCount ?? 0) + (usage.thoughtsTokenCount ?? 0) } : undefined })
         ev({ type: 'message_stop' })
       } catch (e) {
         ev({ type: 'error', error: { message: String(e) } })

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { uploadPdf, classifyPages } from '../../lib/pipeline'
+import { uploadPdf, classifyPages, classifyLocalPages } from '../../lib/pipeline'
 import { ROOM_TYPES } from '../../lib/codes'
 import type { ProjectData } from '../../lib/useProject'
 import LogBox, { useLog } from '../../components/LogBox'
@@ -23,7 +23,7 @@ export default function UploadTab({ d }: { d: ProjectData }) {
   const onFile = (f?: File) => {
     if (!f) return
     if (d.pages.length && !confirm('Tải file mới sẽ xoá toàn bộ trang, phòng và kết quả phân tích hiện có. Tiếp tục?')) return
-    run(async () => { await uploadPdf(p, f, log); await d.reload(); log('Bắt đầu AI phân loại trang...'); await classifyPages(p, log) })
+    run(async () => { await uploadPdf(p, f, log); await d.reload(); log('Phân loại trang & gom phòng theo tiêu đề trang (không dùng AI)...'); await classifyLocalPages(p, log) })
   }
   const setPage = async (id: string, patch: Record<string, unknown>) => { await supabase.from('pages').update(patch).eq('id', id); d.reload() }
   const setRoom = async (id: string, patch: Record<string, unknown>) => { await supabase.from('rooms').update(patch).eq('id', id); d.reload() }
@@ -37,10 +37,11 @@ export default function UploadTab({ d }: { d: ProjectData }) {
     <div className="stack">
       <div className="card">
         <h3>File concept (PDF)</h3>
-        <p className="muted">Phần mềm tách từng trang thành ảnh ngay trong trình duyệt, lưu lên Supabase, rồi AI phân loại trang (bìa / moodboard / mặt bằng / phối cảnh) và gom theo phòng dựa vào tiêu đề trang. Phòng không có trong concept sẽ không được tạo.</p>
+        <p className="muted">Phần mềm tách từng trang thành ảnh ngay trong trình duyệt, đọc tiêu đề trang (vd “INTERIOR CONCEPT | LOCKER ROOM”) để phân loại bìa / moodboard / mặt bằng / phối cảnh và gom theo phòng, đọc luôn ô số liệu (số ghế, bàn, locker…) – <b>không dùng AI, không tốn phí</b>. Phòng không có trong concept sẽ không được tạo. Nếu PDF là ảnh scan không có chữ, dùng nút “AI phân loại”.</p>
         <div className="row gap">
           <label className="btn primary">{d.pages.length ? 'Tải file khác' : 'Chọn file PDF'}<input type="file" accept="application/pdf" hidden disabled={busy} onChange={e => onFile(e.target.files?.[0])} /></label>
-          {d.pages.length > 0 && <button className="btn" disabled={busy} onClick={() => run(() => classifyPages(p, log))}>AI phân loại & gom phòng lại</button>}
+          {d.pages.length > 0 && <button className="btn" disabled={busy} onClick={() => run(() => classifyLocalPages(p, log))}>Phân loại lại (không AI)</button>}
+          {d.pages.length > 0 && <button className="btn ghost" disabled={busy} title="Chỉ cần cho PDF scan không có chữ – dùng hạn mức AI" onClick={() => run(() => classifyPages(p, log))}>AI phân loại (PDF scan)</button>}
           {d.rooms.length > 0 && <button className="btn" onClick={() => nav(`/p/${p.id}/analyze`)}>Tiếp: Phân tích →</button>}
           {busy && <span className="spinner" />}
         </div>
@@ -58,7 +59,7 @@ export default function UploadTab({ d }: { d: ProjectData }) {
                 <td><input defaultValue={r.name_vn} onBlur={e => e.target.value !== r.name_vn && setRoom(r.id, { name_vn: e.target.value })} /></td>
                 <td><input defaultValue={r.name_en ?? ''} onBlur={e => setRoom(r.id, { name_en: e.target.value })} /></td>
                 <td><select value={r.room_type} onChange={e => setRoom(r.id, { room_type: e.target.value })}>{ROOM_TYPES.map(t => <option key={t.key} value={t.key}>{t.vn}</option>)}</select></td>
-                <td className="small">{(r.concept_counts ?? []).map(c => `${c.label}: ${c.qty}`).join(' · ')}</td>
+                <td className="small">{(r.concept_counts ?? []).map(c => `${c.label}: ${c.qty}`).join(' · ')}{d.warnings.filter(w => w.room_id === r.id).map(w => <div key={w.id} className="warn-text">⚠ {w.text}</div>)}</td>
                 <td>{d.pages.filter(pg => pg.room_id === r.id).length}</td>
                 <td><button className="btn ghost sm danger" onClick={() => delRoom(r.id)}>Xoá</button></td>
               </tr>))}

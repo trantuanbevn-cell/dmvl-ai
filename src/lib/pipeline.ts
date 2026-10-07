@@ -1,10 +1,12 @@
 import { supabase, BUCKET, signedUrl, signedUrls } from './supabase'
 import { renderPdf } from './pdf'
 import { callAI } from './ai'
-import { cropBase64 } from './crop'
+import { sampleColor } from './crop'
 import { GROUPS, CATEGORIES } from './codes'
-import { loadSettings } from './settings'
-import type { Project, Room, Page, Entry, Occurrence, Candidate } from './types'
+import { classifyLocal, norm as normT } from './classify'
+import { inferForRoom } from './infer'
+import { specPatch } from './specs'
+import type { Project, Room, Page, Entry, Occurrence } from './types'
 
 type Log = (msg: string) => void
 const GROUP_SET = new Set(GROUPS.map(g => g.code))
@@ -39,7 +41,51 @@ export async function uploadPdf(project: Project, file: File, log: Log) {
   log(`Xong: ${pages.length} trang.`)
 }
 
-// ---------------------------------------------------------------- 2. Phân loại trang + gom phòng
+// ---------------------------------------------------------------- 2a. Phân loại trang + gom phòng KHÔNG dùng AI
+const titleCase = (s: string) => s.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase())
+export async function classifyLocalPages(project: Project, log: Log) {
+  const pages = await must(supabase.from('pages').select('*').eq('project_id', project.id).order('page_no')) as Page[]
+  const res = classifyLocal(pages.map(p => ({ page_no: p.page_no, text: p.page_text })))
+  await must(supabase.from('warnings').delete().eq('project_id', project.id))
+  await must(supabase.from('rooms').delete().eq('project_id', project.id))
+  const rooms = new Map<string, { room: Room; counts: any[]; mismatch: Set<string>; pages: number[] }>()
+  let n = 0
+  for (const r of res) {
+    if (!r.room_key) continue
+    let x = rooms.get(r.room_key)
+    if (!x) {
+      n++
+      const room = await must(supabase.from('rooms').insert({
+        project_id: project.id, code: `R${pad(n)}`, name_vn: r.room_name_vn ?? r.room_title, name_en: titleCase(r.room_title ?? ''), room_type: r.room_type, sort: n,
+      }).select().single()) as Room
+      x = { room, counts: [], mismatch: new Set(), pages: [] }
+      rooms.set(r.room_key, x)
+    }
+    x.pages.push(r.page_no)
+    if (r.box_title && normT(r.box_title) !== r.room_key) x.mismatch.add(r.box_title)
+    else if (!x.counts.length && r.counts.length) x.counts = r.counts
+  }
+  // Số liệu giống hệt phòng khác → nghi chép nhầm
+  const list = [...rooms.values()]
+  for (const x of list) {
+    const warn: string[] = []
+    if (x.mismatch.size) warn.push(`Ô số liệu trên trang ghi tên "${[...x.mismatch].join(', ')}" – khác tiêu đề phòng, có thể bị chép nhầm từ phòng khác. Không dùng số liệu này để đếm.`)
+    const dup = x.counts.length ? list.find(y => y !== x && y.counts.length && JSON.stringify(y.counts.map(c => [c.label, c.qty])) === JSON.stringify(x.counts.map(c => [c.label, c.qty]))) : undefined
+    if (dup && list.indexOf(dup) < list.indexOf(x)) warn.push(`Số liệu trùng hoàn toàn với ${dup.room.code} ${dup.room.name_vn} – nghi chép nhầm, đã bỏ qua.`)
+    const counts = warn.length ? [] : x.counts
+    await must(supabase.from('rooms').update({ concept_counts: counts }).eq('id', x.room.id))
+    for (const w of warn) await must(supabase.from('warnings').insert({ project_id: project.id, room_id: x.room.id, text: w }))
+  }
+  for (const r of res) {
+    const page = pages.find(p => p.page_no === r.page_no)!
+    await must(supabase.from('pages').update({ kind: r.kind, room_id: r.room_key ? rooms.get(r.room_key)!.room.id : null }).eq('id', page.id))
+  }
+  await must(supabase.from('projects').update({ status: 'classified' }).eq('id', project.id))
+  const unknown = res.filter(r => r.kind === 'unknown').length
+  log(`Xong (không dùng AI): ${rooms.size} phòng, ${res.filter(r => r.kind === 'render').length} trang phối cảnh, ${res.filter(r => r.kind === 'plan').length} mặt bằng.` + (unknown ? ` ${unknown} trang không có chữ – hãy gán tay hoặc dùng "AI phân loại".` : ''))
+}
+
+// ---------------------------------------------------------------- 2b. Phân loại bằng AI (chỉ dùng cho PDF scan không có chữ)
 export async function classifyPages(project: Project, log: Log) {
   const pages = await must(supabase.from('pages').select('*').eq('project_id', project.id).order('page_no')) as Page[]
   const urls = await signedUrls(pages.map(p => p.thumb_path ?? p.image_path))
@@ -87,10 +133,11 @@ export async function classifyPages(project: Project, log: Log) {
 }
 
 // ---------------------------------------------------------------- 3. Phân tích phòng
+// AI CHỈ làm 1 việc: nhìn từng ảnh phối cảnh và liệt kê vật liệu/đồ đạc + khung vị trí.
+// Màu, suy luận hạng mục thiếu, thông số kỹ thuật, tính chất, tiêu chuẩn: phần mềm tự làm.
 type AIItem = {
   ref: string; parent_ref?: string; match_code?: string; group_code: string; category: string; name_vn: string; name_en?: string
-  part_vn?: string; part_en?: string; material_vn: string; material_en?: string; color_hex?: string; bbox?: number[]; page_no?: number
-  qty?: number; unit?: string; qty_basis?: string; source: 'image' | 'inferred'; reason?: string; confidence: number
+  part_vn?: string; material_vn: string; material_en?: string; bbox?: number[]; qty?: number; unit?: string; qty_basis?: string; confidence?: number
 }
 
 class CodeBook {
@@ -105,14 +152,22 @@ class CodeBook {
   next(group: string) { const n = (this.max.get(group) ?? 0) + 1; this.max.set(group, n); return `${group}-${pad(n)}` }
 }
 
-function qtyFlag(it: AIItem): { flag: string; note: string } {
+function qtyFlag(it: { qty?: number; qty_basis?: string; unit?: string }): { flag: string; note: string } {
   if (it.qty != null && (it.qty_basis === 'concept_text' || it.qty_basis === 'counted_plan')) return { flag: 'ok', note: it.qty_basis === 'concept_text' ? 'Theo số liệu concept' : 'Đếm trên mặt bằng' }
   if (it.qty != null && it.qty_basis === 'counted_render') return { flag: 'warn', note: 'Đếm trên phối cảnh – cần kiểm tra' }
   if ((it.unit ?? '').includes('m')) return { flag: 'warn', note: 'Đo trên mặt bằng / mặt đứng' }
   return { flag: 'warn', note: 'Chưa xác định – nhập tay' }
 }
 
-async function applyItems(project: Project, room: Room, items: AIItem[], pageByNo: Map<number, Page>, defaultPage: Page | null, book: CodeBook, log: Log) {
+/** Ghép trùng không cần AI: cùng nhóm + tên/vật liệu gần giống */
+function similar(a: string, b: string) {
+  const A = new Set(normT(a).split(' ').filter(w => w.length > 1)), B = new Set(normT(b).split(' ').filter(w => w.length > 1))
+  if (!A.size || !B.size) return 0
+  let k = 0; A.forEach(w => { if (B.has(w)) k++ })
+  return k / Math.min(A.size, B.size)
+}
+
+async function applyItems(project: Project, room: Room, items: AIItem[], page: Page, book: CodeBook, log: Log) {
   const refToEntry = new Map<string, Entry>()
   const ordered = [...items.filter(i => !i.parent_ref), ...items.filter(i => i.parent_ref)]
   let created = 0, linked = 0
@@ -120,38 +175,33 @@ async function applyItems(project: Project, room: Room, items: AIItem[], pageByN
     const group = GROUP_SET.has(it.group_code) ? it.group_code : 'DC'
     const category = CAT_SET.has(it.category) ? it.category : 'decor'
     let entry = it.match_code ? book.byCode.get(it.match_code.trim()) : undefined
+    if (!entry) {
+      // tự ghép với mã đã có nếu cùng nhóm và mô tả gần như trùng
+      for (const e of book.byCode.values()) if (e.group_code === group && similar(`${e.name_vn} ${e.material_vn ?? ''}`, `${it.name_vn} ${it.material_vn}`) >= 0.8) { entry = e; break }
+    }
     const q = qtyFlag(it)
     if (!entry) {
-      const code = book.next(group)
       entry = await must(supabase.from('entries').insert({
-        project_id: project.id, code, group_code: group, category,
-        name_vn: it.name_vn, name_en: it.name_en ?? null, part_vn: it.part_vn ?? null, part_en: it.part_en ?? null,
+        project_id: project.id, code: book.next(group), group_code: group, category,
+        name_vn: it.name_vn, name_en: it.name_en ?? null, part_vn: it.part_vn ?? null,
         material_vn: it.material_vn ?? null, material_en: it.material_en ?? null,
-        color_hex: /^#[0-9a-f]{6}$/i.test(it.color_hex ?? '') ? it.color_hex : null,
-        qty: it.qty ?? null, unit: it.unit ?? null, qty_flag: q.flag, qty_note: q.note,
-        source: it.source === 'inferred' ? 'inferred' : 'image', status: 'pending',
-        note_vn: it.source === 'inferred' && it.reason ? `SUY LUẬN: ${it.reason}` : null,
+        qty: it.qty ?? null, unit: it.unit ?? null, qty_flag: q.flag, qty_note: q.note, source: 'image', status: 'pending',
         sort: book.max.get(group) ?? 0,
       }).select().single()) as Entry
       book.add(entry); created++
     } else {
       linked++
-      // cộng dồn số lượng khi có ở nhiều phòng
-      if (it.qty != null) {
-        const newQty = (entry.qty ?? 0) + it.qty
-        const flag = entry.qty_flag === 'ok' && q.flag === 'ok' ? 'ok' : 'warn'
-        await must(supabase.from('entries').update({ qty: newQty, qty_flag: flag }).eq('id', entry.id))
-        entry.qty = newQty; entry.qty_flag = flag
+      if (it.qty != null && it.qty_basis === 'concept_text' && entry.qty == null) {
+        await must(supabase.from('entries').update({ qty: it.qty, qty_flag: q.flag, qty_note: q.note }).eq('id', entry.id))
+        entry.qty = it.qty
       }
     }
     refToEntry.set(it.ref, entry)
-    const page = (it.page_no != null ? pageByNo.get(it.page_no) : undefined) ?? defaultPage
+    const ok = Array.isArray(it.bbox) && it.bbox.length === 4
     await must(supabase.from('occurrences').insert({
-      entry_id: entry.id, room_id: room.id, page_id: it.bbox?.length === 4 ? page?.id ?? null : null, category,
-      bbox: it.bbox?.length === 4 ? it.bbox : null, qty: it.qty ?? null, confidence: it.confidence ?? null,
-      note: it.source === 'inferred' ? it.reason ?? 'Suy luận' : null,
+      entry_id: entry.id, room_id: room.id, page_id: ok ? page.id : null, category,
+      bbox: ok ? it.bbox : null, qty: it.qty ?? null, confidence: it.confidence ?? null,
     }))
-    // Gắn vật liệu cấu thành vào đồ chứa nó
     if (it.parent_ref) {
       const parent = refToEntry.get(it.parent_ref)
       if (parent && parent.id !== entry.id) {
@@ -167,64 +217,57 @@ async function applyItems(project: Project, room: Room, items: AIItem[], pageByN
   log(`    +${created} mã mới, ${linked} lần gắn vào mã đã có`)
 }
 
-export async function analyzeRoom(project: Project, room: Room, log: Log, opts: { review?: boolean } = { review: true }) {
-  const settings = await loadSettings()
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+/** Gọi AI có giãn cách + tự thử lại khi chạm hạn mức miễn phí (429) */
+async function callAIPaced(task: string, payload: unknown, log: Log) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const r = await callAI(task, payload)
+      if (r.usage) log(`    (token: vào ${r.usage.input_tokens ?? '?'}, ra ${r.usage.output_tokens ?? '?'})`)
+      return r
+    } catch (e) {
+      const msg = String(e)
+      if (attempt < 4 && /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE|overloaded/i.test(msg)) {
+        const wait = 20 * attempt
+        log(`    Chạm giới hạn tốc độ miễn phí – chờ ${wait}s rồi thử lại (${attempt}/3)...`)
+        await sleep(wait * 1000)
+        continue
+      }
+      throw e
+    }
+  }
+}
+
+export async function analyzeRoom(project: Project, room: Room, log: Log) {
   await must(supabase.from('rooms').update({ analysis_status: 'running' }).eq('id', room.id))
   try {
-    const pages = (await must(supabase.from('pages').select('*').eq('room_id', room.id).order('page_no')) as Page[])
-      .filter(p => p.kind === 'render' || p.kind === 'plan')
-    if (!pages.length) throw new Error('Phòng chưa có trang phối cảnh/mặt bằng nào')
-    const pageByNo = new Map(pages.map(p => [p.page_no, p]))
-    const rulesTxt = settings.rules.map(r => `- Khi: ${r.trigger} → ${r.item} [${r.group}]`)
-    // Đồ đã có ở phòng này thì xoá để chạy lại sạch
+    const all = await must(supabase.from('pages').select('*').eq('room_id', room.id).order('page_no')) as Page[]
+    let pages = all.filter(p => p.kind === 'render')
+    if (!pages.length) pages = all.filter(p => p.kind === 'plan')
+    if (!pages.length) throw new Error('Phòng chưa có trang phối cảnh nào')
     await must(supabase.from('occurrences').delete().eq('room_id', room.id))
-    await must(supabase.from('warnings').delete().eq('room_id', room.id))
     await cleanupOrphans(project)
 
-    // render trước, plan sau (plan chủ yếu để đếm số lượng)
-    const order = [...pages.filter(p => p.kind === 'render'), ...pages.filter(p => p.kind === 'plan')]
-    for (const page of order) {
+    for (const [i, page] of pages.entries()) {
       const entries = await must(supabase.from('entries').select('*').eq('project_id', project.id)) as Entry[]
       const book = new CodeBook(entries)
-      log(`  ${room.code} · trang ${page.page_no} (${page.kind}) – AI đang bóc tách...`)
+      log(`  ${room.code} · trang ${page.page_no} (${i + 1}/${pages.length}) – AI đang nhìn ảnh...`)
       const url = await signedUrl(page.image_path)
-      const r = await callAI('analyze_page', {
+      const r = await callAIPaced('analyze_page', {
         room: { name_vn: room.name_vn, room_type: room.room_type, concept_counts: room.concept_counts },
-        page: { page_no: page.page_no, kind: page.kind, url, text: page.page_text },
-        existing: entries.map(e => ({ code: e.code, name_vn: e.name_vn, material_vn: e.material_vn })),
-        rules: rulesTxt,
-      }, n => { if (n % 4000 < 40) log(`    ...${n} ký tự`) })
+        page: { page_no: page.page_no, url },
+        existing: entries.filter(e => e.source === 'image').map(e => ({ code: e.code, name_vn: e.name_vn, material_vn: e.material_vn })),
+      }, log)
       const items = (r.tool?.items ?? []) as AIItem[]
-      log(`    AI trả ${items.length} hạng mục`)
-      await applyItems(project, room, items.map(i => ({ ...i, page_no: page.page_no })), pageByNo, page, book, log)
-      for (const w of r.tool?.warnings ?? []) await must(supabase.from('warnings').insert({ project_id: project.id, room_id: room.id, text: `Trang ${page.page_no}: ${w}` }))
-      if ((!room.concept_counts || !room.concept_counts.length) && r.tool?.concept_counts?.length) {
-        room.concept_counts = r.tool.concept_counts
-        await must(supabase.from('rooms').update({ concept_counts: room.concept_counts }).eq('id', room.id))
-      }
+      log(`    AI nhận diện ${items.length} hạng mục`)
+      await applyItems(project, room, items, page, book, log)
       await must(supabase.from('pages').update({ analyzed: true }).eq('id', page.id))
+      if (i < pages.length - 1) await sleep(4000) // giãn cách để nằm trong hạn mức miễn phí
     }
-
-    if (opts.review !== false) {
-      log(`  ${room.code} – AI soát lại lần 2 (tìm hạng mục còn thiếu)...`)
-      const entries = await must(supabase.from('entries').select('*').eq('project_id', project.id)) as Entry[]
-      const occ = await must(supabase.from('occurrences').select('entry_id,category').eq('room_id', room.id)) as Occurrence[]
-      const ids = new Set(occ.map(o => o.entry_id))
-      const current = entries.filter(e => ids.has(e.id)).map(e => ({ code: e.code, category: e.category, name_vn: e.name_vn, source: e.source }))
-      const checklist = settings.checklist.filter(c => c.req[room.room_type] && c.req[room.room_type] !== 'na')
-        .map(c => `${c.req[room.room_type] === 'required' ? '[BẮT BUỘC]' : '[thường có]'} ${c.label}`)
-      const renderPages = pages.filter(p => p.kind === 'render').slice(0, 10)
-      const urls = await signedUrls(renderPages.map(p => p.image_path))
-      const r = await callAI('review_room', {
-        room: { name_vn: room.name_vn, room_type: room.room_type },
-        current, checklist, rules: rulesTxt,
-        pages: renderPages.map(p => ({ page_no: p.page_no, url: urls[p.image_path] })),
-      })
-      const items = (r.tool?.items ?? []) as AIItem[]
-      log(`    Soát lại: thêm ${items.length} hạng mục`)
-      await applyItems(project, room, items, pageByNo, null, new CodeBook(entries), log)
-      for (const w of r.tool?.warnings ?? []) await must(supabase.from('warnings').insert({ project_id: project.id, room_id: room.id, text: w }))
-    }
+    await fillColors(project, room)
+    const added = await applyInference(project, room)
+    log(`  ${room.code} – quy tắc suy luận thêm ${added} hạng mục (không dùng AI)`)
+    await writeSpecs(project)
     await must(supabase.from('rooms').update({ analysis_status: 'done', analysis_log: null }).eq('id', room.id))
   } catch (e) {
     await supabase.from('rooms').update({ analysis_status: 'error', analysis_log: String(e) }).eq('id', room.id)
@@ -232,7 +275,67 @@ export async function analyzeRoom(project: Project, room: Room, log: Log, opts: 
   }
 }
 
-/** Xoá các mã do AI sinh ra mà không còn xuất hiện ở phòng nào (sau khi chạy lại) */
+/** Lấy màu chủ đạo từ điểm ảnh của vùng crop (không dùng AI) */
+export async function fillColors(project: Project, room?: Room) {
+  const entries = await must(supabase.from('entries').select('*').eq('project_id', project.id).is('color_hex', null)) as Entry[]
+  if (!entries.length) return
+  let q = supabase.from('occurrences').select('*').in('entry_id', entries.map(e => e.id)).not('bbox', 'is', null)
+  if (room) q = q.eq('room_id', room.id)
+  const occ = await must(q) as Occurrence[]
+  const pages = await must(supabase.from('pages').select('*').eq('project_id', project.id)) as Page[]
+  const urls = await signedUrls(pages.map(p => p.image_path))
+  for (const e of entries) {
+    const o = occ.filter(x => x.entry_id === e.id).sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0]
+    const pg = o ? pages.find(p => p.id === o.page_id) : undefined
+    if (!o || !pg) continue
+    const hex = await sampleColor(urls[pg.image_path], o.bbox!)
+    if (hex) await must(supabase.from('entries').update({ color_hex: hex }).eq('id', e.id))
+  }
+}
+
+/** Áp bộ quy tắc suy luận cho phòng (không dùng AI) – trả về số hạng mục thêm mới */
+export async function applyInference(project: Project, room: Room): Promise<number> {
+  const entries = await must(supabase.from('entries').select('*').eq('project_id', project.id)) as Entry[]
+  const occ = await must(supabase.from('occurrences').select('*').eq('room_id', room.id)) as Occurrence[]
+  // bỏ các dòng suy luận cũ của phòng (giữ dòng đã xác nhận)
+  const oldInf = occ.filter(o => entries.find(e => e.id === o.entry_id && e.source === 'inferred' && e.status === 'pending'))
+  if (oldInf.length) await must(supabase.from('occurrences').delete().in('id', oldInf.map(o => o.id)))
+  const ids = new Set(occ.filter(o => !oldInf.includes(o)).map(o => o.entry_id))
+  const inRoom = entries.filter(e => ids.has(e.id) && e.status !== 'rejected')
+  const book = new CodeBook(entries)
+  let added = 0
+  for (const x of inferForRoom(room, inRoom)) {
+    let e = entries.find(y => y.source === 'inferred' && y.group_code === x.group && y.name_vn === x.name_vn)
+    if (!e) {
+      e = await must(supabase.from('entries').insert({
+        project_id: project.id, code: book.next(x.group), group_code: x.group, category: x.category, name_vn: x.name_vn, name_en: x.name_en,
+        material_vn: x.material_vn, qty: x.qty ?? null, unit: x.unit ?? null, qty_flag: x.qty ? 'warn' : 'warn', qty_note: x.qty ? 'Theo số cửa – kiểm tra' : 'Nhập tay',
+        source: 'inferred', status: 'pending', note_vn: `SUY LUẬN: ${x.reason}`, note_en: 'Inferred – not shown in render, logically required.',
+      }).select().single()) as Entry
+      book.add(e); entries.push(e)
+    }
+    await must(supabase.from('occurrences').insert({ entry_id: e.id, room_id: room.id, category: x.category, note: x.reason }))
+    added++
+  }
+  await cleanupOrphans(project)
+  return added
+}
+
+/** Viết mô tả, tính chất theo không gian, tiêu chuẩn từ mẫu (không dùng AI) */
+export async function writeSpecs(project: Project, opts: { ids?: string[]; force?: boolean } = {}) {
+  let entries = await must(supabase.from('entries').select('*').eq('project_id', project.id)) as Entry[]
+  entries = opts.ids ? entries.filter(e => opts.ids!.includes(e.id)) : entries.filter(e => opts.force || !e.enriched)
+  if (!entries.length) return 0
+  const rooms = await must(supabase.from('rooms').select('*').eq('project_id', project.id)) as Room[]
+  const occ = await must(supabase.from('occurrences').select('entry_id,room_id').in('entry_id', entries.map(e => e.id))) as Occurrence[]
+  for (const e of entries) {
+    const rs = rooms.filter(r => occ.some(o => o.entry_id === e.id && o.room_id === r.id))
+    await must(supabase.from('entries').update(specPatch(e, rs)).eq('id', e.id))
+  }
+  return entries.length
+}
+
+/** Xoá các mã do AI/quy tắc sinh ra mà không còn xuất hiện ở phòng nào */
 export async function cleanupOrphans(project: Project) {
   const entries = await must(supabase.from('entries').select('id,source,status').eq('project_id', project.id)) as Entry[]
   if (!entries.length) return
@@ -242,73 +345,11 @@ export async function cleanupOrphans(project: Project) {
   if (orphan.length) await must(supabase.from('entries').delete().in('id', orphan))
 }
 
-// ---------------------------------------------------------------- 4. Viết thông số kỹ thuật
-export async function enrichEntries(project: Project, log: Log, onlyIds?: string[]) {
-  const settings = await loadSettings()
-  let entries = await must(supabase.from('entries').select('*').eq('project_id', project.id).order('code')) as Entry[]
-  entries = onlyIds ? entries.filter(e => onlyIds.includes(e.id)) : entries.filter(e => !e.enriched && e.status !== 'rejected')
-  if (!entries.length) { log('Không có mã nào cần viết thông số.'); return }
-  const rooms = await must(supabase.from('rooms').select('*').eq('project_id', project.id)) as Room[]
-  const occ = await must(supabase.from('occurrences').select('entry_id,room_id').in('entry_id', entries.map(e => e.id))) as Occurrence[]
-  const perfTxt = settings.perf.map(p => `${p.space} / ${p.surface}: ${p.vn} (${p.ref})`).join('\n')
-  for (let i = 0; i < entries.length; i += 8) {
-    const batch = entries.slice(i, i + 8)
-    log(`AI viết thông số ${batch.map(e => e.code).join(', ')}...`)
-    const r = await callAI('enrich_entries', {
-      project: { name: project.name },
-      perf_table: perfTxt,
-      entries: batch.map(e => ({
-        code: e.code, group_code: e.group_code, name_vn: e.name_vn, part_vn: e.part_vn, material_vn: e.material_vn, composition: e.composition,
-        source: e.source, current_note: e.note_vn,
-        rooms: [...new Set(occ.filter(o => o.entry_id === e.id).map(o => o.room_id))].map(id => { const rm = rooms.find(x => x.id === id); return rm ? `${rm.name_vn} (${rm.room_type})` : '' }),
-      })),
-    })
-    for (const s of r.tool?.entries ?? []) {
-      const e = batch.find(x => x.code === s.code); if (!e) continue
-      const note = [e.note_vn, s.note_vn].filter(Boolean).join(' · ') || null
-      await must(supabase.from('entries').update({
-        desc_vn: s.desc_vn, desc_en: s.desc_en, perf_vn: s.perf_vn, perf_en: s.perf_en, standards: s.standards ?? null,
-        unit: e.unit ?? s.unit ?? null, note_vn: note, note_en: [e.note_en, s.note_en].filter(Boolean).join(' · ') || null, enriched: true,
-      }).eq('id', e.id))
-    }
-  }
-  log('Xong phần viết thông số.')
-}
-
-// ---------------------------------------------------------------- 5. Đề xuất mã thực tế
-export async function bestOccurrence(entryId: string): Promise<{ occ: Occurrence; page: Page } | null> {
-  const occ = await must(supabase.from('occurrences').select('*').eq('entry_id', entryId).not('bbox', 'is', null)) as Occurrence[]
-  if (!occ.length) return null
-  occ.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
-  const page = await must(supabase.from('pages').select('*').eq('id', occ[0].page_id!).single()) as Page
-  return { occ: occ[0], page }
-}
-
-export async function suggestProducts(entry: Entry): Promise<Candidate[]> {
-  let crop: { base64: string; media_type: string } | undefined
-  const best = await bestOccurrence(entry.id)
-  if (best?.occ.bbox) {
-    const url = await signedUrl(best.page.image_path)
-    crop = { base64: await cropBase64(url, best.occ.bbox, 800), media_type: 'image/jpeg' }
-  }
-  const lib = await must(supabase.from('library_products').select('brand').eq('group_code', entry.group_code).limit(20)) as { brand: string }[]
-  const r = await callAI('suggest_products', {
-    entry: { code: entry.code, group_code: entry.group_code, name_vn: entry.name_vn, material_vn: entry.material_vn, desc_vn: entry.desc_vn, color_hex: entry.color_hex },
-    crop, preferred_brands: [...new Set(lib.map(l => l.brand))],
-  })
-  const cands = ((r.tool?.candidates ?? []) as Candidate[]).slice(0, 3).map(c => ({ ...c, verified: false }))
-  await must(supabase.from('entries').update({ candidates: cands }).eq('id', entry.id))
-  return cands
-}
-
-export async function chooseCandidate(entry: Entry, c: Candidate) {
+/** Chọn một sản phẩm từ thư viện cho mã */
+export async function applyProduct(entry: Entry, p: { brand: string; product_code: string; product_name?: string | null; url?: string | null; image_url?: string | null }) {
   await must(supabase.from('entries').update({
-    brand: c.brand, product_code: c.product_code, product_name: c.product_name ?? null, product_url: c.url, product_image_url: c.image_url ?? null,
+    brand: p.brand, product_code: p.product_code, product_name: p.product_name ?? null, product_url: p.url ?? null, product_image_url: p.image_url ?? null,
   }).eq('id', entry.id))
-  await supabase.from('library_products').upsert({
-    group_code: entry.group_code, brand: c.brand, product_code: c.product_code, product_name: c.product_name ?? null,
-    url: c.url, image_url: c.image_url ?? null, color_hex: entry.color_hex, verified: true,
-  }, { onConflict: 'brand,product_code' })
 }
 
 // ---------------------------------------------------------------- Thêm tay
