@@ -1,5 +1,5 @@
 import { supabase, BUCKET, signedUrl, signedUrls } from './supabase'
-import { renderPdf } from './pdf'
+import { renderPdf, cleanText } from './pdf'
 import { callAI } from './ai'
 import { sampleColor } from './crop'
 import { GROUPS, CATEGORIES } from './codes'
@@ -34,7 +34,7 @@ export async function uploadPdf(project: Project, file: File, log: Log) {
     const base = `${project.id}/pages/p${pad(p.page_no, 3)}`
     await must(supabase.storage.from(BUCKET).upload(`${base}.jpg`, p.large, { upsert: true, contentType: 'image/jpeg' }))
     await must(supabase.storage.from(BUCKET).upload(`${base}_t.jpg`, p.thumb, { upsert: true, contentType: 'image/jpeg' }))
-    await must(supabase.from('pages').insert({ project_id: project.id, page_no: p.page_no, image_path: `${base}.jpg`, thumb_path: `${base}_t.jpg`, width: p.width, height: p.height, page_text: p.text }))
+    await must(supabase.from('pages').insert({ project_id: project.id, page_no: p.page_no, image_path: `${base}.jpg`, thumb_path: `${base}_t.jpg`, width: p.width, height: p.height, page_text: cleanText(p.text) }))
     log(`  Đã lưu trang ${p.page_no}`)
   }
   await must(supabase.from('projects').update({ pdf_path: pdfPath, status: 'pages_ready' }).eq('id', project.id))
@@ -167,7 +167,15 @@ function similar(a: string, b: string) {
   return k / Math.min(A.size, B.size)
 }
 
-async function applyItems(project: Project, room: Room, items: AIItem[], page: Page, book: CodeBook, log: Log) {
+/** Làm sạch mọi chuỗi trong kết quả AI trước khi lưu (tránh lỗi "unsupported Unicode escape sequence") */
+function cleanItem<T extends Record<string, any>>(o: T): T {
+  const r: any = {}
+  for (const [k, v] of Object.entries(o)) r[k] = typeof v === 'string' ? cleanText(v).trim() : v
+  return r
+}
+
+async function applyItems(project: Project, room: Room, rawItems: AIItem[], page: Page, book: CodeBook, log: Log) {
+  const items = rawItems.filter(i => i && i.name_vn).map(cleanItem)
   const refToEntry = new Map<string, Entry>()
   const ordered = [...items.filter(i => !i.parent_ref), ...items.filter(i => i.parent_ref)]
   let created = 0, linked = 0

@@ -1,6 +1,16 @@
 import * as pdfjs from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { despaceLine } from './despace'
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
+
+/** Làm sạch chữ trích từ PDF: bỏ ký tự rỗng/điều khiển (font Canva hay mã hoá dấu tiếng Việt thành \u0000),
+ *  gộp dấu rời vào chữ (chuẩn NFC). PostgreSQL không nhận ký tự \u0000. */
+export function cleanText(s: string): string {
+  return s
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFFFD]/g, '')
+    .replace(/[\uD800-\uDFFF]/g, '')
+    .normalize('NFC')
+}
 
 export type RenderedPage = { page_no: number; large: Blob; thumb: Blob; width: number; height: number; text: string }
 
@@ -35,7 +45,7 @@ export async function renderPdf(file: File, onPage?: (i: number, n: number) => v
       // giữ xuống dòng (hasEOL) để tách được tiêu đề trang và ô số liệu
       const tc = await page.getTextContent()
       text = tc.items.map((it: any) => (it.str ?? '') + (it.hasEOL ? '\n' : ' ')).join('')
-        .split('\n').map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n')
+        .split('\n').map(l => despaceLine(cleanText(l).replace(/\s+/g, ' ').trim())).filter(Boolean).join('\n')
     } catch { /* */ }
     out.push({ page_no: i, large, thumb, width: canvas.width, height: canvas.height, text })
     page.cleanup()
