@@ -20,11 +20,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Thông tin Supabase lấy từ file .env.production trong repo
       - run: npm run build
-        env:
-          # Ưu tiên biến repo (Settings → Secrets and variables → Actions → Variables); nếu không có sẽ dùng .env.production
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
