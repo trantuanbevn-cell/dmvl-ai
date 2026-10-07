@@ -15,9 +15,11 @@ Web app nội bộ: tải file concept nội thất (PDF) → AI gom ảnh theo 
 ## Cài đặt
 1. **Supabase** – chạy `supabase/migrations/0001_init.sql` (SQL Editor) → tạo bảng, RLS, bucket `concept`.
 2. **Edge Function** – deploy `supabase/functions/ai` (CLI: `supabase functions deploy ai`).
-3. **Secrets** (Supabase → Edge Functions → Secrets):
-   - `ANTHROPIC_API_KEY` – khoá API từ console.anthropic.com (bắt buộc)
-   - `ANTHROPIC_MODEL` – tuỳ chọn, mặc định `claude-sonnet-5-5`
+3. **Secrets** (Supabase → Edge Functions → Secrets) – chọn MỘT nhà cung cấp AI, đổi lúc nào cũng được, không cần sửa code:
+   - **Google Gemini:** `GEMINI_API_KEY` (aistudio.google.com/apikey), tuỳ chọn `GEMINI_MODEL` (mặc định `gemini-3.1-pro-preview`, có thể đổi `gemini-3.8-flash` cho rẻ/nhanh hơn)
+   - **Anthropic Claude:** `ANTHROPIC_API_KEY` (console.anthropic.com), tuỳ chọn `ANTHROPIC_MODEL` (mặc định `claude-sonnet-5-5`)
+   - `AI_PROVIDER` = `gemini` hoặc `anthropic` (bỏ trống: có khoá Claude thì dùng Claude, không thì dùng Gemini)
+   - Tab "Phân tích AI" hiển thị nhà cung cấp & model đang dùng.
 4. **Biến giao diện** – `.env.production` (hoặc GitHub → Settings → Variables): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (anon key công khai được).
 5. **GitHub Pages** – repo Settings → Pages → Source: *GitHub Actions*. Push lên `main` là web tự cập nhật.
 6. **Auth** – Supabase → Authentication → Providers → Email. Sau khi tạo đủ tài khoản cho nhóm, nên tắt *Allow new users to sign up*.

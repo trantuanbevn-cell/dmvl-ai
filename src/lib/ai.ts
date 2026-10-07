@@ -80,3 +80,16 @@ export async function callAI(task: string, payload: unknown, onProgress?: (chars
   const lt = lastTool as { name: string; input: any } | null
   return { tool: lt?.input ?? null, toolName: lt?.name ?? null, text, stop_reason: stop }
 }
+
+/** Nhà cung cấp AI đang dùng (đổi bằng Secrets AI_PROVIDER trong Supabase) */
+export async function aiInfo(): Promise<{ provider: string; model: string; search_model?: string } | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const r = await fetch(`${FUNCTIONS_URL}/ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
+      body: JSON.stringify({ task: 'info' }),
+    })
+    return r.ok ? await r.json() : null
+  } catch { return null }
+}

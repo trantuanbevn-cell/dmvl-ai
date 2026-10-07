@@ -3,10 +3,22 @@
 // và trả thẳng luồng SSE của Anthropic về trình duyệt (giữ kết nối sống, tránh timeout).
 
 import { GROUPS_PROMPT, CATEGORY_PROMPT, ROOM_TYPES_PROMPT } from './prompts.ts'
+import { callGemini } from './gemini.ts'
 
 const API = (Deno.env.get('ANTHROPIC_BASE_URL') ?? 'https://api.anthropic.com') + '/v1/messages'
 const MODEL = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-sonnet-5-5'
 const SEARCH_MODEL = Deno.env.get('ANTHROPIC_SEARCH_MODEL') ?? MODEL
+
+// Chọn nhà cung cấp AI bằng Secrets trong Supabase (đổi lúc nào cũng được, không cần sửa code):
+//   AI_PROVIDER = gemini | anthropic   (bỏ trống: có ANTHROPIC_API_KEY thì dùng Claude, không thì Gemini)
+//   GEMINI_API_KEY, GEMINI_MODEL (mặc định gemini-3.1-pro-preview), GEMINI_SEARCH_MODEL
+const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.1-pro-preview'
+const GEMINI_SEARCH_MODEL = Deno.env.get('GEMINI_SEARCH_MODEL') ?? GEMINI_MODEL
+function provider(): 'anthropic' | 'gemini' {
+  const p = (Deno.env.get('AI_PROVIDER') ?? '').toLowerCase()
+  if (p === 'gemini' || p === 'anthropic') return p
+  return Deno.env.get('ANTHROPIC_API_KEY') ? 'anthropic' : 'gemini'
+}
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -260,7 +272,7 @@ Màu chủ đạo: ${e.color_hex ?? ''}
 Hãng ưu tiên: ${(p.preferred_brands ?? []).join(', ') || 'tuỳ nhóm (vd An Cường cho melamine/laminate; Dulux/Jotun cho sơn; Viglacera/Vietceramics/Khatra/Luxcasa cho gạch; Vĩnh Tường/Knauf cho trần; Hafele cho phụ kiện; TOTO/Kohler/Grohe/Inax cho TBVS; Philips/Panasonic/Rạng Đông cho đèn)'}
 Ảnh crop từ phối cảnh đính kèm (nếu có).
 
-Dùng web_search để tìm và XÁC MINH mã có thật trên trang của hãng/đại lý. Chỉ nộp mã đã thấy trong kết quả tìm kiếm, kèm link đúng trang. So màu/vân với ảnh crop để xếp hạng. Cuối cùng BẮT BUỘC gọi submit_candidates (có thể rỗng nếu không tìm được).`),
+Dùng công cụ tìm kiếm web để tìm và XÁC MINH mã có thật trên trang của hãng/đại lý. Chỉ nộp mã đã thấy trong kết quả tìm kiếm, kèm link đúng trang. So màu/vân với ảnh crop để xếp hạng. Cuối cùng BẮT BUỘC gọi submit_candidates (có thể rỗng nếu không tìm được); nếu không gọi được công cụ thì trả đúng một khối JSON dạng {"candidates":[{brand, product_code, product_name, url, image_url, reason_vn, confidence}]} trong khối mã json.`),
       ]
       if (p.crop) content.push(img(p.crop))
       return {
@@ -275,24 +287,35 @@ Dùng web_search để tìm và XÁC MINH mã có thật trên trang của hãng
   throw new Error('Unknown task: ' + task)
 }
 
+const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
+const SSE = { ...cors, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' }
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
-    const key = Deno.env.get('ANTHROPIC_API_KEY')
-    if (!key) return new Response(JSON.stringify({ error: 'Chưa cấu hình ANTHROPIC_API_KEY trong Supabase → Edge Functions → Secrets' }), { status: 500, headers: { ...cors, 'Content-Type': 'application/json' } })
     const { task, payload } = await req.json()
-    const body = { ...build(task, payload), stream: true }
+    const prov = provider()
+    if (task === 'info') return json({ provider: prov, model: prov === 'gemini' ? GEMINI_MODEL : MODEL, search_model: prov === 'gemini' ? GEMINI_SEARCH_MODEL : SEARCH_MODEL })
+    const request = build(task, payload)
+
+    if (prov === 'gemini') {
+      const key = Deno.env.get('GEMINI_API_KEY')
+      if (!key) return json({ error: 'Chưa cấu hình GEMINI_API_KEY trong Supabase → Edge Functions → Secrets' }, 500)
+      const model = task === 'suggest_products' ? GEMINI_SEARCH_MODEL : GEMINI_MODEL
+      const r = await callGemini(request, key, model)
+      return new Response(r.body, { headers: SSE })
+    }
+
+    const key = Deno.env.get('ANTHROPIC_API_KEY')
+    if (!key) return json({ error: 'Chưa cấu hình ANTHROPIC_API_KEY trong Supabase → Edge Functions → Secrets' }, 500)
     const r = await fetch(API, {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...request, stream: true }),
     })
-    if (!r.ok || !r.body) {
-      const t = await r.text()
-      return new Response(JSON.stringify({ error: `Claude API ${r.status}: ${t}` }), { status: 502, headers: { ...cors, 'Content-Type': 'application/json' } })
-    }
-    return new Response(r.body, { headers: { ...cors, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' } })
+    if (!r.ok || !r.body) return json({ error: `Claude API ${r.status}: ${await r.text()}` }, 502)
+    return new Response(r.body, { headers: SSE })
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { ...cors, 'Content-Type': 'application/json' } })
+    return json({ error: String(e) }, 500)
   }
 })

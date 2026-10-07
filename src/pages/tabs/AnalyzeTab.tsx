@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { aiInfo } from '../../lib/ai'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { analyzeRoom, enrichEntries } from '../../lib/pipeline'
@@ -15,6 +16,8 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
   const [review, setReview] = useState(true)
   const log = useLog(setLines)
   const nav = useNavigate()
+  const [info, setInfo] = useState<{ provider: string; model: string } | null>(null)
+  useEffect(() => { aiInfo().then(setInfo) }, [])
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true)
@@ -37,7 +40,7 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
   return (
     <div className="stack">
       <div className="card">
-        <h3>Phân tích bằng AI</h3>
+        <div className="row between"><h3>Phân tích bằng AI</h3><span className="pill">{info ? `AI: ${info.provider === 'gemini' ? 'Google Gemini' : 'Anthropic Claude'} · ${info.model}` : 'AI: đang kiểm tra…'}</span></div>
         <p className="muted">Với mỗi phòng: AI đọc từng ảnh phối cảnh/mặt bằng → bóc tách sàn, tường, trần, đồ liền tường (tách vật liệu cấu thành), đồ rời, đèn, thiết bị, decor, artwork, đầu chờ MEP → gộp với mã đã có → suy luận hạng mục bắt buộc không thể hiện (nền vàng) → <b>soát lại lần 2</b> theo checklist loại phòng → viết thông số kỹ thuật. Mỗi phòng mất vài phút; có thể để chạy và quay lại sau (giữ tab trình duyệt mở).</p>
         <div className="row gap">
           <button className="btn primary" disabled={busy || !d.rooms.length} onClick={() => doRooms(d.rooms.map(r => r.id))}>▶ Phân tích tất cả phòng</button>
