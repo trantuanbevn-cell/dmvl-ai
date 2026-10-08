@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { loadSettings, saveSetting } from '../lib/settings'
 import { DEFAULT_CHECKLIST, DEFAULT_RULES, DEFAULT_PERF } from '../lib/rules'
 import { GROUPS } from '../lib/codes'
+import { useAuth } from '../lib/auth'
 
 const KEYS = [
   ['checklist', 'Checklist hạng mục theo loại phòng', DEFAULT_CHECKLIST, 'req: required = bắt buộc (thiếu báo đỏ), common = thường có, na = không áp dụng. keywords: từ khoá để nhận ra hạng mục trong tên mã.'],
@@ -10,6 +11,7 @@ const KEYS = [
 ] as const
 
 export default function SettingsPage() {
+  const { isAdmin } = useAuth()
   const [vals, setVals] = useState<Record<string, string>>({})
   const [tab, setTab] = useState<string>('checklist')
   const [msg, setMsg] = useState('')
@@ -18,6 +20,7 @@ export default function SettingsPage() {
   const save = async () => {
     try { await saveSetting(tab as any, JSON.parse(vals[tab])); setMsg('Đã lưu.') } catch (e) { setMsg('Lỗi: ' + String(e)) }
   }
+  if (!isAdmin) return <div className="page"><div className="card muted">Chỉ quản trị viên mới xem được trang này.</div></div>
   return (
     <div className="page">
       <h1>Cài đặt chung</h1>

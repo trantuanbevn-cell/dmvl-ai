@@ -34,7 +34,7 @@ function Shell({ session }: { session: Session }) {
         <nav>
           <Link to="/">Dự án</Link>
           {isAdmin && <Link to="/team">Thành viên</Link>}
-          <Link to="/settings">Cài đặt</Link>
+          {isAdmin && <Link to="/settings">Cài đặt</Link>}
           <UpdateBell />
           <div className="online" title={online.map(o => `${o.name} (${ROLE_VN[o.role as keyof typeof ROLE_VN] ?? o.role})`).join('\n')}>
             <span className="online-n">● {online.length} online</span>
