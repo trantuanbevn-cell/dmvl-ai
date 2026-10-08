@@ -14,6 +14,9 @@ import PlanMap from '../../components/PlanMap'
 import RoomSections from '../../components/RoomSections'
 import type { Lang } from '../../lib/sections'
 import { roomStats, heroUrl } from '../../lib/progress'
+import { useAuth } from '../../lib/auth'
+import { useOnline, colorOf } from '../../lib/presence'
+import { roomMissing } from '../../lib/missing'
 
 export default function RoomView({ d }: { d: ProjectData }) {
   const [sp, setSp] = useSearchParams()
@@ -25,7 +28,9 @@ export default function RoomView({ d }: { d: ProjectData }) {
   const [draw, setDraw] = useState(false)
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   const [lang, setLang] = useState<Lang>('vn')
-  const [flt, setFlt] = useState<'all' | 'pending' | 'inferred'>('all')
+  const [flt, setFlt] = useState<'all' | 'pending' | 'inferred' | 'missing'>('all')
+  const { canEdit, name } = useAuth()
+  const online = useOnline()
   const [add, setAdd] = useState({ group: 'DC', name: '', category: 'decor' })
   const imgRef = useRef<HTMLDivElement>(null)
 
@@ -70,6 +75,22 @@ export default function RoomView({ d }: { d: ProjectData }) {
   }
   const removeOcc = async (o: Occurrence) => { if (confirm('Bỏ hạng mục này khỏi phòng?')) { await supabase.from('occurrences').delete().eq('id', o.id); d.reload() } }
 
+  const setWork = async (st: 'todo' | 'doing' | 'done') => {
+    if (!room) return
+    if (st === 'done') {
+      const m = roomMissing(d, room.id, lang)
+      if (m.rows && !confirm(`Phòng này còn ${m.rows} dòng thiếu thông tin (${m.cells} ô đỏ). Vẫn đánh dấu HOÀN THÀNH?`)) return
+    }
+    const patch = st === 'todo' ? { work_status: st, assigned_to: null, work_by: null, work_at: null } : { work_status: st, assigned_to: name, work_by: name, work_at: new Date().toISOString() }
+    const { error } = await supabase.from('rooms').update(patch).eq('id', room.id)
+    if (error) return alert(error.message)
+    d.reload()
+  }
+  const WS = { todo: 'Chưa làm', doing: 'Đang làm', done: 'Đã hoàn thành' } as const
+  const ws = room?.work_status ?? 'todo'
+  const rm = room ? roomMissing(d, room.id, lang) : { rows: 0, cells: 0 }
+  const here = (rid: string) => online.filter(o => o.room === rid && o.project === d.project!.id)
+
   if (!d.rooms.length) return <div className="card muted">Chưa có phòng. Hãy tải concept ở bước 1.</div>
 
   return (
@@ -77,12 +98,16 @@ export default function RoomView({ d }: { d: ProjectData }) {
       <div className="room-list">
         {d.rooms.map(r => {
           const st = stats.get(r.id)!; const url = heroUrl(d, st.hero)
+          const rmiss = roomMissing(d, r.id, lang), wk = r.work_status ?? 'todo', hr = here(r.id)
           return (
             <button key={r.id} className={'room-btn' + (r.id === roomId ? ' on' : '')} onClick={() => { setSp({ room: r.id }); setPageIdx(0); setSel(null) }}>
-              <div className="rb-img" style={url ? { backgroundImage: `url("${url}")` } : undefined}><span className="rc-code">{r.code}</span><span className={'rb-dot ' + st.state} /></div>
+              <div className="rb-img" style={url ? { backgroundImage: `url("${url}")` } : undefined}><span className="rc-code">{r.code}</span><span className={'rb-dot ' + st.state} />{wk !== 'todo' && <span className={'ws-tag ' + wk}>{wk === 'done' ? '✓ Xong' : '● Đang làm'}</span>}
+                {hr.length > 0 && <span className="rb-here">{hr.slice(0, 3).map(o => <i key={o.id} className="av xs" style={{ background: colorOf(o.id) }} title={o.name + ' đang xem phòng này'}>{o.name.split(/\s+/).slice(-1)[0][0]}</i>)}</span>}</div>
               <div className="rb-name">{r.name_vn}</div>
               <Bar approved={st.approved} pending={st.pending + st.review} total={st.total} height={5} />
               <span className="small muted">{st.approved}/{st.total} mã{st.pending + st.review ? ` · ${st.pending + st.review} chờ` : ''}</span>
+              {r.work_by && wk !== 'todo' && <span className="small muted">{r.work_by}</span>}
+              {st.total > 0 && <span className={'small ' + (rmiss.rows ? 'bad-text' : 'ok-text')}>{rmiss.rows ? `⚠ ${rmiss.rows} dòng thiếu` : '✓ đủ thông tin'}</span>}
             </button>)
         })}
       </div>
@@ -93,7 +118,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
             <div className="row between">
               <div className="page-strip">{pages.map((p, i) => <button key={p.id} className={'ps-tile' + (i === pageIdx ? ' on' : '')} onClick={() => setPageIdx(i)}><img src={d.urls[p.thumb_path ?? p.image_path]} alt="" /><span>Tr.{p.page_no}{p.kind === 'plan' ? ' · MB' : ''}</span></button>)}</div>
               <div className="row gap sm-gap">
-                {selOcc && <button className={'btn sm' + (draw ? ' primary' : '')} onClick={() => setDraw(!draw)}>{draw ? 'Kéo chuột trên ảnh để khoanh…' : '✎ Khoanh lại vùng cho mục đang chọn'}</button>}
+                {canEdit && selOcc && <button className={'btn sm' + (draw ? ' primary' : '')} onClick={() => setDraw(!draw)}>{draw ? 'Kéo chuột trên ảnh để khoanh…' : '✎ Khoanh lại vùng cho mục đang chọn'}</button>}
               </div>
             </div>
             {(() => {
@@ -128,7 +153,16 @@ export default function RoomView({ d }: { d: ProjectData }) {
         <div className="card">
           <div className="row between">
             <div className="row gap sm-gap"><button className="btn ghost sm" onClick={() => goto(-1)}>←</button><h3 style={{ margin: 0 }}>{room?.code} {room?.name_vn} – {new Set(occ.map(o => o.entry_id)).size} hạng mục</h3><button className="btn ghost sm" onClick={() => goto(1)}>→</button></div>
-            <button className="btn sm" onClick={approveAll}>✓ Xác nhận tất cả mục nhìn thấy</button>
+            {canEdit && <button className="btn sm" onClick={approveAll}>✓ Xác nhận tất cả mục nhìn thấy</button>}
+          </div>
+          <div className={'work-bar ws-' + ws}>
+            <span className={'ws-pill ' + ws}>{WS[ws]}</span>
+            {room?.work_by && ws !== 'todo' && <span className="small">{ws === 'done' ? 'Hoàn thành bởi' : 'Người làm:'} <b>{room.work_by}</b>{room.work_at ? ` · ${new Date(room.work_at).toLocaleString('vi-VN')}` : ''}</span>}
+            {here(room?.id ?? '').filter(o => o.name !== name).length > 0 && <span className="small muted">Đang xem cùng: {here(room!.id).filter(o => o.name !== name).map(o => o.name).join(', ')}</span>}
+            <span className={'small ' + (rm.rows ? 'bad-text' : 'ok-text')} style={{ marginLeft: 'auto' }}>{rm.rows ? `⚠ ${rm.rows} dòng còn thiếu thông tin (${rm.cells} ô)` : (stats.get(room?.id ?? '')?.total ? '✓ Đã đủ thông tin các ô bắt buộc' : '')}</span>
+            {canEdit && ws === 'todo' && <button className="btn sm" onClick={() => setWork('doing')}>▶ Nhận phòng này</button>}
+            {canEdit && ws !== 'done' && <button className="btn primary sm" onClick={() => setWork('done')}>✓ Hoàn thành phòng</button>}
+            {canEdit && ws === 'done' && <button className="btn sm" onClick={() => setWork('doing')}>↺ Mở lại để sửa</button>}
           </div>
           {room?.concept_counts?.length ? <p className="small muted">Số liệu concept: {room.concept_counts.map(c => `${c.label}: ${c.qty}`).join(' · ')}</p> : null}
           {d.warnings.filter(w => w.room_id === roomId).map(w => <div key={w.id} className="warnline">⚠ {w.text}</div>)}
@@ -136,15 +170,15 @@ export default function RoomView({ d }: { d: ProjectData }) {
             <span className="small muted">Ngôn ngữ / ký hiệu:</span>
             {([['vn', 'Tiếng Việt'], ['en', 'English'], ['both', 'Song ngữ']] as const).map(([k, l]) => <button key={k} className={'chip' + (lang === k ? ' on' : '')} onClick={() => setLang(k)}>{l}</button>)}
             <span className="small muted" style={{ marginLeft: 12 }}>Lọc:</span>
-            {([['all', 'Tất cả'], ['pending', 'Chờ duyệt'], ['inferred', 'Suy luận (không thấy trong ảnh)']] as const).map(([k, l]) => <button key={k} className={'chip' + (flt === k ? ' on' : '')} onClick={() => setFlt(k)}>{l}</button>)}
+            {([['all', 'Tất cả'], ['pending', 'Chờ duyệt'], ['inferred', 'Suy luận (không thấy trong ảnh)'], ['missing', `⚠ Thiếu thông tin${rm.rows ? ' (' + rm.rows + ')' : ''}`]] as const).map(([k, l]) => <button key={k} className={'chip' + (flt === k ? ' on' : '')} onClick={() => setFlt(k)}>{l}</button>)}
           </div>
           <RoomSections d={d} room={room!} lang={lang} filter={flt} sel={sel} onPick={pick} onDetail={id => { setSel(id); setSelOcc(null) }} onRemove={removeOcc} />
-          <div className="row gap add-row">
+          {canEdit && <div className="row gap add-row">
             <select value={add.category} onChange={e => setAdd({ ...add, category: e.target.value })}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.vn}</option>)}</select>
             <select value={add.group} onChange={e => setAdd({ ...add, group: e.target.value })}>{GROUPS.map(g => <option key={g.code} value={g.code}>{g.code} – {g.vn}</option>)}</select>
             <input placeholder="Thêm hạng mục bị thiếu, vd: Ghế băng thay đồ" value={add.name} onChange={e => setAdd({ ...add, name: e.target.value })} style={{ flex: 1 }} />
             <button className="btn primary sm" onClick={addItem}>+ Thêm</button>
-          </div>
+          </div>}
         </div>
       </div>
 

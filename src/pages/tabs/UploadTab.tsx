@@ -1,3 +1,4 @@
+import { useAuth } from '../../lib/auth'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
@@ -11,6 +12,7 @@ import FloorPlans from '../../components/FloorPlans'
 const KINDS: Record<string, string> = { cover: 'Bìa', moodboard: 'Moodboard', plan: 'Mặt bằng', render: 'Phối cảnh', other: 'Khác', unknown: 'Chưa phân loại' }
 
 export default function UploadTab({ d }: { d: ProjectData }) {
+  const { canEdit } = useAuth()
   const p = d.project!
   const [lines, setLines] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
@@ -36,7 +38,7 @@ export default function UploadTab({ d }: { d: ProjectData }) {
   const delRoom = async (id: string) => { if (confirm('Xoá phòng này? Các trang sẽ bị bỏ gán.')) { await supabase.from('rooms').delete().eq('id', id); d.reload() } }
 
   return (
-    <div className="stack">
+    <fieldset className="plain stack" disabled={!canEdit}>
       <div className="card">
         <h3>File concept (PDF)</h3>
         <details className="small muted"><summary>Cách hoạt động</summary><p>Phần mềm tách từng trang thành ảnh ngay trong trình duyệt, đọc chữ trên trang để phân loại bìa / moodboard / mặt bằng / phối cảnh, gom theo phòng và đọc số liệu – <b>không dùng AI, không tốn phí</b>. Nếu PDF là ảnh scan không có chữ, dùng “AI phân loại”.</p></details>
@@ -94,6 +96,6 @@ export default function UploadTab({ d }: { d: ProjectData }) {
           </div>
         </div>
       )}
-    </div>
+    </fieldset>
   )
 }

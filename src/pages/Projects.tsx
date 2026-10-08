@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Project } from '../lib/types'
+import { useAuth } from '../lib/auth'
 
 const STATUS: Record<string, string> = { new: 'Mới tạo', pages_ready: 'Đã tách trang', classified: 'Đã gom phòng', analyzed: 'Đã phân tích' }
 
@@ -10,6 +11,7 @@ export default function Projects() {
   const [name, setName] = useState('')
   const [loc, setLoc] = useState('')
   const nav = useNavigate()
+  const { canEdit, isAdmin } = useAuth()
   const load = () => supabase.from('projects').select('*').order('created_at', { ascending: false }).then(({ data }) => setList((data ?? []) as Project[]))
   useEffect(() => { load() }, [])
   const create = async (e: React.FormEvent) => {
@@ -25,18 +27,18 @@ export default function Projects() {
   return (
     <div className="page">
       <h1>Dự án</h1>
-      <form className="card row gap" onSubmit={create}>
+      {canEdit && <form className="card row gap" onSubmit={create}>
         <input placeholder="Tên dự án, vd: BOH Khách sạn Waldorf Astoria" value={name} onChange={e => setName(e.target.value)} required style={{ flex: 2 }} />
         <input placeholder="Địa điểm" value={loc} onChange={e => setLoc(e.target.value)} style={{ flex: 1 }} />
         <button className="btn primary">+ Tạo dự án</button>
-      </form>
+      </form>}
       <div className="grid-cards">
         {list.map(p => (
           <div key={p.id} className="card project-card">
             <Link to={`/p/${p.id}/overview`}><h3>{p.name}</h3></Link>
             <div className="muted">{p.location}</div>
             <div className="row between"><span className="pill">{STATUS[p.status] ?? p.status}</span>
-              <button className="btn ghost sm danger" onClick={() => remove(p)}>Xoá</button></div>
+              {isAdmin && <button className="btn ghost sm danger" onClick={() => remove(p)}>Xoá</button>}</div>
           </div>
         ))}
         {!list.length && <p className="muted">Chưa có dự án. Tạo dự án rồi tải file concept PDF lên.</p>}

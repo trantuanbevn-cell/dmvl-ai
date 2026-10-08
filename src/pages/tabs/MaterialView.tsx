@@ -6,6 +6,8 @@ import type { Entry } from '../../lib/types'
 import { locationsOf } from '../../lib/locations'
 import Crop from '../../components/Crop'
 import EntryPanel from '../../components/EntryPanel'
+import { useAuth } from '../../lib/auth'
+import { missingOf } from '../../lib/missing'
 
 export function StatusDot({ s }: { s: string }) {
   const t = { approved: 'Đã xác nhận', pending: 'Chờ duyệt', review: 'TVTK xem lại', rejected: 'Loại bỏ' }[s] ?? s
@@ -14,6 +16,7 @@ export function StatusDot({ s }: { s: string }) {
 
 export default function MaterialView({ d }: { d: ProjectData }) {
   const groups = GROUPS.map(g => ({ g, list: d.entries.filter(e => e.group_code === g.code) })).filter(x => x.list.length)
+  const { canEdit } = useAuth()
   const [gc, setGc] = useState<string>(groups[0]?.g.code ?? '')
   const [sel, setSel] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'pending' | 'inferred' | 'nocode'>('all')
@@ -69,9 +72,9 @@ export default function MaterialView({ d }: { d: ProjectData }) {
                   <div className="small muted">{e.material_vn}</div>
                   <div className="loc-line"><span className="small muted">Có ở {locs.length} phòng:</span>{locs.map(l => <span key={l.room.id} className="loc-tag" title={l.pages.length ? `Trang concept: ${l.pages.join(', ')}` : ''}>{l.room.code} {l.room.name_vn}{l.n > 1 ? ` ×${l.n}` : ''}</span>)}{!locs.length && <span className="muted small">chưa gán phòng</span>}</div>
                   <div className="row between small"><span>{e.brand ? <b>{e.brand} · {e.product_code}</b> : <span className="muted">chưa chọn mã hãng</span>}</span><span>{e.qty ?? '—'} {e.unit ?? ''} {e.qty_flag !== 'ok' && <span className="warn-text">⚠</span>}</span></div>
-                  <div className="ic-actions"><StatusDot s={e.status} />
-                    <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}>✓ Xác nhận</button>
-                    <button className="btn ghost sm" onClick={ev => quick(e, 'rejected', ev)}>✕ Loại</button></div>
+                  <div className="ic-actions"><StatusDot s={e.status} />{missingOf(e, 'vn').length > 0 && <span className="miss-badge" title="Thiếu thông tin">⚠ thiếu {new Set(missingOf(e, 'vn').map(m => m.label)).size}</span>}
+                    {canEdit && <><button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}>✓ Xác nhận</button>
+                    <button className="btn ghost sm" onClick={ev => quick(e, 'rejected', ev)}>✕ Loại</button></>}</div>
                 </div>
               </div>)
           })}</div>

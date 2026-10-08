@@ -7,6 +7,7 @@ import { checkRoom } from '../../lib/check'
 import type { ProjectData } from '../../lib/useProject'
 import Bar from '../../components/Bar'
 import Crop from '../../components/Crop'
+import { roomMissing } from '../../lib/missing'
 
 const STATE_LABEL = { none: 'Chưa phân tích', todo: 'Cần duyệt', done: 'Hoàn tất' } as const
 
@@ -93,13 +94,14 @@ export default function Overview({ d }: { d: ProjectData }) {
               <div className="rc-img" style={url ? { backgroundImage: `url("${url}")` } : undefined}>
                 <span className="rc-code">{s.room.code}</span>
                 <span className={'rc-state ' + s.state}>{STATE_LABEL[s.state]}</span>
+                {s.room.work_status && s.room.work_status !== 'todo' && <span className={'ws-tag ' + s.room.work_status} style={{ right: 6, bottom: 6, left: 'auto', top: 'auto' }}>{s.room.work_status === 'done' ? '✓ Xong' : '● Đang làm'}{s.room.work_by ? ` · ${s.room.work_by}` : ''}</span>}
                 {!url && <span className="muted small">chưa có ảnh</span>}
               </div>
               <div className="rc-body">
                 <b>{s.room.name_vn}</b>
                 <div className="small muted">{roomTypeLabel(s.room.room_type)}{area ? ` · ${area.qty} m²` : ''} · {s.pages.filter(p => p.kind === 'render').length} ảnh PC</div>
                 <Bar approved={s.approved} pending={s.pending + s.review} total={s.total} />
-                <div className="small rc-nums"><span>{s.approved}/{s.total} đã xác nhận</span>{s.inferred > 0 && <span className="warn-text">{s.inferred} suy luận</span>}{miss > 0 && <span className="bad-text">✗ thiếu {miss}</span>}{s.qtyWarn > 0 && s.total > 0 && <span className="muted">⚠ {s.qtyWarn} SL</span>}</div>
+                <div className="small rc-nums"><span>{s.approved}/{s.total} đã xác nhận</span>{s.inferred > 0 && <span className="warn-text">{s.inferred} suy luận</span>}{miss > 0 && <span className="bad-text">✗ thiếu {miss}</span>}{(() => { const m = roomMissing(d, s.room.id); return s.total > 0 && m.rows > 0 ? <span className="bad-text">⚠ {m.rows} dòng thiếu thông tin</span> : null })()}{s.qtyWarn > 0 && s.total > 0 && <span className="muted">⚠ {s.qtyWarn} SL</span>}</div>
                 {thumbs.length > 0 && <div className="rc-thumbs">{thumbs.map(o => { const pg = d.pages.find(p => p.id === o.page_id); return <Crop key={o.id} url={pg ? d.urls[pg.image_path] : undefined} bbox={o.bbox} pageW={pg?.width} pageH={pg?.height} height={40} maxWidth={60} arrow={false} /> })}</div>}
               </div>
             </div>)

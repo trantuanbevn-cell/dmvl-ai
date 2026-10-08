@@ -7,11 +7,12 @@ import type { Entry } from '../lib/types'
 import type { ProjectData } from '../lib/useProject'
 import { locationsOf } from '../lib/locations'
 import Crop from './Crop'
+import { useAuth } from '../lib/auth'
 
 type F = keyof Entry
 function Field({ e, k, label, area, onSaved, type = 'text' }: { e: Entry; k: F; label: string; area?: boolean; onSaved: () => void; type?: string }) {
   const [v, setV] = useState<string>((e[k] as any) ?? '')
-  useEffect(() => setV((e[k] as any) ?? ''), [e, k])
+  useEffect(() => setV((e[k] as any) ?? ''), [String(e[k] ?? ''), k])
   const save = async () => {
     const old = (e[k] as any) ?? ''
     if (String(old) === v) return
@@ -28,6 +29,7 @@ function Field({ e, k, label, area, onSaved, type = 'text' }: { e: Entry; k: F; 
 }
 
 export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entry: Entry; onClose: () => void }) {
+  const { canEdit } = useAuth()
   const [busy, setBusy] = useState('')
   const [lang, setLang] = useState<'vn' | 'en'>('vn')
   const saved = () => d.reload()
@@ -60,6 +62,7 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
         <button className="btn ghost sm" onClick={onClose}>✕</button>
       </div>
 
+      <fieldset className="plain" disabled={!canEdit}>
       <div className="status-row">
         {(['approved', 'pending', 'review', 'rejected'] as const).map(s => (
           <button key={s} className={'btn sm st-btn ' + s + (entry.status === s ? ' on' : '')} onClick={() => set({ status: s })}>
@@ -89,7 +92,9 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
         <label className="fld">Bề mặt / mục<select value={entry.category ?? ''} onChange={e => set({ category: e.target.value })}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.vn}</option>)}</select></label>
       </div>
 
+      </fieldset>
       <div className="lang-switch"><button className={lang === 'vn' ? 'on' : ''} onClick={() => setLang('vn')}>Tiếng Việt</button><button className={lang === 'en' ? 'on' : ''} onClick={() => setLang('en')}>English</button></div>
+      <fieldset className="plain" disabled={!canEdit}>
       {lang === 'vn' ? <>
         <Field e={entry} k="name_vn" label="Tên hạng mục / vật liệu" onSaved={saved} />
         <Field e={entry} k="part_vn" label="Bộ phận áp dụng" onSaved={saved} />
@@ -146,6 +151,7 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
       </div>
       <Field e={entry} k="qty_note" label="Ghi chú số lượng" onSaved={saved} />
       <button className="btn ghost sm danger" onClick={del}>Xoá mã này</button>
+      </fieldset>
     </aside>
   )
 }

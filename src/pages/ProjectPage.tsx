@@ -1,4 +1,5 @@
 import { NavLink, useParams } from 'react-router-dom'
+import { useAuth } from '../lib/auth'
 import { useProject } from '../lib/useProject'
 import { projectStats, roomStats } from '../lib/progress'
 import Bar from '../components/Bar'
@@ -13,6 +14,7 @@ import ExportTab from './tabs/ExportTab'
 export default function ProjectPage() {
   const { id = '', tab = 'overview' } = useParams()
   const data = useProject(id)
+  const { canEdit } = useAuth()
   if (!data.project) return <div className="page muted">{data.loading ? 'Đang tải dự án…' : 'Không tìm thấy dự án'}</div>
   const ps = projectStats(data)
   const rs = [...roomStats(data).values()]
@@ -38,6 +40,7 @@ export default function ProjectPage() {
             <span className="step-ic">{ic}</span><span className="step-tx">{label}{badge && <small>{badge}</small>}</span>
           </NavLink>))}
       </nav>
+      {!canEdit && <div className="note ro-note">👁 Bạn chỉ có quyền <b>xem</b> – không sửa được dữ liệu. Vẫn xuất file được ở bước “Xuất file”.</div>}
       {tab === 'overview' && <Overview d={data} />}
       {tab === 'upload' && <UploadTab d={data} />}
       {tab === 'analyze' && <AnalyzeTab d={data} />}

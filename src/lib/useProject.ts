@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase, signedUrls } from './supabase'
+import { toast } from './toast'
 import type { Project, Room, Page, Entry, Occurrence, Warning, FloorPlan } from './types'
 
 export type ProjectData = {
@@ -32,5 +33,24 @@ export function useProject(id: string): ProjectData {
     setS({ project: p.data as Project, rooms: (r.data ?? []) as Room[], pages, entries, occ, warnings: (w.data ?? []) as Warning[], floors, urls, loading: false })
   }, [id])
   useEffect(() => { reload() }, [reload])
+  // Đồng bộ trực tiếp: ai sửa gì, mọi người thấy ngay (gộp nhiều thay đổi liên tiếp thành 1 lần tải lại)
+  const roomsRef = useRef<Room[]>([])
+  roomsRef.current = s.rooms
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | undefined
+    const bump = () => { clearTimeout(t); t = setTimeout(() => { reload() }, 1200) }
+    const ch = supabase.channel('proj-' + id)
+    for (const table of ['rooms', 'entries', 'occurrences', 'warnings', 'pages', 'floor_plans'])
+      ch.on('postgres_changes', { event: '*', schema: 'public', table }, (p: any) => {
+        if (table === 'rooms' && p.eventType === 'UPDATE' && p.new?.project_id === id) {
+          const old = roomsRef.current.find(r => r.id === p.new.id)
+          if (old && old.work_status !== p.new.work_status && p.new.work_status === 'done') toast(`✓ ${p.new.work_by || 'Một thành viên'} đã hoàn thành phòng ${p.new.code} ${p.new.name_vn}`, 'ok')
+          else if (old && old.work_status !== p.new.work_status && p.new.work_status === 'doing') toast(`${p.new.work_by || 'Một thành viên'} nhận làm phòng ${p.new.code} ${p.new.name_vn}`)
+        }
+        bump()
+      })
+    ch.subscribe()
+    return () => { clearTimeout(t); supabase.removeChannel(ch) }
+  }, [id, reload])
   return { ...s, reload }
 }

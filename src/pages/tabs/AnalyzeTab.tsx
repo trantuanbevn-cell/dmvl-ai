@@ -1,3 +1,4 @@
+import { useAuth } from '../../lib/auth'
 import { useEffect, useState } from 'react'
 import { aiInfo } from '../../lib/ai'
 import { useNavigate } from 'react-router-dom'
@@ -13,6 +14,7 @@ import LogBox, { useLog } from '../../components/LogBox'
 const ST: Record<string, string> = { pending: 'Chưa chạy', running: 'Đang chạy…', done: 'Xong', error: 'Lỗi' }
 
 export default function AnalyzeTab({ d }: { d: ProjectData }) {
+  const { canEdit } = useAuth()
   const p = d.project!
   const [lines, setLines] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
@@ -51,7 +53,7 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
   const renders = d.pages.filter(pg => pg.kind === 'render' && pg.room_id).length
 
   return (
-    <div className="stack">
+    <fieldset className="plain stack" disabled={!canEdit}>
       <div className="card">
         <div className="row between"><h3>Phân tích bằng AI</h3><span className="pill">{info ? `AI: ${info.provider === 'gemini' ? 'Google Gemini' : 'Anthropic Claude'} · ${info.model}` : 'AI: đang kiểm tra…'}</span></div>
         <p className="muted small"><b>AI chỉ nhìn ảnh phối cảnh</b> và liệt kê vật liệu/đồ đạc kèm khung vị trí (Gemini Flash, trong hạn mức miễn phí). Mọi thứ còn lại do phần mềm tự làm. Dự án này cần khoảng <b>{renders} lần gọi AI</b>, giãn cách vài giây giữa các lần.</p>
@@ -84,6 +86,6 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
         </table>
         <p className="muted small">Chạy lại một phòng sẽ gọi lại AI cho các ảnh của phòng đó (mã đã xác nhận hoặc thêm tay được giữ lại). Sửa quy tắc/checklist xong chỉ cần bấm “Áp lại quy tắc” – không tốn lượt AI.</p>
       </div>
-    </div>
+    </fieldset>
   )
 }
