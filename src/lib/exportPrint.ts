@@ -41,14 +41,14 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
       if (mvSrc && (e.mat_view?.img || e.mat_view?.region)) { try { matUrl = (await regionCanvas(mvSrc, e.mat_view?.region, 300)).toDataURL('image/png') } catch { /* */ } }
       const map = matUrl ? `<img src="${matUrl}">` : e.product_image_url ? `<img src="${esc(e.product_image_url)}">` : e.color_hex ? `<div class="sw" style="background:${esc(e.color_hex)}"></div><small>${esc(e.color_hex)}</small>` : ''
       const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
-      const rooms = locs.length ? locs.map(l => `${esc(l.room.code)} – ${esc(tx(l.room.name_vn, l.room.name_en, L).replace('\n', ' / '))}${l.pages.length ? ` (${vn ? 'tr.' : 'p.'}${l.pages.join(', ')})` : ''}`).join('<br>') : '—'
+      const rooms = locs.length ? locs.map(l => esc(tx(l.room.name_vn, l.room.name_en, L).replace('\n', ' / '))).join('<br>') : '—'
       const cats = [...new Set(occ.map(o => o.category ?? e.category).filter(Boolean) as string[])].map(catL).join(' / ')
       const spec = [tx(e.name_vn, e.name_en, L) && `<b>${esc(tx(e.name_vn, e.name_en, L))}</b>`, esc(tx(e.desc_vn || e.material_vn, e.desc_en || e.material_en, L)),
         e.composition ? `<small>${h('Cấu tạo', 'Composition')}: ${esc(e.composition)}</small>` : '', e.perf_vn ? `<small>${h('Yêu cầu', 'Requirement')}: ${esc(tx(e.perf_vn, e.perf_en, L))}</small>` : '', e.standards ? `<small>${h('Tiêu chuẩn', 'Standards')}: ${esc(e.standards)}</small>` : ''].filter(Boolean).join('<br>')
       rows += `<tr class="${e.source === 'inferred' ? 'inf' : ''}"><td>${stt}</td><td class="code">${esc(symbolOf(e, L, sym.legacy, sym.en))}</td><td class="code">${esc(e.product_code ?? '')}</td><td>${esc(cats)}</td><td>${rooms}</td><td class="im">${img}</td>
         <td>${spec}</td>
         <td>${esc([e.brand, e.origin].filter(Boolean).join(' / '))}</td><td class="im">${map}</td>
-        <td>${e.product_url ? `<a href="${esc(e.product_url)}">${esc(e.product_url)}</a><br>` : ''}${esc(tx(e.note_vn, e.note_en, L))}${e.qty != null ? `<br><small>${h('Thống kê', 'Qty')}: ${esc(e.qty)} ${esc(e.unit ?? '')}${e.qty_flag !== 'ok' ? ' ⚠' : ''}</small>` : ''}${e.status !== 'approved' ? `<br><i>${esc((vn ? STATUS_VN : STATUS_EN)[e.status])}</i>` : ''}</td></tr>`
+        <td>${e.product_url ? `<a href="${esc(e.product_url)}">${esc(e.product_url)}</a><br>` : ''}${esc(tx(e.note_vn, e.note_en, L))}${e.status !== 'approved' ? `<br><i>${esc((vn ? STATUS_VN : STATUS_EN)[e.status])}</i>` : ''}</td></tr>`
     }
   }
   }
@@ -60,7 +60,7 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
   td { border:1px solid #c9b9a8; padding:3px; vertical-align:top; word-wrap:break-word } thead { display:table-header-group }
   tr { page-break-inside:avoid } tr.sh td { background:#222; color:#fff; font-size:12px; font-weight:bold } tr.brk { page-break-before: always }
   tr.b td { background:#6B3A1F; color:#fff; font-weight:bold; font-size:11px } tr.g td { background:#d9d9d9; font-weight:bold; font-size:10px }
-  tr.inf td { background:#FFF9E5 } td.code { font-weight:bold; color:#6B3A1F; text-align:center } td.im img { max-width:100%; max-height:130px; display:block }
+  tr.inf td { background:#FFF9E5 } td.code { font-weight:bold; color:#6B3A1F; text-align:left } td.im img { max-width:100%; max-height:130px; display:block }
   .sw { width:60px; height:44px; border:1px solid #aaa } small { color:#666 } .w { color:#c00 } a { color:#1F4E9A; font-size:8px }
   </style></head><body><h1>${h('BẢNG DANH MỤC VẬT LIỆU HOÀN THIỆN', 'FINISHES & FF&E MATERIAL SCHEDULE')}</h1>
   <div class="sub">${h('Dự án', 'Project')}: ${esc(d.project.name)}${d.project.location ? ' · ' + esc(d.project.location) : ''} · ${new Date().toLocaleDateString(vn ? 'vi-VN' : 'en-GB')}</div>

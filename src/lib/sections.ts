@@ -67,9 +67,17 @@ export function legacyCodes(entries: Entry[]): Map<string, string> {
   for (const e of sorted) { const p = legacyPrefix(e.group_code); const k = (n.get(p) ?? 0) + 1; n.set(p, k); out.set(e.id, `${p}${k}`) }
   return out
 }
-export function symbolOf(e: Entry, lang: Lang, legacy: Map<string, string>, en?: Map<string, string>): string {
-  const lg = legacy.get(e.id) ?? e.code, ec = en?.get(e.id) ?? e.code
-  return lang === 'vn' ? lg : lang === 'en' ? ec : (lg === ec ? ec : `${ec} / ${lg}`)
+/** Tiền tố ký hiệu theo thông lệ quốc tế (bảng finish schedule / FF&E bằng tiếng Anh): CPT thảm, PT sơn, CT gạch, ST đá, WD gỗ, LAM laminate, MTL kim loại, FAB vải, LTH da, MWK đồ liền tường (millwork)… */
+export const INTL: Record<string, string> = {
+  CT: 'CT', ST: 'ST', ES: 'ES', LVT: 'LVT', CPT: 'CPT', BS: 'WB', PT: 'PT', SP: 'SC', WC: 'WC', WP: 'WP', GWB: 'GWB', ACT: 'ACT',
+  WD: 'WD', LM: 'LAM', MT: 'MTL', GL: 'GL', MR: 'MR', FB: 'FAB', LE: 'LTH', DR: 'DR', HW: 'HW', JN: 'MWK', FH: 'FH', FF: 'FF',
+  LT: 'LT', SF: 'PF', BA: 'BA', EQ: 'EQ', AW: 'ART', DC: 'ACC', WT: 'WT', SN: 'SGN', ME: 'ME',
+}
+export const intlPrefix = (group: string) => INTL[group] ?? group
+const intlCode = (e: Entry) => { const m = /^[A-Z]+-(\d+)/.exec(e.code); return m ? `${intlPrefix(e.group_code)}-${m[1]}` : e.code }
+/** Ký hiệu bản vẽ: luôn dùng chuẩn viết tắt tiếng Anh, cho cả bản tiếng Việt và tiếng Anh (tham số lang/legacy giữ lại cho tương thích) */
+export function symbolOf(e: Entry, _lang?: Lang, _legacy?: Map<string, string>, en?: Map<string, string>): string {
+  return en?.get(e.id) ?? intlCode(e)
 }
 /** Ký hiệu dùng khi xuất: tính trên đúng danh sách được xuất, có thể đánh lại số liên tục (bỏ khoảng trống do mã bị loại) */
 export function exportSymbols(list: Entry[], renumber: boolean) {
@@ -79,9 +87,9 @@ export function exportSymbols(list: Entry[], renumber: boolean) {
     const gi = (c: string) => GROUPS.findIndex(g => g.code === c)
     const n = new Map<string, number>()
     for (const e of [...list].sort((a, b) => gi(a.group_code) - gi(b.group_code) || a.code.localeCompare(b.code, undefined, { numeric: true }))) {
-      const k = (n.get(e.group_code) ?? 0) + 1; n.set(e.group_code, k); en.set(e.id, `${e.group_code}-${String(k).padStart(2, '0')}`)
+      const k = (n.get(e.group_code) ?? 0) + 1; n.set(e.group_code, k); en.set(e.id, `${intlPrefix(e.group_code)}-${String(k).padStart(2, '0')}`)
     }
-  } else for (const e of list) en.set(e.id, e.code)
+  } else for (const e of list) en.set(e.id, intlCode(e))
   return { legacy, en }
 }
 

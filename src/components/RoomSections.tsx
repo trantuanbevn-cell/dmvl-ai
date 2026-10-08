@@ -27,7 +27,8 @@ function Ed({ e, k, area, ph, num, w, miss }: { e: Entry; k: K; area?: boolean; 
   const common = { value: v, placeholder: ph, readOnly: !canEdit, className: miss ? 'miss' : undefined, title: miss ? 'Thiếu thông tin – cần điền' : undefined, onChange: (x: any) => setV(x.target.value), onBlur: save, onClick: (x: any) => x.stopPropagation(), style: w ? { width: w } : undefined }
   return area ? <textarea {...common} rows={Math.min(8, Math.max(2, Math.ceil(v.length / 38)))} /> : <input {...common} type={num ? 'number' : 'text'} />
 }
-const pair = (k: 'name' | 'material' | 'desc' | 'note', lang: Lang): K[] => (lang === 'vn' ? [`${k}_vn`] : lang === 'en' ? [`${k}_en`] : [`${k}_vn`, `${k}_en`]) as K[]
+const pair = (k: 'name' | 'material' | 'desc' | 'note' | 'perf' | 'part', lang: Lang): K[] => (lang === 'vn' ? [`${k}_vn`] : lang === 'en' ? [`${k}_en`] : [`${k}_vn`, `${k}_en`]) as K[]
+const roomName = (r: Room, lang: Lang) => (lang === 'en' ? r.name_en || r.name_vn : lang === 'both' && r.name_en && r.name_en !== r.name_vn ? `${r.name_vn} / ${r.name_en}` : r.name_vn)
 const flag = (k: K) => (String(k).endsWith('_en') ? 'EN' : String(k).endsWith('_vn') ? 'VN' : '')
 
 // Cột giống bảng danh mục mẫu của công ty (tên và vị trí cột)
@@ -81,13 +82,15 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                     <td className="c-code"><b>{symbolOf(e, lang, legacy)}</b>{ms.length > 0 && <div><span className="miss-badge" title={'Còn thiếu: ' + missText(ms)}>⚠ thiếu {new Set(ms.map(m => m.label)).size}</span></div>}<div><span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></div></td>
                     <td className="c-vl"><Ed e={e} k="product_code" ph="Mã vật liệu" miss={M('product_code')} /></td>
                     <td><select value={cat} disabled={!canEdit} onClick={x => x.stopPropagation()} onChange={x => setCat(os, x.target.value)}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{lang === 'en' ? c.en : c.vn}</option>)}</select>
-                      {e.part_vn && <div className="small muted">{lang === 'en' ? e.part_en || e.part_vn : e.part_vn}</div>}
-                      <div className="c-qty"><Ed e={e} k="qty" num w={54} miss={M('qty')} ph="SL" /><Ed e={e} k="unit" ph="đvt" w={54} miss={M('unit')} />{e.qty_flag !== 'ok' && <span className="warn-text" title={e.qty_note ?? ''}>⚠ cần kiểm</span>}</div></td>
-                    <td className="c-loc">{locs.map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room.id ? ' here' : '')}>{l.room.code} {lang === 'en' ? l.room.name_en || l.room.name_vn : l.room.name_vn}</span>)}</td>
+                      {pair('part', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} ph="Bộ phận áp dụng" /></div>)}</td>
+                    <td className="c-loc">{locs.map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room.id ? ' here' : '')}>{roomName(l.room, lang)}</span>)}</td>
                     <td className="c-img">{shots.length ? shots.map(o => <OccCrop key={o.id} d={d} o={o} height={64} maxWidth={90} />)
                       : <div className="ic-none tiny"><span>{e.source === 'inferred' ? 'Suy luận' : 'Chưa có ảnh'}</span></div>}</td>
-                    <td>{[...pair('name', lang), ...pair('material', lang), ...pair('desc', lang)].map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} miss={M(k)} area={!String(k).startsWith('name')} ph={String(k).startsWith('name') ? 'Tên hạng mục' : String(k).startsWith('material') ? 'Vật liệu / màu / bề mặt' : 'Thông số kỹ thuật'} /></div>)}</td>
-                    <td className="c-brand"><Ed e={e} k="brand" ph="Hãng / thương hiệu" miss={M('brand')} /><Ed e={e} k="origin" ph="Xuất xứ" miss={M('origin')} /></td>
+                    <td>{[...pair('name', lang), ...pair('material', lang), ...pair('desc', lang)].map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} miss={M(k)} area={!String(k).startsWith('name')} ph={String(k).startsWith('name') ? 'Tên hạng mục' : String(k).startsWith('material') ? 'Vật liệu / màu / bề mặt' : 'Thông số kỹ thuật'} /></div>)}
+                      <div className="ed-line lab"><i>{lang === 'en' ? 'Composition' : 'Cấu tạo'}</i><Ed e={e} k="composition" area ph={lang === 'en' ? 'Composition' : 'Cấu tạo (vật liệu thành phần)'} /></div>
+                      {pair('perf', lang).map(k => <div key={String(k)} className="ed-line lab">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} area ph={String(k).endsWith('_en') ? 'Performance requirements' : 'Tính chất yêu cầu theo không gian'} /></div>)}
+                      <div className="ed-line lab"><Ed e={e} k="standards" ph={lang === 'en' ? 'Reference standards' : 'Tiêu chuẩn tham chiếu'} /></div></td>
+                    <td className="c-brand"><Ed e={e} k="brand" ph="Hãng / thương hiệu" miss={M('brand')} /><Ed e={e} k="product_name" ph="Tên sản phẩm" /><Ed e={e} k="origin" ph="Xuất xứ" miss={M('origin')} /></td>
                     <td className="c-mat"><MatImage d={d} e={e} />
                       <Ed e={e} k="product_image_url" ph="Link ảnh mẫu" /></td>
                     <td><Ed e={e} k="product_url" ph="Link sản phẩm" />{pair('note', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} area ph="Ghi chú" /></div>)}</td>

@@ -241,3 +241,9 @@ input[readonly], textarea[readonly] { cursor: default }
 .ed-obj { position: absolute; border: 2px dashed #e11d1d; pointer-events: none; box-sizing: border-box }
 .ed-arrow { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none }
 .ed-pt { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 3px solid #fff; background: #e11d1d; cursor: grab; box-shadow: 0 0 0 1px #0006 } .ed-pt.tail { background: #fff; border-color: #e11d1d }
+
+/* Nội dung các cột căn lề TRÁI (tiêu đề cột vẫn căn giữa) */
+.sec-table td, .sec-table .c-code, .sec-table .c-img, .sec-table .c-stt, .sec-table .c-mat, .sec-table .c-act { text-align: left }
+.sec-table .c-img > *, .sec-table .c-img > .crop-wrap { margin: 0 0 3px 0 } .sec-table .mat-wrap, .sec-table .mat-img, .sec-table .mat-sw { margin-left: 0; margin-right: 0 }
+.sec-table .c-qty input { text-align: left } .sec-table .c-code .miss-badge { margin-top: 3px }
+.sec-table .ed-line.lab { margin-top: 2px } .sec-table .ed-line.lab input, .sec-table .ed-line.lab textarea { font-size: 11px; color: #6b5a4c }

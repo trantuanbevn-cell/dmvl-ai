@@ -21,8 +21,6 @@ export function missingOf(e: Entry, lang: Lang): Miss[] {
   if (!has(e.brand)) out.push({ key: 'brand', label: 'Hãng' })
   if (!has(e.product_code)) out.push({ key: 'product_code', label: 'Mã sản phẩm' })
   if (!has(e.origin)) out.push({ key: 'origin', label: 'Xuất xứ' })
-  if (e.qty == null) out.push({ key: 'qty', label: 'Số lượng' })
-  if (!has(e.unit)) out.push({ key: 'unit', label: 'ĐVT' })
   return out
 }
 export const missKeys = (e: Entry, lang: Lang) => new Set<string>(missingOf(e, lang).map(m => String(m.key)))

@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs'
 import { groupOf, CATEGORIES } from './codes'
-import { groupBySection, sectionTitle, bandTitle, exportSymbols, symbolOf, tx, planSheets, type Lang, type ExportOpts, type Section } from './sections'
+import { GROUPS } from './codes'
+import { intlPrefix, groupBySection, sectionTitle, bandTitle, exportSymbols, symbolOf, tx, planSheets, type Lang, type ExportOpts, type Section } from './sections'
 import { signedUrls } from './supabase'
 import { viewCanvas, regionCanvas, swatchBase64, loadImage } from './crop'
 import { locationsOf, locationLines } from './locations'
@@ -47,7 +48,7 @@ function columns(o: ExportOpts, h: Ctx['h']): Col[] {
   if (o.quote) c.push(
     { key: 'q_qty', head: h('Số lượng', 'Quantity'), w: 10, band: 'quote' }, { key: 'q_unit', head: h('ĐVT', 'Unit'), w: 8, band: 'quote' },
     { key: 'q_price', head: h('Đơn giá (VNĐ)', 'Unit price (VND)'), w: 16, band: 'quote' }, { key: 'q_total', head: h('Thành tiền (VNĐ)', 'Amount (VND)'), w: 18, band: 'quote' })
-  c.push({ key: 'qty', head: h('Thống kê', 'Qty'), w: 10, band: 'int' }, { key: 'i_src', head: h('Nguồn', 'Source'), w: 9, band: 'int' }, { key: 'i_st', head: h('Trạng thái', 'Status'), w: 11, band: 'int' }, { key: 'i_flag', head: h('Cờ số lượng', 'Qty flag'), w: 14, band: 'int' })
+  c.push({ key: 'i_src', head: h('Nguồn', 'Source'), w: 9, band: 'int' }, { key: 'i_st', head: h('Trạng thái', 'Status'), w: 11, band: 'int' }, { key: 'i_flag', head: h('Cờ số lượng', 'Qty flag'), w: 14, band: 'int' })
   return c
 }
 
@@ -98,14 +99,14 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
       const occ = d.occ.filter(o2 => o2.entry_id === e.id)
       const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
       const roomNames = locs.length
-        ? locs.map(l => `${l.room.code} – ${tx(l.room.name_vn, l.room.name_en, L).replace('\n', ' / ')}${l.pages.length ? ` (${vn ? 'tr.' : 'p.'}${l.pages.join(', ')})` : ''}`).join('\n')
+        ? locs.map(l => tx(l.room.name_vn, l.room.name_en, L).replace('\n', ' / ')).join('\n')
         : h('(chưa gán phòng)', '(no room assigned)')
       const cats = [...new Set(occ.map(o2 => o2.category ?? e.category).filter(Boolean) as string[])]
       const sy = symbolOf(e, L, sym.legacy, sym.en)
       const spec = [tx(e.name_vn, e.name_en, L), tx(e.desc_vn || e.material_vn, e.desc_en || e.material_en, L),
         e.part_vn ? `${h('Bộ phận', 'Part')}: ${tx(e.part_vn, e.part_en, L)}` : '', e.composition ? `${h('Cấu tạo', 'Composition')}: ${e.composition}` : '',
         e.perf_vn ? `${h('Yêu cầu', 'Requirement')}: ${tx(e.perf_vn, e.perf_en, L)}` : '', e.standards ? `${h('Tiêu chuẩn', 'Standards')}: ${e.standards}` : ''].filter(Boolean).join('\n')
-      const remarks = [tx(e.note_vn, e.note_en, L), e.qty_flag !== 'ok' && e.qty_note ? `⚠ ${e.qty_note}` : '', e.status !== 'approved' ? `[${(L === 'en' ? STATUS_EN : STATUS_VN)[e.status]}]` : ''].filter(Boolean).join('\n')
+      const remarks = [tx(e.note_vn, e.note_en, L), e.status !== 'approved' ? `[${(L === 'en' ? STATUS_EN : STATUS_VN)[e.status]}]` : ''].filter(Boolean).join('\n')
       const brand = [e.brand ? (e.product_name ? `${e.brand} – ${e.product_name}` : e.brand) : '', e.origin].filter(Boolean).join('\n')
       const v: Record<string, any> = { stt, sym: sy, mavl: e.product_code || sy, cat: cats.map(catLabel).join(' / '), loc: roomNames, qty: e.qty != null ? `${e.qty}${e.unit ? ' ' + e.unit : ''}` : '', spec, brand, link: e.product_url, note: remarks,
         q_qty: e.qty, q_unit: e.unit, i_src: (L === 'en' ? SOURCE_EN : SOURCE_VN)[e.source], i_st: (L === 'en' ? STATUS_EN : STATUS_VN)[e.status], i_flag: e.qty_flag === 'ok' ? 'OK' : '⚠' }
@@ -113,7 +114,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
       cols.forEach((col, i) => {
         const c = row.getCell(i + 1); c.value = (v[col.key] ?? '') as any
         c.font = { name: 'Arial', size: 9, bold: col.key === 'sym', color: { argb: col.key === 'sym' ? BROWN : 'FF000000' } }
-        c.alignment = { vertical: 'middle', wrapText: true, horizontal: ['stt', 'sym', 'mavl', 'qty', 'q_qty', 'q_unit'].includes(col.key) ? 'center' : 'left' }; c.border = border
+        c.alignment = { vertical: 'top', wrapText: true, horizontal: 'left' }; c.border = border
       })
       if (o.quote) {
         const q = ci('q_qty'), p = ci('q_price'), t = ci('q_total')
@@ -191,7 +192,7 @@ export async function exportExcel(d: ExportData, o: ExportOpts) {
     const entryById = new Map(list.map(e => [e.id, e]))
     d.rooms.forEach((rm, i) => {
       const row = rs.getRow(i + 2)
-      row.getCell(1).value = `${rm.code} – ${tx(rm.name_vn, rm.name_en, L).replace('\n', ' / ')}`
+      row.getCell(1).value = tx(rm.name_vn, rm.name_en, L).replace('\n', ' / ')
       cats.forEach((c, j) => {
         const codes = [...new Set(d.occ.filter(x => x.room_id === rm.id && (x.category ?? entryById.get(x.entry_id)?.category) === c.key).map(x => { const e = entryById.get(x.entry_id); return e ? symbolOf(e, L, sym.legacy, sym.en) : '' }).filter(Boolean))]
         row.getCell(j + 2).value = codes.join(' · ')
@@ -199,6 +200,15 @@ export async function exportExcel(d: ExportData, o: ExportOpts) {
       row.eachCell(c => { c.alignment = { wrapText: true, vertical: 'top' }; c.border = border; c.font = { name: 'Arial', size: 9 } })
       row.height = 48
     })
+  }
+  // 3) Chú giải ký hiệu (chuẩn viết tắt tiếng Anh) – chỉ các nhóm có trong file
+  {
+    const used = GROUPS.filter(g => list.some(e => e.group_code === g.code))
+    const ls = wb.addWorksheet(L === 'en' ? 'Legend' : 'Chú giải ký hiệu')
+    ls.getRow(1).values = [h('KÍ HIỆU', 'CODE'), h('Tên tiếng Anh', 'English name'), h('Tên tiếng Việt', 'Vietnamese name')]
+    ls.getRow(1).eachCell(c => { c.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BROWN } }; c.alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' } })
+    ls.getColumn(1).width = 12; ls.getColumn(2).width = 50; ls.getColumn(3).width = 50
+    used.forEach((g, i) => { const r = ls.getRow(i + 2); r.values = [intlPrefix(g.code), g.en, g.vn]; r.eachCell(c => { c.font = { name: 'Arial', size: 9 }; c.alignment = { vertical: 'top', horizontal: 'left', wrapText: true }; c.border = border }); r.getCell(1).font = { name: 'Arial', size: 9, bold: true, color: { argb: BROWN } } })
   }
   const buf = await wb.xlsx.writeBuffer()
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
