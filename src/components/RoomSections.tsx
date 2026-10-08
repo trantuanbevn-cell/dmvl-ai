@@ -41,7 +41,7 @@ const HW: (number | string)[] = [38, 84, 112, 116, '11%', 104, '24%', '12%', 112
 export default function RoomSections({ d, room, lang, filter, sel, onPick, onDetail, onRemove, onAdd }: {
   d: ProjectData; room: Room; lang: Lang; filter: 'all' | 'pending' | 'inferred' | 'missing'; sel: string | null
   onPick: (o: Occurrence) => void; onDetail: (id: string) => void; onRemove: (o: Occurrence) => void
-  onAdd: (p: { group: string; category: string; name: string; part_vn?: string | null; parent_id?: string | null; hint?: string }) => void
+  onAdd: (p: { copy?: string; group: string; category: string; name: string; part_vn?: string | null; parent_id?: string | null; hint?: string }) => void
 }) {
   const { canEdit } = useAuth()
   const pageById = useMemo(() => new Map(d.pages.map(p => [p.id, p])), [d.pages])
@@ -54,6 +54,21 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   if (filter === 'missing') ents = ents.filter(e => missingOf(e, lang).length)
   const secs = groupBySection(ents)
   const quick = async (e: Entry, status: Entry['status'], ev: React.MouseEvent) => { ev.stopPropagation(); await supabase.from('entries').update({ status }).eq('id', e.id); d.reload() }
+  /** Xoá hạng mục: nếu mã còn dùng ở phòng khác thì chỉ bỏ khỏi phòng này, ngược lại xoá hẳn mã */
+  const del = async (e: Entry) => {
+    const others = [...new Set(d.occ.filter(o => o.entry_id === e.id && o.room_id && o.room_id !== room.id).map(o => o.room_id!))]
+    if (others.length) {
+      if (!confirm(`${e.code} ${e.name_vn} còn dùng ở ${others.length} phòng khác → chỉ bỏ khỏi phòng ${room.code}. Tiếp tục?`)) return
+      await supabase.from('occurrences').delete().eq('entry_id', e.id).eq('room_id', room.id)
+    } else {
+      if (!confirm(`Xoá hẳn ${e.code} ${e.name_vn}? Không hoàn tác được.`)) return
+      await supabase.from('entries').update({ parent_id: null }).eq('parent_id', e.id)
+      await supabase.from('occurrences').delete().eq('entry_id', e.id)
+      const { error } = await supabase.from('entries').delete().eq('id', e.id)
+      if (error) { alert(error.message); return }
+    }
+    d.reload()
+  }
   const setCat = async (os: Occurrence[], category: string) => { await supabase.from('occurrences').update({ category }).in('id', os.map(o => o.id)); d.reload() }
   let lastBand = '', n = 0
   if (!secs.length) return <div className="muted small" style={{ padding: 12 }}>Chưa có hạng mục nào{filter !== 'all' ? ' khớp bộ lọc' : ''}.</div>
@@ -96,10 +111,9 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                     <td><Ed e={e} k="product_url" ph="Link sản phẩm" />{pair('note', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} area ph="Ghi chú" /></div>)}</td>
                     <td className="c-act"><StatusDot s={e.status} />
                       {canEdit && <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}>✓</button>}
-                      {canEdit && <button className="btn ghost sm" title="Loại bỏ mã" onClick={ev => quick(e, 'rejected', ev)}>✕</button>}
                       <button className="btn ghost sm" title="Chi tiết / chọn mã hãng từ thư viện" onClick={ev => { ev.stopPropagation(); onDetail(e.id) }}>⋯</button>
-                      {canEdit && <button className="btn ghost sm" title="Thêm 1 vật liệu nữa cùng hạng mục này (vd màu thứ 2)" onClick={ev => { ev.stopPropagation(); onAdd({ group: e.group_code, category: cat, name: e.name_vn, part_vn: e.part_vn, parent_id: e.parent_id, hint: `Thêm vật liệu cùng loại với ${e.code} – ${e.name_vn}. Sửa tên/màu cho khác đi.` }) }}>＋</button>}
-                      {canEdit && <button className="btn ghost sm" title="Bỏ khỏi phòng này" onClick={ev => { ev.stopPropagation(); os[0] && onRemove(os[0]) }}>🗑</button>}</td>
+                      {canEdit && <button className="btn ghost sm" title="Nhân đôi vật liệu này (vd màu thứ 2) – chép nội dung, chỉ sửa vài chỗ" onClick={ev => { ev.stopPropagation(); onAdd({ copy: e.id, group: e.group_code, category: cat, name: e.name_vn, part_vn: e.part_vn, parent_id: e.parent_id, hint: `Thêm vật liệu cùng loại với ${e.code} – ${e.name_vn}. Sửa tên/màu cho khác đi.` }) }}>＋</button>}
+                      {canEdit && <button className="btn ghost sm" title="Xoá hạng mục này" onClick={ev => { ev.stopPropagation(); del(e) }}>🗑</button>}</td>
                   </tr>)
               })}</tbody>
             </table>

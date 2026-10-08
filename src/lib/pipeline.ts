@@ -427,7 +427,9 @@ export async function applyProduct(entry: Entry, p: { brand: string; product_cod
 }
 
 // ---------------------------------------------------------------- Thêm tay
-export type ManualExtra = { material_vn?: string; color_hex?: string | null; part_vn?: string | null; parent_id?: string | null; name_en?: string }
+export type ManualExtra = Partial<Pick<Entry, 'material_vn' | 'material_en' | 'color_hex' | 'part_vn' | 'part_en' | 'parent_id' | 'name_en' | 'desc_vn' | 'desc_en' | 'perf_vn' | 'perf_en' | 'standards' | 'brand' | 'product_name' | 'origin' | 'unit'>>
+/** Các trường được sao chép khi nhân đôi một vật liệu (không chép mã hãng/link/ảnh mẫu vì thường khác nhau) */
+export const cloneExtra = (e: Entry): ManualExtra => ({ name_en: e.name_en, part_vn: e.part_vn, part_en: e.part_en, parent_id: e.parent_id, material_vn: e.material_vn ?? undefined, material_en: e.material_en, color_hex: e.color_hex, desc_vn: e.desc_vn, desc_en: e.desc_en, perf_vn: e.perf_vn, perf_en: e.perf_en, standards: e.standards, brand: e.brand, product_name: null, origin: e.origin, unit: e.unit })
 export async function addManualEntry(project: Project, room: Room | null, group: string, name: string, category: string, extra: ManualExtra = {}) {
   // nhiều người cùng thêm: nếu trùng mã (người khác vừa lấy) thì lấy mã kế tiếp và thử lại
   for (let attempt = 0; attempt < 5; attempt++) {
