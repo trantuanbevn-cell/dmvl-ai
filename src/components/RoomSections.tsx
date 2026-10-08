@@ -5,7 +5,8 @@ import { groupBySection, sectionTitle, bandTitle, legacyCodes, symbolOf, BANDS, 
 import { locationsOf } from '../lib/locations'
 import type { ProjectData } from '../lib/useProject'
 import type { Entry, Occurrence, Room } from '../lib/types'
-import Crop from './Crop'
+import OccCrop from './OccCrop'
+import MatImage from './MatImage'
 import { StatusDot } from '../pages/tabs/MaterialView'
 import { useAuth } from '../lib/auth'
 import { missingOf, missText } from '../lib/missing'
@@ -83,11 +84,11 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                       {e.part_vn && <div className="small muted">{lang === 'en' ? e.part_en || e.part_vn : e.part_vn}</div>}
                       <div className="c-qty"><Ed e={e} k="qty" num w={54} miss={M('qty')} ph="SL" /><Ed e={e} k="unit" ph="đvt" w={54} miss={M('unit')} />{e.qty_flag !== 'ok' && <span className="warn-text" title={e.qty_note ?? ''}>⚠ cần kiểm</span>}</div></td>
                     <td className="c-loc">{locs.map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room.id ? ' here' : '')}>{l.room.code} {lang === 'en' ? l.room.name_en || l.room.name_vn : l.room.name_vn}</span>)}</td>
-                    <td className="c-img">{shots.length ? shots.map(o => { const pg = pageById.get(o.page_id!); return <Crop key={o.id} url={pg ? d.urls[pg.image_path] : undefined} bbox={o.bbox} pageW={pg?.width} pageH={pg?.height} height={64} maxWidth={90} /> })
+                    <td className="c-img">{shots.length ? shots.map(o => <OccCrop key={o.id} d={d} o={o} height={64} maxWidth={90} />)
                       : <div className="ic-none tiny"><span>{e.source === 'inferred' ? 'Suy luận' : 'Chưa có ảnh'}</span></div>}</td>
                     <td>{[...pair('name', lang), ...pair('material', lang), ...pair('desc', lang)].map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} miss={M(k)} area={!String(k).startsWith('name')} ph={String(k).startsWith('name') ? 'Tên hạng mục' : String(k).startsWith('material') ? 'Vật liệu / màu / bề mặt' : 'Thông số kỹ thuật'} /></div>)}</td>
                     <td className="c-brand"><Ed e={e} k="brand" ph="Hãng / thương hiệu" miss={M('brand')} /><Ed e={e} k="origin" ph="Xuất xứ" miss={M('origin')} /></td>
-                    <td className="c-mat">{e.product_image_url ? <img className="mat-img" src={e.product_image_url} alt="" /> : e.color_hex ? <div className="mat-sw" style={{ background: e.color_hex }} title={e.color_hex}><span>{e.color_hex}</span></div> : <div className="ic-none tiny"><span>Chưa có mẫu</span></div>}
+                    <td className="c-mat"><MatImage d={d} e={e} />
                       <Ed e={e} k="product_image_url" ph="Link ảnh mẫu" /></td>
                     <td><Ed e={e} k="product_url" ph="Link sản phẩm" />{pair('note', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} area ph="Ghi chú" /></div>)}</td>
                     <td className="c-act"><StatusDot s={e.status} />

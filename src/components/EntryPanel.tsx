@@ -6,7 +6,7 @@ import { librarySuggestions, saveToLibrary, searchLinks, LibProduct } from '../l
 import type { Entry } from '../lib/types'
 import type { ProjectData } from '../lib/useProject'
 import { locationsOf } from '../lib/locations'
-import Crop from './Crop'
+import OccCrop from './OccCrop'
 import { useAuth } from '../lib/auth'
 
 type F = keyof Entry
@@ -75,7 +75,7 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
           const pg = o.page_id ? pageById.get(o.page_id) : undefined
           return (
             <div key={o.id} className="occ">
-              <Crop url={pg ? d.urls[pg.image_path] : undefined} bbox={o.bbox} pageW={pg?.width} pageH={pg?.height} height={120} maxWidth={210} />
+              <OccCrop d={d} o={o} height={120} maxWidth={210} />
               <div className="small muted">{o.room_id ? roomById.get(o.room_id)?.code : ''}{pg ? ` · tr.${pg.page_no}` : ''}{o.note ? ` · ${o.note}` : ''}</div>
             </div>)
         })}

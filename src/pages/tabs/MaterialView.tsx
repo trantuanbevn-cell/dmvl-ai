@@ -4,7 +4,7 @@ import { GROUPS } from '../../lib/codes'
 import type { ProjectData } from '../../lib/useProject'
 import type { Entry } from '../../lib/types'
 import { locationsOf } from '../../lib/locations'
-import Crop from '../../components/Crop'
+import OccCrop from '../../components/OccCrop'
 import EntryPanel from '../../components/EntryPanel'
 import { useAuth } from '../../lib/auth'
 import { missingOf } from '../../lib/missing'
@@ -61,7 +61,7 @@ export default function MaterialView({ d }: { d: ProjectData }) {
             return (
               <div key={e.id} className={'mat-card st-' + e.status + (e.id === sel ? ' sel' : '') + ' src-row-' + e.source} onClick={() => setSel(e.id)}>
                 <div className="mc-imgs">
-                  {shots.slice(0, 3).map(o => { const pg = o.page_id ? pageById.get(o.page_id) : undefined; return <Crop key={o.id} url={pg ? d.urls[pg.image_path] : undefined} bbox={o.bbox} pageW={pg?.width} pageH={pg?.height} height={120} maxWidth={180} /> })}
+                  {shots.slice(0, 3).map(o => <OccCrop key={o.id} d={d} o={o} height={120} maxWidth={180} />)}
                   {shots.length > 3 && <span className="small muted">+{shots.length - 3} ảnh</span>}
                   {!shots.length && <div className="ic-none wide" style={e.color_hex ? { background: e.color_hex } : undefined}><span>{e.source === 'inferred' ? 'Suy luận – không thấy trong ảnh' : 'Chưa có ảnh'}</span></div>}
                   {e.color_hex && shots.length > 0 && <span className="swatch" style={{ background: e.color_hex, height: 120 }}><span>{e.color_hex}</span></span>}

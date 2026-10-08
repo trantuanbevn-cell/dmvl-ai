@@ -1,3 +1,4 @@
+import type { CropViewT } from './crop'
 export type Project = { id: string; name: string; location: string | null; client: string | null; pdf_path: string | null; status: string; created_at: string }
 export type Room = { id: string; project_id: string; code: string; name_vn: string; name_en: string | null; room_type: string; concept_counts: { label: string; qty: number; unit?: string }[]; analysis_status: string; analysis_log: string | null; sort: number; plan?: any | null; work_status?: 'todo' | 'doing' | 'done'; assigned_to?: string | null; work_by?: string | null; work_at?: string | null }
 export type Page = { id: string; project_id: string; page_no: number; image_path: string; thumb_path: string | null; width: number | null; height: number | null; kind: string; room_id: string | null; page_text: string | null; analyzed: boolean; camera?: any | null }
@@ -13,8 +14,9 @@ export type Entry = {
   qty: number | null; unit: string | null; qty_flag: string | null; qty_note: string | null
   source: 'image' | 'inferred' | 'manual'; status: 'pending' | 'approved' | 'rejected' | 'review'
   note_vn: string | null; note_en: string | null; enriched: boolean; sort: number
+  mat_view?: { img?: string | null; region?: number[] | null } | null
 }
-export type Occurrence = { id: string; entry_id: string; room_id: string | null; page_id: string | null; category: string | null; bbox: number[] | null; qty: number | null; confidence: number | null; note: string | null }
+export type Occurrence = { id: string; entry_id: string; room_id: string | null; page_id: string | null; category: string | null; bbox: number[] | null; qty: number | null; confidence: number | null; note: string | null; view?: CropViewT | null }
 export type Warning = { id: string; project_id: string; room_id: string | null; text: string; resolved: boolean }
 
 export const STATUS_VN: Record<string, string> = { pending: 'Chờ duyệt', approved: 'Đã xác nhận', rejected: 'Loại bỏ', review: 'Cần TVTK xem lại' }

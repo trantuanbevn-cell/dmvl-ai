@@ -1,7 +1,7 @@
 import { CATEGORIES } from './codes'
 import { groupBySection, sectionTitle, bandTitle, exportSymbols, symbolOf, tx, planSheets, type ExportOpts } from './sections'
 import { signedUrls } from './supabase'
-import { contextCanvas } from './crop'
+import { viewCanvas, regionCanvas } from './crop'
 import { locationsOf, locationLines } from './locations'
 import { filterEntries, ExportData } from './exportExcel'
 import { STATUS_VN, STATUS_EN } from './types'
@@ -18,7 +18,7 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
   w.document.write('<p style="font-family:sans-serif">Đang dựng trang in…</p>')
   const list = filterEntries(d.entries, includePending)
   const pageById = new Map(d.pages.map(p => [p.id, p]))
-  const urls = await signedUrls([...new Set(d.pages.map(p => p.image_path))])
+  const urls = await signedUrls([...new Set([...d.pages.map(p => p.image_path), ...d.occ.map(x => x.view?.img), ...d.entries.map(x => x.mat_view?.img)].filter(Boolean) as string[])])
   const H = [h('STT', 'No.'), h('KÍ HIỆU BẢN VẼ', 'DRAWING CODE'), h('KÍ HIỆU VL', 'MATERIAL CODE'), h('Hạng mục', 'Item'), h('Vị trí', 'Location'), h('Hình ảnh phối cảnh', 'Render image'), h('Thông số kỹ thuật', 'Specification'), h('Xuất xứ/ Thương hiệu', 'Origin / Brand'), h('Hình ảnh vật liệu', 'Material image'), h('Ghi chú', 'Remarks')]
   const sym = exportSymbols(list, o.renumber)
   const catL = (k: string) => { const c = CATEGORIES.find(x => x.key === k); return c ? tx(c.vn, c.en, L) : k }
@@ -35,8 +35,11 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
       const occ = d.occ.filter(o => o.entry_id === e.id)
       const best = occ.filter(o => o.bbox && o.page_id).sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0]
       let img = ''
-      if (best) { const p = pageById.get(best.page_id!); if (p) { try { img = `<img src="${(await contextCanvas(urls[p.image_path], best.bbox!, 520)).toDataURL('image/jpeg', 0.85)}">` } catch { /* */ } } }
-      const map = e.product_image_url ? `<img src="${esc(e.product_image_url)}">` : e.color_hex ? `<div class="sw" style="background:${esc(e.color_hex)}"></div><small>${esc(e.color_hex)}</small>` : ''
+      if (best) { const p = pageById.get(best.page_id!); if (p) { try { img = `<img src="${(await viewCanvas(urls[p.image_path], best.bbox!, best.view, best.view?.img ? urls[best.view.img] : undefined, 520)).toDataURL('image/jpeg', 0.85)}">` } catch { /* */ } } }
+      let matUrl = ''
+      const mvSrc = e.mat_view?.img ? urls[e.mat_view.img] : e.product_image_url
+      if (mvSrc && (e.mat_view?.img || e.mat_view?.region)) { try { matUrl = (await regionCanvas(mvSrc, e.mat_view?.region, 300)).toDataURL('image/png') } catch { /* */ } }
+      const map = matUrl ? `<img src="${matUrl}">` : e.product_image_url ? `<img src="${esc(e.product_image_url)}">` : e.color_hex ? `<div class="sw" style="background:${esc(e.color_hex)}"></div><small>${esc(e.color_hex)}</small>` : ''
       const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
       const rooms = locs.length ? locs.map(l => `${esc(l.room.code)} – ${esc(tx(l.room.name_vn, l.room.name_en, L).replace('\n', ' / '))}${l.pages.length ? ` (${vn ? 'tr.' : 'p.'}${l.pages.join(', ')})` : ''}`).join('<br>') : '—'
       const cats = [...new Set(occ.map(o => o.category ?? e.category).filter(Boolean) as string[])].map(catL).join(' / ')

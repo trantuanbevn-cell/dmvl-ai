@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs'
 import { groupOf, CATEGORIES } from './codes'
 import { groupBySection, sectionTitle, bandTitle, exportSymbols, symbolOf, tx, planSheets, type Lang, type ExportOpts, type Section } from './sections'
 import { signedUrls } from './supabase'
-import { contextCanvas, swatchBase64, loadImage } from './crop'
+import { viewCanvas, regionCanvas, swatchBase64, loadImage } from './crop'
 import { locationsOf, locationLines } from './locations'
 import type { Project, Room, Page, Entry, Occurrence } from './types'
 import { STATUS_VN, STATUS_EN, SOURCE_VN, SOURCE_EN } from './types'
@@ -133,7 +133,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
         const u = pg ? urls[pg.image_path] : undefined
         if (u) {
           try {
-            const c = await contextCanvas(u, best.bbox!, 520)
+            const c = await viewCanvas(u, best.bbox!, best.view, best.view?.img ? urls[best.view.img] : undefined, 520)
             const id = wb.addImage({ base64: c.toDataURL('image/jpeg', 0.85).split(',')[1], extension: 'jpeg' })
             const scale = Math.min(236 / c.width, 150 / c.height)
             ws.addImage(id, { tl: { col: rc - 1 + 0.05, row: r - 1 + 0.05 }, ext: { width: c.width * scale, height: c.height * scale } })
@@ -143,7 +143,10 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
         row.getCell(rc).value = h('(không thể hiện trong phối cảnh)', '(not shown in render)')
         row.getCell(rc).font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF7F6000' } }
       }
-      let mapB64: string | null = e.product_image_url ? await productImage(e.product_image_url) : null
+      let mapB64: string | null = null
+      const mvSrc = e.mat_view?.img ? urls[e.mat_view.img] : e.product_image_url
+      if (mvSrc && (e.mat_view?.img || e.mat_view?.region)) { try { mapB64 = (await regionCanvas(mvSrc, e.mat_view?.region, 300)).toDataURL('image/png').split(',')[1] } catch { /* ảnh ngoài bị chặn → dùng ảnh gốc */ } }
+      if (!mapB64) mapB64 = e.product_image_url ? await productImage(e.product_image_url) : null
       if (!mapB64 && e.color_hex) mapB64 = swatchBase64(e.color_hex)
       if (mapB64) {
         const id = wb.addImage({ base64: mapB64, extension: 'png' })
@@ -170,7 +173,7 @@ export async function exportExcel(d: ExportData, o: ExportOpts) {
   const list = filterEntries(d.entries, o.includePending)
   const sym = exportSymbols(list, o.renumber)
   const pageById = new Map(d.pages.map(p => [p.id, p]))
-  const urls = await signedUrls([...new Set(d.occ.filter(x => x.page_id).map(x => pageById.get(x.page_id!)?.image_path).filter(Boolean) as string[])])
+  const urls = await signedUrls([...new Set([...d.occ.filter(x => x.page_id).map(x => pageById.get(x.page_id!)?.image_path), ...d.occ.map(x => x.view?.img), ...d.entries.map(x => x.mat_view?.img)].filter(Boolean) as string[])])
   const ctx: Ctx = { wb, d, o, sym, urls, pageById, h }
   const sheets = planSheets(groupBySection(list), o)
   const title = h('BẢNG DANH MỤC VẬT LIỆU HOÀN THIỆN', 'FINISHES & FF&E MATERIAL SCHEDULE')

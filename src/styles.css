@@ -226,3 +226,18 @@ input[readonly], textarea[readonly] { cursor: default }
 .c-mat { text-align: center } .mat-img { max-width: 96px; max-height: 70px; border-radius: 4px; border: 1px solid var(--line); display: block; margin: 0 auto 4px }
 .mat-sw { width: 96px; height: 56px; border-radius: 4px; border: 1px solid var(--line); margin: 0 auto 4px; display: flex; align-items: flex-end; justify-content: center } .mat-sw span { font-size: 9px; background: rgba(255,255,255,.75); padding: 0 4px; border-radius: 3px }
 .c-qty { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-top: 4px }
+/* Chỉnh ảnh crop / ảnh vật liệu */
+.crop-wrap { position: relative; display: block; width: fit-content; max-width: 100% } .sec-table .c-img > .crop-wrap { margin: 0 auto 3px }
+.crop-edit { position: absolute; top: 2px; right: 2px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(42,33,27,.78); color: #fff; font-size: 12px; cursor: pointer; opacity: 0; transition: opacity .15s; padding: 0; line-height: 22px }
+.crop-wrap:hover .crop-edit, .mat-wrap:hover .crop-edit, .crop-edit.show { opacity: 1 } .crop-edit:hover { background: var(--orange) }
+.mat-wrap { position: relative; display: block; width: fit-content; margin: 0 auto 4px; min-width: 40px } .mat-img { display: block; margin: 0 auto; border-radius: 4px; border: 1px solid var(--line); max-width: 96px; max-height: 70px } .mat-img.crop-like { cursor: zoom-in }
+.editor-bg { align-items: center; justify-content: center; overflow: auto; z-index: 90 }
+.editor { background: #fff; border-radius: 12px; padding: 14px; width: min(1100px, 96vw); max-height: 94vh; overflow: auto; display: flex; flex-direction: column; gap: 10px }
+.editor-main { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap } .editor-stage { flex: 1 1 560px; min-width: 0; display: flex; flex-direction: column; align-items: center }
+.editor-side { flex: 0 0 300px; display: flex; flex-direction: column; gap: 8px; align-self: stretch } .editor-prev { background: #f3ede6; border-radius: 8px; padding: 8px; display: flex; justify-content: center; min-height: 100px }
+.ed-box { position: relative; display: inline-block; line-height: 0; overflow: hidden; touch-action: none; user-select: none; border-radius: 6px } .ed-box img { max-width: 100%; max-height: 68vh; display: block }
+.ed-region { position: absolute; border: 2px solid var(--orange); box-shadow: 0 0 0 9999px rgba(0,0,0,.5); cursor: move; box-sizing: border-box }
+.ed-h { position: absolute; width: 14px; height: 14px; background: var(--orange); border: 2px solid #fff; border-radius: 3px; box-sizing: border-box } .ed-h.tl { left: -8px; top: -8px; cursor: nwse-resize } .ed-h.tr { right: -8px; top: -8px; cursor: nesw-resize } .ed-h.bl { left: -8px; bottom: -8px; cursor: nesw-resize } .ed-h.br { right: -8px; bottom: -8px; cursor: nwse-resize }
+.ed-obj { position: absolute; border: 2px dashed #e11d1d; pointer-events: none; box-sizing: border-box }
+.ed-arrow { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none }
+.ed-pt { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 3px solid #fff; background: #e11d1d; cursor: grab; box-shadow: 0 0 0 1px #0006 } .ed-pt.tail { background: #fff; border-color: #e11d1d }
