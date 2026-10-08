@@ -8,6 +8,8 @@ import type { ProjectData } from '../../lib/useProject'
 import { roomStats, heroUrl } from '../../lib/progress'
 import LogBox, { useLog } from '../../components/LogBox'
 import FloorPlans from '../../components/FloorPlans'
+import RoomSplit from '../../components/RoomSplit'
+import { suggestSplits } from '../../lib/roomSplit'
 
 const KINDS: Record<string, string> = { cover: 'Bìa', moodboard: 'Moodboard', plan: 'Mặt bằng', render: 'Phối cảnh', other: 'Khác', unknown: 'Chưa phân loại' }
 
@@ -18,6 +20,8 @@ export default function UploadTab({ d }: { d: ProjectData }) {
   const [busy, setBusy] = useState(false)
   const log = useLog(setLines)
   const nav = useNavigate()
+  const [splitId, setSplitId] = useState<string | null>(null)
+  const splits = suggestSplits(d.rooms, d.pages)
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true)
@@ -57,6 +61,9 @@ export default function UploadTab({ d }: { d: ProjectData }) {
       {d.rooms.length > 0 && (
         <div className="card">
           <div className="row between"><h3>Phòng ({d.rooms.length})</h3><button className="btn sm" onClick={addRoom}>+ Thêm phòng</button></div>
+          {splits.length > 0 && <div className="warn-box small" style={{ margin: '8px 0', padding: 8, background: '#fff6df', borderRadius: 8 }}>
+            ⚠ Phát hiện phòng có thể đang gom nhiều phòng trong cùng một slide: {splits.map(x => <span key={x.room.id} style={{ marginRight: 10 }}><b>{x.room.code} {x.room.name_vn}</b> → {x.parts.map(p => p.name_vn).join(' | ')} <button className="btn sm" onClick={() => setSplitId(x.room.id)}>✂ Tách</button></span>)}
+          </div>}
           <table className="tbl">
             <thead><tr><th /><th>Mã</th><th>Tên phòng (VN)</th><th>Tên (EN)</th><th>Loại phòng</th><th>Số liệu concept</th><th>Số trang</th><th /></tr></thead>
             <tbody>{d.rooms.map(r => (
@@ -68,7 +75,7 @@ export default function UploadTab({ d }: { d: ProjectData }) {
                 <td><select value={r.room_type} onChange={e => setRoom(r.id, { room_type: e.target.value })}>{ROOM_TYPES.map(t => <option key={t.key} value={t.key}>{t.vn}</option>)}</select></td>
                 <td className="small">{(r.concept_counts ?? []).map(c => `${c.label}: ${c.qty}`).join(' · ')}{d.warnings.filter(w => w.room_id === r.id).map(w => <div key={w.id} className="warn-text">⚠ {w.text}</div>)}</td>
                 <td>{d.pages.filter(pg => pg.room_id === r.id).length}</td>
-                <td><button className="btn ghost sm danger" onClick={() => delRoom(r.id)}>Xoá</button></td>
+                <td><button className="btn ghost sm" title="Tách phòng này thành nhiều phòng" onClick={() => setSplitId(r.id)}>✂ Tách</button> <button className="btn ghost sm danger" onClick={() => delRoom(r.id)}>Xoá</button></td>
               </tr>))}
             </tbody>
           </table>
@@ -96,6 +103,7 @@ export default function UploadTab({ d }: { d: ProjectData }) {
           </div>
         </div>
       )}
+      {splitId && d.rooms.find(r => r.id === splitId) && <RoomSplit d={d} room={d.rooms.find(r => r.id === splitId)!} onClose={() => setSplitId(null)} />}
     </fieldset>
   )
 }

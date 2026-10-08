@@ -289,7 +289,9 @@ async function pairViews(room: Room, page: Page, v: PageViews, url: string, log:
 export async function analyzeRoom(project: Project, room: Room, log: Log) {
   await must(supabase.from('rooms').update({ analysis_status: 'running' }).eq('id', room.id))
   try {
-    const all = await must(supabase.from('pages').select('*').eq('room_id', room.id).order('page_no')) as Page[]
+    // trang của phòng này + trang slide dùng chung (một ảnh/camera trong slide thuộc phòng này dù trang gán cho phòng khác)
+    const every = await must(supabase.from('pages').select('*').eq('project_id', project.id).order('page_no')) as Page[]
+    const all = every.filter(p => p.room_id === room.id || (p.views as PageViews | null)?.cams?.some(c => c.room_id === room.id))
     let pages = all.filter(p => p.kind === 'render')
     if (!pages.length) pages = all.filter(p => p.kind === 'plan')
     if (!pages.length) throw new Error('Phòng chưa có trang phối cảnh nào')
@@ -301,14 +303,16 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
       const book = new CodeBook(entries)
       log(`  ${room.code} · trang ${page.page_no} (${i + 1}/${pages.length}) – AI đang nhìn ảnh...`)
       const url = await signedUrl(page.image_path)
-      await must(supabase.from('occurrences').delete().eq('page_id', page.id)) // làm lại sạch kể cả các dòng đã gán cho phòng khác
       const views = page.views as PageViews | null
+      const multi = !!(views && views.rects.length >= 2 && views.cams.length >= 2)
+      if (!multi) await must(supabase.from('occurrences').delete().eq('page_id', page.id)) // trang 1 ảnh: làm lại sạch; slide nhiều phòng chỉ xoá phần của phòng này (đã xoá ở trên)
       if (views && views.rects.length >= 2 && views.cams.length >= 2) {
         await pairViews(room, page, views, url, log)
         const roomIds = new Set((await must(supabase.from('rooms').select('id').eq('project_id', project.id)) as { id: string }[]).map(x => x.id))
         for (const [vi, rect] of views.rects.entries()) {
           const cam = views.pair[vi] >= 0 ? views.cams[views.pair[vi]] : null
           const label = cam?.label ?? `${vi + 1}`
+          if (cam?.room_id && cam.room_id !== room.id && roomIds.has(cam.room_id)) continue // ảnh này thuộc phòng khác của slide – phòng đó tự phân tích phần của nó
           const ents = (await must(supabase.from('entries').select('*').eq('project_id', project.id)) as Entry[])
           const bk = new CodeBook(ents)
           log(`    Ảnh ${vi + 1}/${views.rects.length} (camera ${cam ? label : 'chưa rõ'}) – AI đang nhìn...`)
