@@ -66,7 +66,7 @@ export default function MaterialView({ d }: { d: ProjectData }) {
             const row = secs.filter(x => x.sec.band === b); if (!row.length) return null
             return <div key={b} className="nav-row"><span className="nav-band">{bandTitle(b, 'vn').split(' – ')[0].replace(/^[A-D]\. /, '')}</span>
               {row.map(({ sec, list }) => { const n = list.filter(inRoom).length, m = nMiss(list); return (
-                <button key={sec.key} className={'chip' + (only === sec.key ? ' on' : '')} onClick={() => { setOnly(sec.key); setSel(null) }} title={sec.en}>{sectionTitle(sec, 'vn')} <span className="cnt">{n}</span>{m > 0 && <span className="cnt warn" title="dòng còn thiếu thông tin">⚠{m}</span>}</button>) })}
+                <button key={sec.key} className={'chip' + (only === sec.key ? ' on' : n > 0 && m === 0 ? ' done' : '')} onClick={() => { setOnly(sec.key); setSel(null) }} title={sec.en}>{sectionTitle(sec, 'vn')} <span className="cnt">{n}</span>{n > 0 && m === 0 && <span className="cnt ok" title="đã đủ thông tin">✓</span>}{m > 0 && <span className="cnt warn" title="dòng còn thiếu thông tin">⚠{m}</span>}</button>) })}
             </div>
           })}
         </div>

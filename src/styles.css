@@ -291,3 +291,5 @@ input[readonly], textarea[readonly] { cursor: default }
 .oprule-txt { white-space: pre-wrap; color: #b3261e; font-size: 13px; line-height: 1.45 } .oprule-txt.en { font-style: italic }
 
 .sec-table .ed-pre { display: flex; align-items: flex-start; gap: 4px } .sec-table .ed-pre > b { flex: none; font-size: 11px; color: #6b5a4c; padding-top: 7px; white-space: nowrap } .sec-table .ed-pre > *:last-child { flex: 1; min-width: 0 }
+
+.chip.done { background: #e4f3e6; border-color: #a9d3ae } .chip.done .cnt { background: #cfe8d3 } .cnt.ok { background: #5aa466 !important; color: #fff }
