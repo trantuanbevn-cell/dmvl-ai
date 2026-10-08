@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Routes, Route, Link, useNavigate } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, configured } from './lib/supabase'
+import ForcePassword from './components/ForcePassword'
 import { AuthProvider, useAuth, ROLE_VN } from './lib/auth'
 import { PresenceProvider, useOnline, colorOf } from './lib/presence'
 import { Toaster } from './lib/toast'
@@ -70,5 +71,6 @@ export default function App() {
   )
   if (!ready) return <div className="center-card">Đang tải…</div>
   if (!session) return <Login />
+  if (session.user.user_metadata?.must_change) return <ForcePassword name={(session.user.email ?? '').replace(/@dmvl\.local$/i, '')} />
   return <AuthProvider session={session}><PresenceProvider><Shell session={session} /></PresenceProvider></AuthProvider>
 }

@@ -1,3 +1,4 @@
+import { syncLibrary } from '../../lib/matLibrary'
 import { useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
@@ -11,6 +12,7 @@ import { StatusDot } from './MaterialView'
 import Bar from '../../components/Bar'
 import PlanMap from '../../components/PlanMap'
 import RoomSections from '../../components/RoomSections'
+import RoomSuggest from '../../components/RoomSuggest'
 import AddMaterial, { type AddPreset } from '../../components/AddMaterial'
 import type { Lang } from '../../lib/sections'
 import { roomStats, heroUrl } from '../../lib/progress'
@@ -45,7 +47,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
   const stats = useMemo(() => roomStats(d), [d])
   const passes = (e?: Entry) => !!e && (flt === 'all' || (flt === 'pending' ? e.status === 'pending' || e.status === 'review' : e.source === 'inferred'))
   const byCat = CATEGORIES.map(c => ({ c, rows: occ.filter(o => (o.category ?? entryById.get(o.entry_id)?.category) === c.key && passes(entryById.get(o.entry_id))) })).filter(x => x.rows.length)
-  const quick = async (e: Entry, status: Entry['status'], ev: React.MouseEvent) => { ev.stopPropagation(); await supabase.from('entries').update({ status }).eq('id', e.id); d.reload() }
+  const quick = async (e: Entry, status: Entry['status'], ev: React.MouseEvent) => { ev.stopPropagation(); await supabase.from('entries').update({ status }).eq('id', e.id); if (status === 'approved') syncLibrary(e.project_id, [{ ...e, status }]); d.reload() }
   const goto = (dir: number) => { const i = d.rooms.findIndex(r => r.id === roomId); const r = d.rooms[i + dir]; if (r) { setSp({ room: r.id }); setPageIdx(0); setSel(null) } }
 
   const pick = (o: Occurrence) => {
@@ -170,6 +172,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
             {([['all', 'Tất cả'], ['pending', 'Chờ duyệt'], ['inferred', 'Suy luận (không thấy trong ảnh)'], ['missing', `⚠ Thiếu thông tin${rm.rows ? ' (' + rm.rows + ')' : ''}`]] as const).map(([k, l]) => <button key={k} className={'chip' + (flt === k ? ' on' : '')} onClick={() => setFlt(k)}>{l}</button>)}
           </div>
           <RoomSections d={d} room={room!} lang={lang} filter={flt} sel={sel} onPick={pick} onDetail={id => { setSel(id); setSelOcc(null) }} onRemove={removeOcc} onAdd={setDlg} />
+          {room && <RoomSuggest d={d} room={room} onAdd={setDlg} />}
           {canEdit && <div className="row gap add-row">
             <select value={add.category} onChange={e => setAdd({ ...add, category: e.target.value })}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.vn}</option>)}</select>
             <select value={add.group} onChange={e => setAdd({ ...add, group: e.target.value })}>{GROUPS.map(g => <option key={g.code} value={g.code}>{g.code} – {g.vn}</option>)}</select>

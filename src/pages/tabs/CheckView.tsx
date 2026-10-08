@@ -20,7 +20,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
 
   const stats = roomStats(d)
   const thumb = (id: string) => { const u = heroUrl(d, stats.get(id)?.hero); return u ? <span className="mini-hero" style={{ backgroundImage: `url("${u}")` }} /> : null }
-  const results = new Map(d.rooms.map(r => [r.id, checkRoom(d, r, st.checklist)]))
+  const results = new Map(d.rooms.map(r => [r.id, checkRoom(d, r, st.checklist).filter(x => !(r.dismissed_suggest ?? []).includes(x.item.label))]))
   const totals = {
     pending: d.entries.filter(e => e.status === 'pending').length,
     review: d.entries.filter(e => e.status === 'review').length,
@@ -87,7 +87,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
               {!miss.length && !ws.length && <div className="ok-text">✓ Đủ theo checklist</div>}
               {miss.map(x => <div key={x.item.label} className={x.level === 'required' ? 'missline' : 'warnline'}>{x.level === 'required' ? '✗ Thiếu (bắt buộc):' : '? Thường có:'} {x.item.label}</div>)}
               {ws.map(w => <div key={w.id} className="warnline small">⚠ {w.text}</div>)}
-              <button className="btn sm" onClick={() => nav(`/p/${d.project!.id}/rooms?room=${r.id}`)}>Mở phòng để bổ sung →</button>
+              <button className="btn sm" onClick={() => nav(`/p/${d.project!.id}/rooms?room=${r.id}`)}>Mở phòng để bổ sung / xử lý đề xuất →</button>
             </div>)
         })}
       </div>

@@ -9,6 +9,7 @@ import { specPatch } from './specs'
 import { planContext, fillPlanQty } from './planPipeline'
 import type { Rect } from './renders'
 import { autoMerge } from './merge'
+import { libFill, loadLibrary, syncLibrary } from './matLibrary'
 import { cropBase64, cropCanvas } from './crop'
 import type { PageViews, CameraData } from './planPipeline'
 import type { Project, Room, Page, Entry, Occurrence } from './types'
@@ -201,6 +202,7 @@ async function applyItems(project: Project, room: Room, rawItems: AIItem[], page
         qty: it.qty ?? null, unit: it.unit ?? null, qty_flag: q.flag, qty_note: q.note, source: 'image', status: 'pending',
         sort: book.max.get(group) ?? 0,
       }).select().single()) as Entry
+      try { const fill = libFill(await loadLibrary(), entry); if (fill) { await must(supabase.from('entries').update(fill).eq('id', entry.id)); Object.assign(entry, fill) } } catch { /* */ }
       book.add(entry); created++
     } else {
       linked++
@@ -342,6 +344,7 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
     const added = await applyInference(project, room)
     log(`  ${room.code} – quy tắc suy luận thêm ${added} hạng mục (không dùng AI)`)
     await writeSpecs(project)
+    try { await syncLibrary(project.id, await must(supabase.from('entries').select('*').eq('project_id', project.id)) as Entry[]) } catch { /* */ }
     await must(supabase.from('rooms').update({ analysis_status: 'done', analysis_log: null }).eq('id', room.id))
   } catch (e) {
     await supabase.from('rooms').update({ analysis_status: 'error', analysis_log: String(e) }).eq('id', room.id)

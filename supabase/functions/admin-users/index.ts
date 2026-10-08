@@ -31,11 +31,13 @@ Deno.serve(async (req) => {
     }
 
     if (b.action === 'create') {
-      const email = String(b.email ?? '').trim().toLowerCase(), password = String(b.password ?? '')
-      if (!/^\S+@\S+\.\S+$/.test(email)) return json({ error: 'Email không hợp lệ' }, 400)
+      // chỉ cần TÊN ĐĂNG NHẬP (không cần email thật): lưu dưới dạng ten@dmvl.local; vẫn nhận email thật nếu có @
+      let email = String(b.email ?? b.username ?? '').trim().toLowerCase(); const password = String(b.password ?? '')
+      if (!email.includes('@')) { if (!/^[a-z0-9._-]{3,30}$/.test(email)) return json({ error: 'Tên đăng nhập 3–30 ký tự: chữ không dấu, số, . _ -' }, 400); email += '@dmvl.local' }
+      if (!/^\S+@\S+\.\S+$/.test(email)) return json({ error: 'Tên đăng nhập không hợp lệ' }, 400)
       if (password.length < 8) return json({ error: 'Mật khẩu tối thiểu 8 ký tự' }, 400)
       const role = ROLES.includes(b.role) ? b.role : 'viewer'
-      const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true })
+      const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { must_change: true } })
       if (error || !data.user) return json({ error: error?.message ?? 'Không tạo được tài khoản' }, 400)
       const { error: pe } = await admin.from('profiles').upsert({ id: data.user.id, email, full_name: String(b.full_name ?? '').trim() || email.split('@')[0], role, active: true })
       if (pe) { await admin.auth.admin.deleteUser(data.user.id); return json({ error: pe.message }, 400) }
@@ -51,7 +53,7 @@ Deno.serve(async (req) => {
       if ((patch.role && patch.role !== 'admin') || patch.active === false) if (!(await adminsLeft(id))) return json({ error: 'Phải còn ít nhất một quản trị viên đang hoạt động' }, 400)
       if (Object.keys(patch).length) { const { error } = await admin.from('profiles').update(patch).eq('id', id); if (error) return json({ error: error.message }, 400) }
       const authPatch: Record<string, unknown> = {}
-      if (b.password) { if (String(b.password).length < 8) return json({ error: 'Mật khẩu tối thiểu 8 ký tự' }, 400); authPatch.password = String(b.password) }
+      if (b.password) { if (String(b.password).length < 8) return json({ error: 'Mật khẩu tối thiểu 8 ký tự' }, 400); authPatch.password = String(b.password); authPatch.user_metadata = { must_change: true } }
       if (patch.active !== undefined) authPatch.ban_duration = patch.active ? 'none' : '876000h' // khoá hẳn đăng nhập khi ngưng tài khoản
       if (Object.keys(authPatch).length) { const { error } = await admin.auth.admin.updateUserById(id, authPatch); if (error) return json({ error: error.message }, 400) }
       return json({ ok: true })

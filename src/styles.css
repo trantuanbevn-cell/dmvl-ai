@@ -253,3 +253,9 @@ input[readonly], textarea[readonly] { cursor: default }
 .zone-tools, .zone-sug { margin: 8px 0; padding: 8px; border: 1px solid #e3d6c5; border-radius: 8px; background: #fbf7f1 }
 .zone-tools .chip { display: inline-block; margin: 2px 4px 2px 0; padding: 1px 7px; border-radius: 10px; background: #efe3d3 }
 .zone-tools .chip a { cursor: pointer; color: #b3261e; margin-left: 4px }
+.invite-card pre { background: #fbf7f1; border: 1px dashed #c9b79c; border-radius: 8px; padding: 12px; white-space: pre-wrap; font: 13px/1.6 ui-monospace, Menlo, monospace }
+.suggest-box { margin-top: 14px; padding: 12px; border: 1px dashed #c9b79c; border-radius: 10px; background: #fffaf2 }
+.sg-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid #f0e6d6 } .sg-row:first-of-type { border-top: 0 }
+.sg-tag { font-size: 11px; border-radius: 99px; padding: 1px 8px; white-space: nowrap } .sg-row.req .sg-tag { background: #fde0e0; color: #b3261e } .sg-row.com .sg-tag { background: #fdf0c8; color: #8a6d00 } .sg-name { flex: 1 }
+.mat-nav .nav-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 0; border-top: 1px solid #f0e6d6 } .mat-nav .nav-row:first-of-type { border-top: 0 }
+.mat-nav .chip { margin: 0 } .nav-band { width: 110px; font-size: 11px; font-weight: 700; color: var(--brown); text-transform: uppercase; letter-spacing: .03em }

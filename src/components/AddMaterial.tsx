@@ -4,19 +4,23 @@ import { CATEGORIES, GROUPS } from '../lib/codes'
 import { addManualEntry, cloneExtra } from '../lib/pipeline'
 import { findSimilar } from '../lib/similar'
 import type { ProjectData } from '../lib/useProject'
-import type { Room } from '../lib/types'
+import { loadLibrary, searchLibrary, syncLibrary, type LibRow } from '../lib/matLibrary'
+import type { Room, Entry } from '../lib/types'
 
-export type AddPreset = { copy?: string; group: string; category: string; name: string; part_vn?: string | null; parent_id?: string | null; hint?: string }
+export type AddPreset = { name_en?: string; copy?: string; group: string; category: string; name: string; part_vn?: string | null; parent_id?: string | null; hint?: string }
 
 /** Thêm vật liệu/hạng mục mới vào phòng – tự cảnh báo nếu trong dự án đã có mã giống (kể cả do người khác vừa thêm) */
 export default function AddMaterial({ d, room, preset, onClose, onDone }: { d: ProjectData; room: Room; preset: AddPreset; onClose: () => void; onDone: (entryId: string) => void }) {
   const [f, setF] = useState({ group: preset.group, category: preset.category, name: preset.name, material: '', color: '', useColor: false })
   const [busy, setBusy] = useState(false)
   const [src, setSrc] = useState<string>(preset.copy ?? '')
-  const srcE = d.entries.find(e => e.id === src)
+  const [lib, setLib] = useState<LibRow[]>([]), [libSrc, setLibSrc] = useState<LibRow | null>(null)
+  useEffect(() => { loadLibrary().then(setLib) }, [])
+  const libHits = useMemo(() => searchLibrary(lib, d.entries, { group: f.group, name: f.name, material: f.material, color: f.useColor ? f.color : null }, 4), [lib, d.entries, f])
+  const srcE = (libSrc as unknown as Entry | null) ?? d.entries.find(e => e.id === src)
   const sources = useMemo(() => d.entries.filter(e => e.group_code === f.group && e.status !== 'rejected').sort((a, b) => a.code.localeCompare(b.code)), [d.entries, f.group])
   const pickSrc = (id: string) => {
-    setSrc(id); const e = d.entries.find(x => x.id === id)
+    setSrc(id); setLibSrc(null); const e = d.entries.find(x => x.id === id)
     if (e) setF(v => ({ ...v, name: e.name_vn, material: e.material_vn ?? '', color: e.color_hex ?? v.color, useColor: !!e.color_hex, category: v.category }))
   }
   useEffect(() => { if (preset.copy) pickSrc(preset.copy) }, []) // eslint-disable-line
@@ -36,14 +40,16 @@ export default function AddMaterial({ d, room, preset, onClose, onDone }: { d: P
     if (!f.name.trim()) return
     setBusy(true)
     try {
-      const base = srcE ? cloneExtra(srcE) : { part_vn: preset.part_vn ?? null, parent_id: preset.parent_id ?? null }
+      const base = srcE ? { ...cloneExtra(srcE), parent_id: libSrc ? preset.parent_id ?? null : srcE.parent_id } : { name_en: preset.name_en ?? null, part_vn: preset.part_vn ?? null, parent_id: preset.parent_id ?? null }
       const e = await addManualEntry(d.project!, room, f.group, f.name.trim(), f.category, {
         ...base, material_vn: f.material.trim() || undefined, color_hex: f.useColor ? f.color : null,
       })
+      syncLibrary(d.project!.id, [e])
       await d.reload(); onDone(e.id)
     } catch (e: any) { alert(e.message) }
     setBusy(false)
   }
+  const useLib = (r: LibRow) => { setLibSrc(r); setSrc(''); setF(v => ({ ...v, name: r.name_vn, material: r.material_vn ?? '', color: r.color_hex ?? v.color, useColor: !!r.color_hex })) }
 
   return (
     <div className="modal-bg" onMouseDown={onClose}>
@@ -65,6 +71,18 @@ export default function AddMaterial({ d, room, preset, onClose, onDone }: { d: P
         <label className="row gap sm-gap small"><input type="checkbox" checked={f.useColor} onChange={e => setF({ ...f, useColor: e.target.checked, color: f.color || '#888888' })} /> Có màu đại diện
           {f.useColor && <input type="color" value={f.color} onChange={e => setF({ ...f, color: e.target.value })} style={{ padding: 0, width: 36, height: 26 }} />}
           <span className="muted">(giúp so với các mã đã có cùng tông màu)</span></label>
+
+        {libHits.length > 0 && !libSrc && (
+          <div className="dup-box" style={{ background: '#eef5ff', borderColor: '#b7d0f0' }}>
+            <div className="dup-title" style={{ color: '#1a4d8f' }}>📚 Thư viện công ty có {libHits.length} mẫu giống (từ các dự án trước) – dùng lại để khỏi nhập lại</div>
+            {libHits.map(({ row, score }) => (
+              <div key={row.id} className="dup-row">
+                <span className="swatch sm" style={{ background: row.color_hex ?? '#eee', height: 34 }} />
+                <div style={{ flex: 1, minWidth: 0 }}><b>{row.name_vn}</b> <span className="small muted">· {Math.round(score * 100)}% giống</span><div className="small muted">{row.material_vn}{row.brand ? ` · ${row.brand} ${row.product_code ?? ''}` : ''}</div></div>
+                <button className="btn sm primary" onClick={() => useLib(row)}>Dùng mẫu này</button>
+              </div>))}
+          </div>)}
+        {libSrc && <p className="small muted">Đang dùng mẫu từ thư viện công ty: <b>{libSrc.name_vn}</b> – sẽ chép thông số, hãng, xuất xứ. <a style={{ cursor: 'pointer' }} onClick={() => setLibSrc(null)}>Bỏ</a></p>}
 
         {sims.length > 0 && (
           <div className="dup-box">

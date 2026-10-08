@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { NavLink, useParams } from 'react-router-dom'
+import { syncLibrary } from '../lib/matLibrary'
 import { useAuth } from '../lib/auth'
 import { useProject } from '../lib/useProject'
 import { projectStats, roomStats } from '../lib/progress'
@@ -15,6 +17,8 @@ export default function ProjectPage() {
   const { id = '', tab = 'overview' } = useParams()
   const data = useProject(id)
   const { canEdit } = useAuth()
+  // mở dự án → đồng bộ các mã vào thư viện công ty (một lần mỗi lần mở)
+  useEffect(() => { if (canEdit && !data.loading && data.project && data.entries.length) syncLibrary(data.project.id, data.entries) }, [canEdit, data.loading, data.project?.id]) // eslint-disable-line
   if (!data.project) return <div className="page muted">{data.loading ? 'Đang tải dự án…' : 'Không tìm thấy dự án'}</div>
   const ps = projectStats(data)
   const rs = [...roomStats(data).values()]

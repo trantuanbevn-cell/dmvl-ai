@@ -21,7 +21,7 @@ export default function Overview({ d }: { d: ProjectData }) {
   const ps = projectStats(d)
   const list = [...stats.values()]
   const cnt = { none: list.filter(x => x.state === 'none').length, todo: list.filter(x => x.state === 'todo').length, done: list.filter(x => x.state === 'done').length }
-  const missing = (s: RoomStat) => (st ? checkRoom(d, s.room, st.checklist).filter(r => !r.ok && r.level === 'required').length : 0)
+  const missing = (s: RoomStat) => (st ? checkRoom(d, s.room, st.checklist).filter(r => !r.ok && r.level === 'required' && !(s.room.dismissed_suggest ?? []).includes(r.item.label)).length : 0)
   const goRoom = (rid: string) => nav(`/p/${id}/rooms?room=${rid}`)
 
   // Gợi ý bước tiếp theo

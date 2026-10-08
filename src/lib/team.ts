@@ -14,7 +14,12 @@ async function call<T = any>(action: string, body: Record<string, unknown> = {})
   return j as T
 }
 export const listUsers = () => call<{ users: TeamUser[] }>('list').then(r => r.users)
-export const createUser = (u: { email: string; password: string; full_name: string; role: Role }) => call('create', u)
+export const createUser = (u: { username: string; password: string; full_name: string; role: Role }) => call<{ id: string; email: string }>('create', u)
+export const loginName = (email: string | null | undefined) => (email ?? '').replace(/@dmvl\.local$/i, '')
+export const slugName = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 24)
+export const appLink = () => `${location.origin}${location.pathname}`
+/** Nội dung "bảng tin" gửi cho thành viên */
+export const inviteText = (name: string, username: string, password: string) => `PHẦN MỀM DMVL – GS-ARCHI\nLink: ${appLink()}\nTên đăng nhập: ${username}\nMật khẩu dùng lần đầu: ${password}\n(Lần đăng nhập đầu tiên phần mềm sẽ yêu cầu bạn tự đặt mật khẩu riêng.)\nXin chào ${name}!`
 export const updateUser = (id: string, patch: { role?: Role; active?: boolean; full_name?: string; password?: string }) => call('update', { id, ...patch })
 export const deleteUser = (id: string) => call('delete', { id })
 export const genPassword = () => { const a = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; return Array.from(crypto.getRandomValues(new Uint8Array(12)), v => a[v % a.length]).join('') }

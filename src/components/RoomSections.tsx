@@ -1,7 +1,8 @@
+import { syncLibrary } from '../lib/matLibrary'
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { CATEGORIES } from '../lib/codes'
-import { groupBySection, sectionTitle, bandTitle, legacyCodes, symbolOf, BANDS, type Lang } from '../lib/sections'
+import { groupBySection, sectionOf, sectionTitle, bandTitle, legacyCodes, symbolOf, BANDS, type Lang } from '../lib/sections'
 import { locationsOf } from '../lib/locations'
 import type { ProjectData } from '../lib/useProject'
 import type { Entry, Occurrence, Room } from '../lib/types'
@@ -38,26 +39,27 @@ const HEAD: Record<Lang, string[]> = {
   both: ['STT / No.', 'KÍ HIỆU BẢN VẼ / DRAWING CODE', 'KÍ HIỆU VL / MATERIAL CODE', 'Hạng mục / Item', 'Vị trí / Location', 'Hình ảnh phối cảnh / Render', 'Thông số kỹ thuật / Specification', 'Xuất xứ/ Thương hiệu / Origin / Brand', 'Hình ảnh vật liệu / Material image', 'Ghi chú / Remarks'],
 }
 const HW: (number | string)[] = [38, 84, 112, 116, '11%', 104, '24%', '12%', 112, '13%']
-export default function RoomSections({ d, room, lang, filter, sel, onPick, onDetail, onRemove, onAdd }: {
-  d: ProjectData; room: Room; lang: Lang; filter: 'all' | 'pending' | 'inferred' | 'missing'; sel: string | null
+export default function RoomSections({ d, room, lang, filter, sel, onPick, onDetail, onRemove, onAdd, only }: {
+  only?: string; d: ProjectData; room: Room | null; lang: Lang; filter: 'all' | 'pending' | 'inferred' | 'missing'; sel: string | null
   onPick: (o: Occurrence) => void; onDetail: (id: string) => void; onRemove: (o: Occurrence) => void
   onAdd: (p: { copy?: string; group: string; category: string; name: string; part_vn?: string | null; parent_id?: string | null; hint?: string }) => void
 }) {
   const { canEdit } = useAuth()
   const pageById = useMemo(() => new Map(d.pages.map(p => [p.id, p])), [d.pages])
   const legacy = useMemo(() => legacyCodes(d.entries), [d.entries])
-  const occ = d.occ.filter(o => o.room_id === room.id)
+  const occ = room ? d.occ.filter(o => o.room_id === room.id) : d.occ
   const ids = [...new Set(occ.map(o => o.entry_id))]
-  let ents = d.entries.filter(e => ids.includes(e.id) && e.status !== 'rejected')
+  let ents = d.entries.filter(e => (room ? ids.includes(e.id) : true) && e.status !== 'rejected')
+  if (only) ents = ents.filter(e => sectionOf(e).key === only)
   if (filter === 'pending') ents = ents.filter(e => e.status === 'pending' || e.status === 'review')
   if (filter === 'inferred') ents = ents.filter(e => e.source === 'inferred')
   if (filter === 'missing') ents = ents.filter(e => missingOf(e, lang).length)
   const secs = groupBySection(ents)
-  const quick = async (e: Entry, status: Entry['status'], ev: React.MouseEvent) => { ev.stopPropagation(); await supabase.from('entries').update({ status }).eq('id', e.id); d.reload() }
+  const quick = async (e: Entry, status: Entry['status'], ev: React.MouseEvent) => { ev.stopPropagation(); await supabase.from('entries').update({ status }).eq('id', e.id); if (status === 'approved') syncLibrary(e.project_id, [{ ...e, status }]); d.reload() }
   /** Xoá hạng mục: nếu mã còn dùng ở phòng khác thì chỉ bỏ khỏi phòng này, ngược lại xoá hẳn mã */
   const del = async (e: Entry) => {
-    const others = [...new Set(d.occ.filter(o => o.entry_id === e.id && o.room_id && o.room_id !== room.id).map(o => o.room_id!))]
-    if (others.length) {
+    const others = room ? [...new Set(d.occ.filter(o => o.entry_id === e.id && o.room_id && o.room_id !== room.id).map(o => o.room_id!))] : []
+    if (room && others.length) {
       if (!confirm(`${e.code} ${e.name_vn} còn dùng ở ${others.length} phòng khác → chỉ bỏ khỏi phòng ${room.code}. Tiếp tục?`)) return
       await supabase.from('occurrences').delete().eq('entry_id', e.id).eq('room_id', room.id)
     } else {
@@ -80,12 +82,12 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
           <div key={section.key}>
             {bandRow && <div className={'band band-' + bandRow}>{bandTitle(bandRow, lang)}</div>}
             <div className="sec-title">{sectionTitle(section, lang)} <span className="cnt">{items.length}</span>{(() => { const n = items.filter(e => missingOf(e, lang).length).length; return n ? <span className="cnt miss-cnt" title="Số dòng còn thiếu thông tin">⚠ {n} dòng thiếu</span> : <span className="cnt ok-cnt">✓ đủ thông tin</span> })()}
-              {canEdit && <button className="btn sm add-sib" style={{ marginLeft: 'auto' }} title="Thêm vật liệu khác vào mục này (vd màu sơn thứ 2)" onClick={() => { const f = items[0]; onAdd({ group: f.group_code, category: f.category ?? 'decor', name: f.name_vn, part_vn: f.part_vn, parent_id: f.parent_id, hint: `Thêm vật liệu nhận diện thiếu trong mục “${sectionTitle(section, lang)}”.` }) }}>＋ Thêm vật liệu</button>}</div>
+              {canEdit && room && <button className="btn sm add-sib" style={{ marginLeft: 'auto' }} title="Thêm vật liệu khác vào mục này (vd màu sơn thứ 2)" onClick={() => { const f = items[0]; onAdd({ group: f.group_code, category: f.category ?? 'decor', name: f.name_vn, part_vn: f.part_vn, parent_id: f.parent_id, hint: `Thêm vật liệu nhận diện thiếu trong mục “${sectionTitle(section, lang)}”.` }) }}>＋ Thêm vật liệu</button>}</div>
             <table className="sec-table">
               <thead><tr>{HEAD[lang].map((t, i) => <th key={i} style={{ width: HW[i] }}>{t}</th>)}<th style={{ width: 112 }} /></tr></thead>
               <tbody>{items.map(e => {
                 const os = occ.filter(o => o.entry_id === e.id)
-                const shots = os.filter(o => o.bbox && o.page_id).slice(0, 2)
+                const shots = os.filter(o => o.bbox && o.page_id).slice(0, room ? 2 : 3)
                 const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
                 const cat = os[0]?.category ?? e.category ?? 'decor'
                 const ms = missingOf(e, lang), mk = new Set<string>(ms.map(m => String(m.key)))
@@ -98,7 +100,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                     <td className="c-vl"><Ed e={e} k="product_code" ph="Mã vật liệu" miss={M('product_code')} /></td>
                     <td><select value={cat} disabled={!canEdit} onClick={x => x.stopPropagation()} onChange={x => setCat(os, x.target.value)}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{lang === 'en' ? c.en : c.vn}</option>)}</select>
                       {pair('part', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} ph="Bộ phận áp dụng" /></div>)}</td>
-                    <td className="c-loc">{locs.map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room.id ? ' here' : '')}>{roomName(l.room, lang)}</span>)}</td>
+                    <td className="c-loc">{locs.map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room?.id ? ' here' : '')}>{roomName(l.room, lang)}</span>)}</td>
                     <td className="c-img">{shots.length ? shots.map(o => <OccCrop key={o.id} d={d} o={o} height={64} maxWidth={90} />)
                       : <div className="ic-none tiny"><span>{e.source === 'inferred' ? 'Suy luận' : 'Chưa có ảnh'}</span></div>}</td>
                     <td>{[...pair('name', lang), ...pair('material', lang), ...pair('desc', lang)].map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} miss={M(k)} area={!String(k).startsWith('name')} ph={String(k).startsWith('name') ? 'Tên hạng mục' : String(k).startsWith('material') ? 'Vật liệu / màu / bề mặt' : 'Thông số kỹ thuật'} /></div>)}
@@ -112,7 +114,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                     <td className="c-act"><StatusDot s={e.status} />
                       {canEdit && <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}>✓</button>}
                       <button className="btn ghost sm" title="Chi tiết / chọn mã hãng từ thư viện" onClick={ev => { ev.stopPropagation(); onDetail(e.id) }}>⋯</button>
-                      {canEdit && <button className="btn ghost sm" title="Nhân đôi vật liệu này (vd màu thứ 2) – chép nội dung, chỉ sửa vài chỗ" onClick={ev => { ev.stopPropagation(); onAdd({ copy: e.id, group: e.group_code, category: cat, name: e.name_vn, part_vn: e.part_vn, parent_id: e.parent_id, hint: `Thêm vật liệu cùng loại với ${e.code} – ${e.name_vn}. Sửa tên/màu cho khác đi.` }) }}>＋</button>}
+                      {canEdit && room && <button className="btn ghost sm" title="Nhân đôi vật liệu này (vd màu thứ 2) – chép nội dung, chỉ sửa vài chỗ" onClick={ev => { ev.stopPropagation(); onAdd({ copy: e.id, group: e.group_code, category: cat, name: e.name_vn, part_vn: e.part_vn, parent_id: e.parent_id, hint: `Thêm vật liệu cùng loại với ${e.code} – ${e.name_vn}. Sửa tên/màu cho khác đi.` }) }}>＋</button>}
                       {canEdit && <button className="btn ghost sm" title="Xoá hạng mục này" onClick={ev => { ev.stopPropagation(); del(e) }}>🗑</button>}</td>
                   </tr>)
               })}</tbody>
