@@ -167,3 +167,24 @@ textarea.json { font-family: ui-monospace, monospace; font-size: 12px; min-heigh
 .dotc { width: 10px; height: 10px; border-radius: 50%; flex: none }
 .cls-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px; max-height: 220px; overflow: auto; margin-top: 6px }
 .planmap { margin-top: 8px }
+
+/* bảng theo mục vật liệu chuẩn công ty */
+.sec-wrap { margin-top: 6px }
+.band { margin: 18px 0 4px; padding: 7px 10px; border-radius: 6px; color: #fff; font-weight: 700; font-size: 12.5px; letter-spacing: .02em; background: #6B3A1F }
+.band-B { background: #8a5a3a } .band-C { background: #4f5d6b } .band-D { background: #7b5a7a }
+.sec-title { margin: 10px 0 4px; padding: 4px 8px; font-weight: 700; font-size: 13px; background: #C57542; color: #fff; border-radius: 4px; display: flex; gap: 8px; align-items: center }
+.sec-title .cnt { background: rgba(255,255,255,.25); color: #fff }
+.sec-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12.5px }
+.sec-table th { background: #f1e8de; color: #6B3A1F; font-size: 11px; padding: 5px 4px; border: 1px solid #d8c8b6; text-align: center }
+.sec-table td { border: 1px solid #e0d3c4; padding: 4px; vertical-align: top; background: #fff }
+.sec-table tr.sel td { outline: 0; background: #fff3e0 } .sec-table tr { cursor: pointer }
+.sec-table tr.src-row-inferred td { background: #fffaf0 } .sec-table tr.st-approved td.c-code { background: #e8f5e9 }
+.sec-table input, .sec-table textarea, .sec-table select { width: 100%; box-sizing: border-box; font-size: 12px; padding: 3px 4px; border: 1px solid transparent; background: transparent; border-radius: 4px; font-family: inherit; resize: vertical }
+.sec-table input:hover, .sec-table textarea:hover, .sec-table select:hover { border-color: #d8c8b6 } .sec-table input:focus, .sec-table textarea:focus { border-color: #C57542; background: #fff; outline: none }
+.sec-table .c-code { text-align: center; font-size: 12px; color: #6B3A1F; word-break: break-word } .sec-table .c-code b { font-size: 13px }
+.sec-table .c-img { text-align: center } .sec-table .c-img > * { margin: 0 auto 3px } .swatch-s { display: inline-block; width: 26px; height: 10px; border: 1px solid #aaa; border-radius: 2px }
+.sec-table .c-qty input { text-align: center } .sec-table .c-act { text-align: center; white-space: normal } .sec-table .c-act .btn { padding: 2px 6px; margin: 1px }
+.sec-table .c-loc .loc-tag { display: inline-block; margin: 1px } .loc-tag.here { background: #ffe0b2; font-weight: 600 }
+.sec-table .ed-line { position: relative } .sec-table .ed-line i { position: absolute; right: 3px; top: 1px; font-size: 9px; color: #999; font-style: normal; pointer-events: none }
+.ic-none.tiny { height: 56px; width: 86px; font-size: 10px }
+@media (max-width: 1100px) { .sec-wrap { overflow-x: auto } .sec-table { min-width: 1000px } }

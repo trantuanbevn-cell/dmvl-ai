@@ -11,6 +11,8 @@ import EntryPanel from '../../components/EntryPanel'
 import { StatusDot } from './MaterialView'
 import Bar from '../../components/Bar'
 import PlanMap from '../../components/PlanMap'
+import RoomSections from '../../components/RoomSections'
+import type { Lang } from '../../lib/sections'
 import { roomStats, heroUrl } from '../../lib/progress'
 
 export default function RoomView({ d }: { d: ProjectData }) {
@@ -22,6 +24,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
   const [pageIdx, setPageIdx] = useState(0)
   const [draw, setDraw] = useState(false)
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
+  const [lang, setLang] = useState<Lang>('vn')
   const [flt, setFlt] = useState<'all' | 'pending' | 'inferred'>('all')
   const [add, setAdd] = useState({ group: 'DC', name: '', category: 'decor' })
   const imgRef = useRef<HTMLDivElement>(null)
@@ -130,37 +133,12 @@ export default function RoomView({ d }: { d: ProjectData }) {
           {room?.concept_counts?.length ? <p className="small muted">Số liệu concept: {room.concept_counts.map(c => `${c.label}: ${c.qty}`).join(' · ')}</p> : null}
           {d.warnings.filter(w => w.room_id === roomId).map(w => <div key={w.id} className="warnline">⚠ {w.text}</div>)}
           <div className="chips" style={{ margin: '10px 0' }}>
+            <span className="small muted">Ngôn ngữ / ký hiệu:</span>
+            {([['vn', 'Tiếng Việt'], ['en', 'English'], ['both', 'Song ngữ']] as const).map(([k, l]) => <button key={k} className={'chip' + (lang === k ? ' on' : '')} onClick={() => setLang(k)}>{l}</button>)}
+            <span className="small muted" style={{ marginLeft: 12 }}>Lọc:</span>
             {([['all', 'Tất cả'], ['pending', 'Chờ duyệt'], ['inferred', 'Suy luận (không thấy trong ảnh)']] as const).map(([k, l]) => <button key={k} className={'chip' + (flt === k ? ' on' : '')} onClick={() => setFlt(k)}>{l}</button>)}
           </div>
-          {byCat.map(({ c, rows }) => (
-            <div key={c.key} className="cat-block">
-              <div className="cat-title">{c.vn} <span className="muted">/ {c.en}</span> <span className="cnt">{rows.length}</span></div>
-              <div className="item-cards">{rows.map(o => {
-                const e = entryById.get(o.entry_id) as Entry | undefined; if (!e) return null
-                const pg = o.page_id ? pageById.get(o.page_id) : undefined
-                return (
-                  <div key={o.id} className={'item-card st-' + e.status + (e.id === sel ? ' sel' : '') + ' src-row-' + e.source} onClick={() => pick(o)}>
-                    <div className="ic-img">
-                      {o.bbox && pg ? <Crop url={d.urls[pg.image_path]} bbox={o.bbox} pageW={pg.width} pageH={pg.height} height={150} maxWidth={270} />
-                        : <div className="ic-none" style={e.color_hex ? { background: e.color_hex } : undefined}><span>{e.source === 'inferred' ? 'Suy luận – không thấy trong ảnh' : 'Chưa có ảnh'}</span></div>}
-                    </div>
-                    <div className="ic-body">
-                      <div className="row between nowrap"><b className="code">{e.code}</b><span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></div>
-                      <div className="ic-name">{e.name_vn}</div>
-                      <div className="small muted ic-mat">{e.material_vn}</div>
-                      <div className="small">{e.brand ? <b>{e.brand} · {e.product_code}</b> : <span className="muted">chưa chọn mã hãng</span>}</div>
-                      <div className="small">{o.qty ?? e.qty ?? '—'} {e.unit ?? ''} {e.qty_flag !== 'ok' && <span className="warn-text" title={e.qty_note ?? ''}>⚠ cần kiểm SL</span>}</div>
-                      <div className="ic-actions">
-                        <StatusDot s={e.status} />
-                        <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}>✓ Xác nhận</button>
-                        <button className="btn ghost sm" title="Loại bỏ mã" onClick={ev => quick(e, 'rejected', ev)}>✕</button>
-                        <button className="btn ghost sm" title="Bỏ khỏi phòng này" onClick={ev => { ev.stopPropagation(); removeOcc(o) }}>🗑</button>
-                      </div>
-                    </div>
-                  </div>)
-              })}</div>
-            </div>
-          ))}
+          <RoomSections d={d} room={room!} lang={lang} filter={flt} sel={sel} onPick={pick} onDetail={id => { setSel(id); setSelOcc(null) }} onRemove={removeOcc} />
           <div className="row gap add-row">
             <select value={add.category} onChange={e => setAdd({ ...add, category: e.target.value })}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.vn}</option>)}</select>
             <select value={add.group} onChange={e => setAdd({ ...add, group: e.target.value })}>{GROUPS.map(g => <option key={g.code} value={g.code}>{g.code} – {g.vn}</option>)}</select>
