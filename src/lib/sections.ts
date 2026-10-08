@@ -81,8 +81,8 @@ export function legacyCodes(entries: Entry[]): Map<string, string> {
 export type Prefix = { prefix: string; en: string; vn: string; includes_en: string; includes_vn: string; groups: string[] }
 export const PREFIXES: Prefix[] = [
   { prefix: 'CT', en: 'Ceramic / Porcelain Tile', vn: 'Gạch ốp lát', includes_en: 'ceramic, porcelain, mosaic tile', includes_vn: 'gạch gốm, porcelain, mosaic', groups: ['CT'] },
-  { prefix: 'ST', en: 'Stone', vn: 'Đá', includes_en: 'natural stone (marble, granite…), engineered stone, quartz, terrazzo, solid surface', includes_vn: 'đá tự nhiên (marble, granite…), đá nhân tạo, quartz, terrazzo, solid surface', groups: ['ST', 'ES'] },
-  { prefix: 'WD', en: 'Wood', vn: 'Gỗ', includes_en: 'solid wood, veneer, engineered wood (MDF/MFC), melamine, laminate, acrylic panels', includes_vn: 'gỗ tự nhiên, veneer, gỗ công nghiệp (MDF/MFC), melamine, laminate, acrylic', groups: ['WD', 'LM'] },
+  { prefix: 'ST', en: 'Stone', vn: 'Đá (tự nhiên, nhân tạo)', includes_en: 'natural stone (marble, granite…), engineered stone, quartz, terrazzo, solid surface', includes_vn: 'đá tự nhiên (marble, granite…), đá nhân tạo, quartz, terrazzo, solid surface', groups: ['ST', 'ES'] },
+  { prefix: 'WD', en: 'Wood', vn: 'Gỗ (tự nhiên, công nghiệp)', includes_en: 'solid wood, veneer, engineered wood (MDF/MFC), melamine, laminate, acrylic panels', includes_vn: 'gỗ tự nhiên, veneer, gỗ công nghiệp (MDF/MFC), melamine, laminate, acrylic', groups: ['WD', 'LM'] },
   { prefix: 'LVT', en: 'Resilient Flooring', vn: 'Sàn nhựa', includes_en: 'luxury vinyl tile, vinyl sheet', includes_vn: 'sàn vinyl, sàn nhựa', groups: ['LVT'] },
   { prefix: 'CPT', en: 'Carpet', vn: 'Thảm', includes_en: 'broadloom, carpet tile', includes_vn: 'thảm cuộn, thảm tấm', groups: ['CPT'] },
   { prefix: 'PNT', en: 'Paint', vn: 'Sơn', includes_en: 'emulsion paint, special / epoxy coatings', includes_vn: 'sơn nước, sơn đặc biệt, epoxy', groups: ['PT', 'SP'] },
@@ -94,7 +94,7 @@ export const PREFIXES: Prefix[] = [
   { prefix: 'MTL', en: 'Metal', vn: 'Kim loại', includes_en: 'stainless steel, brass, aluminium, powder-coated steel', includes_vn: 'inox, đồng thau, nhôm, thép sơn tĩnh điện', groups: ['MT'] },
   { prefix: 'GL', en: 'Glass', vn: 'Kính', includes_en: 'clear, frosted, tempered, laminated glass', includes_vn: 'kính trong, mờ, cường lực, dán an toàn', groups: ['GL'] },
   { prefix: 'MIR', en: 'Mirror', vn: 'Gương', includes_en: 'mirror', includes_vn: 'gương', groups: ['MR'] },
-  { prefix: 'FAB', en: 'Fabric', vn: 'Vải bọc / vải rèm', includes_en: 'upholstery and curtain fabric', includes_vn: 'vải bọc, vải rèm', groups: ['FB'] },
+  { prefix: 'FAB', en: 'Fabric', vn: 'Vải', includes_en: 'upholstery and curtain fabric', includes_vn: 'vải bọc, vải rèm', groups: ['FB'] },
   { prefix: 'LTH', en: 'Leather', vn: 'Da / giả da', includes_en: 'leather, faux leather', includes_vn: 'da thật, giả da', groups: ['LE'] },
   { prefix: 'DR', en: 'Door', vn: 'Cửa đi', includes_en: 'door leaf, frame', includes_vn: 'cánh cửa, khung cửa', groups: ['DR'] },
   { prefix: 'HW', en: 'Door Hardware', vn: 'Phụ kiện cửa', includes_en: 'handle, hinge, closer, lock, stop', includes_vn: 'tay nắm, bản lề, closer, khoá, chặn cửa', groups: ['HW'] },
@@ -105,7 +105,7 @@ export const PREFIXES: Prefix[] = [
   { prefix: 'PLB', en: 'Plumbing Fixtures', vn: 'Thiết bị vệ sinh', includes_en: 'basins, WCs, taps, showers', includes_vn: 'lavabo, bồn cầu, vòi, sen tắm', groups: ['SF'] },
   { prefix: 'WRA', en: 'Washroom Accessories', vn: 'Phụ kiện phòng vệ sinh', includes_en: 'soap dispenser, paper holder, hand dryer', includes_vn: 'hộp xà phòng, giấy, máy sấy tay', groups: ['BA'] },
   { prefix: 'EQP', en: 'Equipment', vn: 'Thiết bị', includes_en: 'appliances, kitchen and special equipment', includes_vn: 'thiết bị điện tử, bếp, chuyên dụng', groups: ['EQ'] },
-  { prefix: 'ART', en: 'Artwork', vn: 'Tranh / tác phẩm nghệ thuật', includes_en: 'paintings, murals, art pieces', includes_vn: 'tranh, mural, tác phẩm', groups: ['AW'] },
+  { prefix: 'ART', en: 'Artwork', vn: 'Tranh', includes_en: 'paintings, murals, art pieces', includes_vn: 'tranh, mural, tác phẩm', groups: ['AW'] },
   { prefix: 'DEC', en: 'Decorative Accessories', vn: 'Đồ trang trí', includes_en: 'plants, cushions, decor items', includes_vn: 'cây, gối, phụ kiện decor', groups: ['DC'] },
   { prefix: 'WT', en: 'Window Treatment', vn: 'Rèm / màn', includes_en: 'curtains, blinds', includes_vn: 'rèm, màn', groups: ['WT'] },
   { prefix: 'SGN', en: 'Signage', vn: 'Biển báo', includes_en: 'room signs, wayfinding', includes_vn: 'biển tên phòng, chỉ dẫn', groups: ['SN'] },
