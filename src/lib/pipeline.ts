@@ -188,8 +188,8 @@ async function applyItems(project: Project, room: Room, rawItems: AIItem[], page
   for (const it of ordered) {
     const group = GROUP_SET.has(it.group_code) ? it.group_code : 'DC'
     const category = CAT_SET.has(it.category) ? it.category : 'decor'
-    let entry = it.match_code ? book.byCode.get(it.match_code.trim()) : undefined
-    if (!entry) {
+    let entry = it.match_code && group !== 'AW' ? book.byCode.get(it.match_code.trim()) : undefined
+    if (!entry && group !== 'AW') {
       // tự ghép với mã đã có nếu cùng nhóm và mô tả gần như trùng
       for (const e of book.byCode.values()) if (e.group_code === group && similar(`${e.name_vn} ${e.material_vn ?? ''}`, `${it.name_vn} ${it.material_vn}`) >= 0.8) { entry = e; break }
     }

@@ -10,9 +10,11 @@ import type { Room, Entry } from '../lib/types'
 export type AddPreset = { name_en?: string; copy?: string; group: string; category: string; name: string; part_vn?: string | null; parent_id?: string | null; hint?: string }
 
 /** Thêm vật liệu/hạng mục mới vào phòng – tự cảnh báo nếu trong dự án đã có mã giống (kể cả do người khác vừa thêm) */
-export default function AddMaterial({ d, room, preset, onClose, onDone }: { d: ProjectData; room: Room; preset: AddPreset; onClose: () => void; onDone: (entryId: string) => void }) {
+export default function AddMaterial({ d, room: room0, preset, onClose, onDone }: { d: ProjectData; room: Room | null; preset: AddPreset; onClose: () => void; onDone: (entryId: string) => void }) {
   const [f, setF] = useState({ group: preset.group, category: preset.category, name: preset.name, material: '', color: '', useColor: false })
   const [busy, setBusy] = useState(false)
+  const [roomSel, setRoomSel] = useState<string>(room0?.id ?? '')
+  const room = d.rooms.find(r => r.id === roomSel) ?? null
   const [src, setSrc] = useState<string>(preset.copy ?? '')
   const [lib, setLib] = useState<LibRow[]>([]), [libSrc, setLibSrc] = useState<LibRow | null>(null)
   useEffect(() => { loadLibrary().then(setLib) }, [])
@@ -24,14 +26,14 @@ export default function AddMaterial({ d, room, preset, onClose, onDone }: { d: P
     if (e) setF(v => ({ ...v, name: e.name_vn, material: e.material_vn ?? '', color: e.color_hex ?? v.color, useColor: !!e.color_hex, category: v.category }))
   }
   useEffect(() => { if (preset.copy) pickSrc(preset.copy) }, []) // eslint-disable-line
-  const inRoom = useMemo(() => new Set(d.occ.filter(o => o.room_id === room.id).map(o => o.entry_id)), [d.occ, room.id])
+  const inRoom = useMemo(() => new Set(d.occ.filter(o => o.room_id === room?.id).map(o => o.entry_id)), [d.occ, room?.id])
   const sims = useMemo(() => findSimilar(d.entries.filter(e => e.id !== src), { group: f.group, name: f.name, material: f.material, color: f.useColor ? f.color : null }), [d.entries, f, src])
   const roomOf = (id: string) => { const rs = [...new Set(d.occ.filter(o => o.entry_id === id && o.room_id).map(o => o.room_id!))]; return rs.map(r => d.rooms.find(x => x.id === r)?.code).filter(Boolean).join(', ') }
 
   const use = async (id: string) => {
     setBusy(true)
     try {
-      if (!inRoom.has(id)) { const { error } = await supabase.from('occurrences').insert({ entry_id: id, room_id: room.id, category: f.category }); if (error) throw new Error(error.message) }
+      if (room && !inRoom.has(id)) { const { error } = await supabase.from('occurrences').insert({ entry_id: id, room_id: room.id, category: f.category }); if (error) throw new Error(error.message) }
       await d.reload(); onDone(id)
     } catch (e: any) { alert(e.message) }
     setBusy(false)
@@ -54,8 +56,9 @@ export default function AddMaterial({ d, room, preset, onClose, onDone }: { d: P
   return (
     <div className="modal-bg" onMouseDown={onClose}>
       <div className="modal" onMouseDown={e => e.stopPropagation()}>
-        <div className="row between"><h3>Thêm vật liệu vào {room.code} {room.name_vn}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
+        <div className="row between"><h3>Thêm vật liệu{room ? ` vào ${room.code} ${room.name_vn}` : ''}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
         {preset.hint && <p className="small muted">{preset.hint}</p>}
+        {!room0 && <label className="fld">Phòng áp dụng (có thể thêm/bỏ sau ở cột Vị trí)<select value={roomSel} onChange={e => setRoomSel(e.target.value)}><option value="">— chưa gán phòng —</option>{d.rooms.map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}</select></label>}
         <div className="grid2">
           <label className="fld">Nhóm<select value={f.group} onChange={e => setF({ ...f, group: e.target.value })}>{GROUPS.map(g => <option key={g.code} value={g.code}>{g.code} – {g.vn}</option>)}</select></label>
           <label className="fld">Bề mặt / mục<select value={f.category} onChange={e => setF({ ...f, category: e.target.value })}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.vn}</option>)}</select></label>
@@ -95,7 +98,7 @@ export default function AddMaterial({ d, room, preset, onClose, onDone }: { d: P
                   <div className="small muted">{e.material_vn}</div>
                   <div className="small">{why.join(' · ')}{why.length ? ' · ' : ''}đang ở: {roomOf(e.id) || 'chưa gán phòng'}{e.brand ? ` · ${e.brand} ${e.product_code ?? ''}` : ''}</div>
                 </div>
-                <button className="btn sm primary" disabled={busy} onClick={() => use(e.id)}>{inRoom.has(e.id) ? 'Đã có trong phòng' : 'Dùng mã này'}</button>
+                <button className="btn sm primary" disabled={busy} onClick={() => use(e.id)}>{inRoom.has(e.id) ? 'Đã có trong phòng' : room ? 'Dùng mã này' : 'Chọn mã này'}</button>
               </div>))}
           </div>)}
 

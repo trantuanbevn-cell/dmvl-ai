@@ -43,6 +43,7 @@ export function searchLibrary(lib: LibRow[], projectEntries: Entry[], p: { group
 
 /** Bổ sung thông số còn trống của mã mới bằng thư viện khi gần như trùng (≥ 0.85) – không ghi đè thứ đã có */
 export function libFill(lib: LibRow[], entry: Entry): Partial<Entry> | null {
+  if (entry.group_code === 'AW') return null
   const [best] = searchLibrary(lib, [], { group: entry.group_code, name: entry.name_vn, material: entry.material_vn ?? '', color: entry.color_hex }, 1)
   if (!best || best.score < 0.85) return null
   const patch: Record<string, unknown> = {}

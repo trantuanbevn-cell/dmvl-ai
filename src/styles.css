@@ -263,3 +263,5 @@ input[readonly], textarea[readonly] { cursor: default }
 .dc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px } @media (max-width: 900px) { .dc-grid { grid-template-columns: 1fr } }
 .dc-side { border: 1px solid #eadfce; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: #fffdf9 }
 .dc-shots { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start } .dc-row { font-size: 13px } .dc-row > span:first-child { display: inline-block; min-width: 70px; color: #8a7a68; margin-right: 6px }
+.loc-x { margin-left: 5px; color: #b3261e; cursor: pointer; font-size: 11px } .loc-add { font-size: 12px; max-width: 130px; margin-top: 4px }
+.shot-wrap { position: relative; display: inline-block } .shot-x { position: absolute; top: 1px; right: 1px; width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 50%; background: rgba(255,255,255,.9); color: #b3261e; font-size: 10px; cursor: pointer; display: none; box-shadow: 0 0 2px rgba(0,0,0,.4) } .shot-wrap:hover .shot-x { display: block }

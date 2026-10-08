@@ -7,6 +7,7 @@ import { locationsOf } from '../lib/locations'
 import type { ProjectData } from '../lib/useProject'
 import type { Entry, Occurrence, Room } from '../lib/types'
 import OccCrop from './OccCrop'
+import AddShot from './AddShot'
 import MatImage from './MatImage'
 import { StatusDot } from '../pages/tabs/MaterialView'
 import { useAuth } from '../lib/auth'
@@ -72,6 +73,25 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     }
     d.reload()
   }
+  const [shotFor, setShotFor] = useState<Entry | null>(null)
+  const delShot = async (o: Occurrence) => {
+    if (!confirm('Xoá hình phối cảnh này khỏi vật liệu?')) return
+    const sameRoom = d.occ.filter(x => x.entry_id === o.entry_id && x.room_id === o.room_id)
+    // hình cuối cùng của phòng: giữ lại vị trí phòng, chỉ bỏ ảnh
+    if (sameRoom.length <= 1) await supabase.from('occurrences').update({ page_id: null, bbox: null, view: null }).eq('id', o.id)
+    else await supabase.from('occurrences').delete().eq('id', o.id)
+    d.reload()
+  }
+  const addLoc = async (e: Entry, roomId: string) => {
+    if (!roomId) return
+    const cat = d.occ.find(o => o.entry_id === e.id)?.category ?? e.category ?? 'decor'
+    const { error } = await supabase.from('occurrences').insert({ entry_id: e.id, room_id: roomId, category: cat })
+    if (error) alert(error.message); else d.reload()
+  }
+  const delLoc = async (e: Entry, r: Room) => {
+    if (!confirm(`Bỏ ${e.code} ${e.name_vn} khỏi phòng ${r.code} ${r.name_vn}? (hình phối cảnh của phòng này cũng bị bỏ)`)) return
+    await supabase.from('occurrences').delete().eq('entry_id', e.id).eq('room_id', r.id); d.reload()
+  }
   const setCat = async (os: Occurrence[], category: string) => { await supabase.from('occurrences').update({ category }).in('id', os.map(o => o.id)); d.reload() }
   let lastBand = '', n = 0
   if (!secs.length) return <div className="muted small" style={{ padding: 12 }}>Chưa có hạng mục nào{filter !== 'all' ? ' khớp bộ lọc' : ''}.</div>
@@ -83,12 +103,12 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
           <div key={section.key}>
             {bandRow && <div className={'band band-' + bandRow}>{bandTitle(bandRow, lang)}</div>}
             <div className="sec-title">{sectionTitle(section, lang)} <span className="cnt">{items.length}</span>{(() => { const n = items.filter(e => missingOf(e, lang).length).length; return n ? <span className="cnt miss-cnt" title="Số dòng còn thiếu thông tin">⚠ {n} dòng thiếu</span> : <span className="cnt ok-cnt">✓ đủ thông tin</span> })()}
-              {canEdit && room && <button className="btn sm add-sib" style={{ marginLeft: 'auto' }} title="Thêm vật liệu khác vào mục này (vd màu sơn thứ 2)" onClick={() => { const f = items[0]; onAdd({ group: f.group_code, category: f.category ?? 'decor', name: f.name_vn, part_vn: f.part_vn, parent_id: f.parent_id, hint: `Thêm vật liệu nhận diện thiếu trong mục “${sectionTitle(section, lang)}”.` }) }}>＋ Thêm vật liệu</button>}</div>
+              {canEdit && <button className="btn sm add-sib" style={{ marginLeft: 'auto' }} title="Thêm vật liệu khác vào mục này (vd màu sơn thứ 2)" onClick={() => { const f = items[0]; onAdd({ group: f.group_code, category: f.category ?? 'decor', name: f.name_vn, part_vn: f.part_vn, parent_id: f.parent_id, hint: `Thêm vật liệu nhận diện thiếu trong mục “${sectionTitle(section, lang)}”.` }) }}>＋ Thêm vật liệu</button>}</div>
             <table className="sec-table">
               <thead><tr>{HEAD[lang].map((t, i) => <th key={i} style={{ width: HW[i] }}>{t}</th>)}<th style={{ width: 112 }} /></tr></thead>
               <tbody>{items.map(e => {
                 const os = occ.filter(o => o.entry_id === e.id)
-                const shots = os.filter(o => o.bbox && o.page_id).slice(0, room ? 2 : 3)
+                const shots = os.filter(o => o.bbox && (o.page_id || o.view?.img)).slice(0, 4)
                 const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
                 const cat = os[0]?.category ?? e.category ?? 'decor'
                 const ms = missingOf(e, lang), mk = new Set<string>(ms.map(m => String(m.key)))
@@ -101,9 +121,11 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                     <td className="c-vl"><Ed e={e} k="product_code" ph="Mã vật liệu" miss={M('product_code')} /></td>
                     <td><select value={cat} disabled={!canEdit} onClick={x => x.stopPropagation()} onChange={x => setCat(os, x.target.value)}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{lang === 'en' ? c.en : c.vn}</option>)}</select>
                       {pair('part', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} ph="Bộ phận áp dụng" /></div>)}</td>
-                    <td className="c-loc">{locs.map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room?.id ? ' here' : '')}>{roomName(l.room, lang)}</span>)}</td>
-                    <td className="c-img">{shots.length ? shots.map(o => <OccCrop key={o.id} d={d} o={o} height={64} maxWidth={90} />)
-                      : <div className="ic-none tiny"><span>{e.source === 'inferred' ? 'Suy luận' : 'Chưa có ảnh'}</span></div>}</td>
+                    <td className="c-loc">{locs.map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room?.id ? ' here' : '')}>{roomName(l.room, lang)}{canEdit && <a className="loc-x" title="Bỏ vị trí này" onClick={ev => { ev.stopPropagation(); delLoc(e, l.room) }}>✕</a>}</span>)}
+                      {canEdit && <select className="loc-add" value="" onClick={x => x.stopPropagation()} onChange={x => addLoc(e, x.target.value)}><option value="">＋ thêm phòng…</option>{d.rooms.filter(r => !locs.some(l => l.room.id === r.id)).map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}</select>}</td>
+                    <td className="c-img">{shots.length ? shots.map(o => <span key={o.id} className="shot-wrap"><OccCrop d={d} o={o} height={64} maxWidth={90} />{canEdit && <a className="shot-x" title="Xoá hình này" onClick={ev => { ev.stopPropagation(); delShot(o) }}>✕</a>}</span>)
+                      : <div className="ic-none tiny"><span>{e.source === 'inferred' ? 'Suy luận' : 'Chưa có ảnh'}</span></div>}
+                      {canEdit && <button className="btn ghost sm" title="Thêm hình phối cảnh" onClick={ev => { ev.stopPropagation(); setShotFor(e) }}>＋ ảnh</button>}</td>
                     <td>{[...pair('name', lang), ...pair('material', lang), ...pair('desc', lang)].map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} miss={M(k)} area={!String(k).startsWith('name')} ph={String(k).startsWith('name') ? 'Tên hạng mục' : String(k).startsWith('material') ? 'Vật liệu / màu / bề mặt' : 'Thông số kỹ thuật'} /></div>)}
                       <div className="ed-line lab"><i>{lang === 'en' ? 'Composition' : 'Cấu tạo'}</i><Ed e={e} k="composition" area ph={lang === 'en' ? 'Composition' : 'Cấu tạo (vật liệu thành phần)'} /></div>
                       </td>
@@ -114,13 +136,14 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                     <td className="c-act"><StatusDot s={e.status} />
                       {canEdit && <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}>✓</button>}
                       <button className="btn ghost sm" title="Chi tiết / chọn mã hãng từ thư viện" onClick={ev => { ev.stopPropagation(); onDetail(e.id) }}>⋯</button>
-                      {canEdit && room && <button className="btn ghost sm" title="Nhân đôi vật liệu này (vd màu thứ 2) – chép nội dung, chỉ sửa vài chỗ" onClick={ev => { ev.stopPropagation(); onAdd({ copy: e.id, group: e.group_code, category: cat, name: e.name_vn, part_vn: e.part_vn, parent_id: e.parent_id, hint: `Thêm vật liệu cùng loại với ${e.code} – ${e.name_vn}. Sửa tên/màu cho khác đi.` }) }}>＋</button>}
+                      {canEdit && <button className="btn ghost sm" title="Nhân đôi vật liệu này (vd màu thứ 2) – chép nội dung, chỉ sửa vài chỗ" onClick={ev => { ev.stopPropagation(); onAdd({ copy: e.id, group: e.group_code, category: cat, name: e.name_vn, part_vn: e.part_vn, parent_id: e.parent_id, hint: `Thêm vật liệu cùng loại với ${e.code} – ${e.name_vn}. Sửa tên/màu cho khác đi.` }) }}>＋</button>}
                       {canEdit && <button className="btn ghost sm" title="Xoá hạng mục này" onClick={ev => { ev.stopPropagation(); del(e) }}>🗑</button>}</td>
                   </tr>)
               })}</tbody>
             </table>
           </div>)
       })}
+    {shotFor && <AddShot d={d} entry={shotFor} roomId={room?.id} onClose={() => setShotFor(null)} />}
     </div>
   )
 }

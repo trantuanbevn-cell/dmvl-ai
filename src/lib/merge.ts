@@ -31,7 +31,7 @@ export async function mergeEntries(keep: Entry, dup: Entry, all: Entry[]) {
 export type DupPair = { keep: Entry; dup: Entry; score: number; dE: number | null; why: string[] }
 /** Tìm các cặp mã có khả năng là một vật liệu. strict=true: chỉ những cặp gần như chắc chắn (dùng để tự gộp) */
 export function findDuplicates(entries: Entry[], strict = false): DupPair[] {
-  const live = entries.filter(e => e.status !== 'rejected' && e.source !== 'inferred')
+  const live = entries.filter(e => e.status !== 'rejected' && e.source !== 'inferred' && e.group_code !== 'AW')
   const seen = new Set<string>(), out: DupPair[] = []
   for (const e of live) {
     for (const s of findSimilar(live.filter(x => x.id !== e.id && x.group_code === e.group_code && x.parent_id === e.parent_id), { group: e.group_code, name: e.name_vn, material: e.material_vn ?? '', color: e.color_hex, brand: e.brand ?? undefined, product_code: e.product_code ?? undefined }, 3)) {

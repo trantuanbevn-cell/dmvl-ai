@@ -126,11 +126,11 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
       if (e.product_url) { row.getCell(ci('link')).value = { text: e.product_url, hyperlink: e.product_url }; row.getCell(ci('link')).font = { name: 'Arial', size: 8, color: { argb: 'FF1F4E9A' }, underline: true } }
       if (e.source === 'inferred') for (let i = 1; i <= wide; i++) row.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9E5' } }
       row.height = Math.max(120, 13 * (locs.length + 1), 12 * Math.ceil(spec.length / 48) + 12)
-      const best = occ.filter(o2 => o2.bbox && o2.page_id).sort((a2, b2) => (b2.confidence ?? 0) - (a2.confidence ?? 0))[0]
+      const best = occ.filter(o2 => o2.bbox && (o2.page_id || o2.view?.img)).sort((a2, b2) => (b2.confidence ?? 0) - (a2.confidence ?? 0))[0]
       const rc = ci('render'), sc = ci('sample')
       if (best) {
-        const pg = pageById.get(best.page_id!)
-        const u = pg ? urls[pg.image_path] : undefined
+        const pg = best.page_id ? pageById.get(best.page_id) : undefined
+        const u = pg ? urls[pg.image_path] : best.view?.img ? urls[best.view.img] : undefined
         if (u) {
           try {
             const c = await viewCanvas(u, best.bbox!, best.view, best.view?.img ? urls[best.view.img] : undefined, 520)

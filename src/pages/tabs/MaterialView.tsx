@@ -52,11 +52,11 @@ export default function MaterialView({ d }: { d: ProjectData }) {
         </div>
         <div className="card">
           <h3 style={{ marginTop: 0 }}>{curSec ? sectionTitle(curSec, lang) : 'Tất cả vật liệu'}{room ? <span className="muted"> · {room.code} {room.name_vn}</span> : <span className="muted"> · tất cả phòng</span>}</h3>
-          <p className="small muted" style={{ marginTop: 0 }}>Bảng trình bày đúng như khi xuất file; cột “Vị trí” liệt kê các phòng dùng vật liệu này. {!room && 'Chọn một phòng ở trên nếu muốn thêm/nhân đôi vật liệu.'}</p>
+          <p className="small muted" style={{ marginTop: 0 }}>Bảng trình bày đúng như khi xuất file; cột “Vị trí” liệt kê các phòng dùng vật liệu này.</p>
           <RoomSections d={d} room={room} only={only || undefined} lang={lang} filter={flt} sel={sel} onPick={o => setSel(o.entry_id)} onDetail={id => setSel(id)} onRemove={() => {}} onAdd={setDlg} />
         </div>
       </div>
-      {dlg && room && <AddMaterial d={d} room={room} preset={dlg} onClose={() => setDlg(null)} onDone={id => { setDlg(null); setSel(id) }} />}
+      {dlg && <AddMaterial d={d} room={room} preset={dlg} onClose={() => setDlg(null)} onDone={id => { setDlg(null); setSel(id) }} />}
       {selEntry && <EntryPanel d={d} entry={selEntry} onClose={() => setSel(null)} />}
     </div>
   )
