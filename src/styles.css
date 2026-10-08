@@ -81,7 +81,7 @@ rect.drag { fill: rgba(0,120,255,.15); stroke: #0078ff; stroke-width: 2px }
 .panel { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; position: sticky; top: 70px; max-height: calc(100vh - 90px); overflow: auto; display: flex; flex-direction: column; gap: 8px }
 .panel-head { border-bottom: 1px solid var(--line); padding-bottom: 8px } .status-row { display: flex; gap: 4px; flex-wrap: wrap }
 .st-btn.on.approved { background: var(--ok); color: #fff; border-color: var(--ok) } .st-btn.on.pending { background: #e0b84c; color: #fff } .st-btn.on.review { background: #6d8bb3; color: #fff } .st-btn.on.rejected { background: var(--bad); color: #fff }
-.crops-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start } .occ { display: flex; flex-direction: column; gap: 2px; max-width: 160px }
+.crops-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start } .occ { display: flex; flex-direction: column; gap: 2px; max-width: 220px }
 .fld { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted) } .fld input, .fld textarea, .fld select { color: var(--ink); font-size: 13px }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px } .grid3 { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 8px }
 .lang-switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; width: fit-content } .lang-switch button { border: 0; background: #fff; padding: 4px 12px; cursor: pointer; font: inherit; font-size: 12px } .lang-switch .on { background: var(--brown); color: #fff }
@@ -104,3 +104,4 @@ rect.drag { fill: rgba(0,120,255,.15); stroke: #0078ff; stroke-width: 2px }
 textarea.json { font-family: ui-monospace, monospace; font-size: 12px; min-height: 60vh }
 
 @media (max-width: 1100px) { .room-layout, .room-layout.with-panel, .mat-layout.with-panel { grid-template-columns: 1fr } .panel { position: static; max-height: none } }
+.loc-cell div { white-space: nowrap } .loc-box { margin: 8px 0; font-size: 12px } .loc-tag { display: inline-block; background: #f3e9dd; border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; margin: 2px 3px 2px 0 }

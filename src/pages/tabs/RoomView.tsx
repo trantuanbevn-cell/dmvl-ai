@@ -123,7 +123,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
                   const pg = o.page_id ? pageById.get(o.page_id) : undefined
                   return (
                     <tr key={o.id} className={(e.id === sel ? 'sel ' : '') + 'src-row-' + e.source} onClick={() => pick(o)}>
-                      <td style={{ width: 120 }}><Crop url={pg ? d.urls[pg.image_path] : undefined} bbox={o.bbox} pageW={pg?.width} pageH={pg?.height} height={56} maxWidth={110} /></td>
+                      <td style={{ width: 150 }}><Crop url={pg ? d.urls[pg.image_path] : undefined} bbox={o.bbox} pageW={pg?.width} pageH={pg?.height} height={72} maxWidth={140} /></td>
                       <td style={{ width: 70 }}><b className="code">{e.code}</b></td>
                       <td><b>{e.name_vn}</b><div className="small muted">{e.material_vn}</div>{e.composition && <div className="small">Cấu tạo: {e.composition}</div>}</td>
                       <td className="small" style={{ width: 150 }}>{e.brand ? `${e.brand} · ${e.product_code ?? ''}` : <span className="muted">chưa chọn mã</span>}</td>

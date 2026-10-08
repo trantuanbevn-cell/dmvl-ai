@@ -49,13 +49,13 @@ const ITEM_LITE = {
     part_vn: { type: 'string', description: 'bộ phận áp dụng, nếu là vật liệu của một món đồ' },
     material_vn: { type: 'string', description: '≤ 20 từ: loại, màu, vân, bề mặt, kích thước ước lượng' },
     material_en: { type: 'string', description: '≤ 20 từ tiếng Anh' },
-    bbox: { type: 'array', items: { type: 'number' }, description: '[x,y,w,h] 0..1 theo toàn ảnh' },
+    box_2d: { type: 'array', items: { type: 'number' }, description: '[ymin, xmin, ymax, xmax] là 4 số nguyên 0..1000 theo TOÀN ẢNH (gốc ở góc trên-trái; ymin/ymax là chiều dọc, xmin/xmax là chiều ngang)' },
     qty: { type: 'number' },
     unit: { type: 'string' },
     qty_basis: { type: 'string', enum: ['concept_text', 'counted_render', 'unknown'] },
     confidence: { type: 'number' },
   },
-  required: ['ref', 'group_code', 'category', 'name_vn', 'material_vn', 'bbox'],
+  required: ['ref', 'group_code', 'category', 'name_vn', 'material_vn', 'box_2d'],
 }
 const REPORT_ITEMS_LITE = {
   name: 'report_items',
@@ -134,7 +134,7 @@ Liệt kê MỌI vật liệu hoàn thiện và đồ vật NHÌN THẤY trong p
 - Bề mặt: sàn, len, tường, tường nhấn, trần (cả trần lộ), cửa, cửa sổ.
 - Đồ liền tường (JN) và đồ rời (FF): mỗi món 1 item; vật liệu cấu thành (thùng, cánh, mặt, khung, bọc, chân, tay nắm) là item riêng có parent_ref.
 - Đèn (LT), thiết bị vệ sinh (SF), phụ kiện WC (BA), thiết bị (EQ), decor/cây (DC), tranh/mural (AW), đầu chờ MEP nhìn thấy (ME).
-Quy tắc: cùng vật liệu xuất hiện nhiều chỗ = 1 item; trùng mã đã có thì ghi match_code; bbox ôm sát vùng rõ nhất; mô tả ngắn gọn; qty theo số liệu concept nếu có (concept_text), đếm được rõ thì counted_render, còn lại bỏ trống. KHÔNG liệt kê thứ không nhìn thấy.
+Quy tắc: cùng vật liệu xuất hiện nhiều chỗ = 1 item; trùng mã đã có thì ghi match_code; box_2d = khung ôm sát món đồ (hoặc một mảng đại diện rõ nhất của bề mặt sàn/tường/trần – KHÔNG phủ cả ảnh), tọa độ [ymin,xmin,ymax,xmax] thang 0..1000 so với toàn bộ ảnh, và CHỈ nằm trong vùng ảnh phối cảnh 3D (không khoanh mặt bằng nhỏ, tiêu đề, logo, ô chữ); mô tả ngắn gọn; qty theo số liệu concept nếu có (concept_text), đếm được rõ thì counted_render, còn lại bỏ trống. KHÔNG liệt kê thứ không nhìn thấy.
 Gọi report_items.`),
         img(p.page),
       ]

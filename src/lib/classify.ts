@@ -62,6 +62,8 @@ const LABEL_LINE = /^[A-Za-zÀ-ỹ][^|]{0,58}$/
 const AREA = /S\s*=\s*([\d.,]+)\s*M²/gi
 const VN_CHARS = /[ĐđĂăÂâÊêÔôƠơƯưÀ-ỹ]|\b(KHO|KHU|SINH|HOA|NAM|NINH|CHUNG|LANG|THANG|PHONG)\b/
 const HEADER = /^(concept|interior concept|mat bang|mặt bằng|ghi chu|ghi chú|dien tich|diện tích|layout|floor plan|thank you)/i
+// Mã tầng / tiêu đề khu vực / tên dự án lọt vào nhãn phòng: "B2", "HẦM B2", "TẦNG 3", "BOH WESTIN HOTEL", "KHU VĂN PHÒNG HẦM B2"
+const JUNK = /^(b\d|l\d|t\d|f\d|\d+f|hotel|boh)$|\b(ham|tang|basement|level|floor)\b|\bhotel\b|\bconcept\b|\bnoi that\b|\binterior\b/
 const PLAN = /(mặt bằng|mat bang|\blayout\b|floor plan|ghi chú: diện tích|ghi chu: dien tich)/i
 const RENDER = /(concept nội thất|concept noi that|interior concept)/i
 
@@ -92,7 +94,8 @@ function bilingualRooms(lines: string[], noise: Set<string>): { rooms: { en?: st
   const cleaned: string[] = []
   for (let l of lines) {
     l = l.replace(AREA, (_m, a) => { areas.push(parseFloat(String(a).replace(',', '.'))); return ' ' }).replace(/^\d+\s+/, '').replace(/\s+\d+$/, '').trim()
-    if (!l || /^\d+$/.test(l) || noise.has(l) || HEADER.test(l) || HEADER.test(norm(l))) continue
+    if (!l || /^\d+$/.test(l) || noise.has(l) || HEADER.test(l) || HEADER.test(norm(l)) || JUNK.test(norm(l))) continue
+    if (norm(l).replace(/ /g, '').length < 3) continue
     if (l.length > 45 || /:/.test(l)) continue
     if (l !== l.toUpperCase()) continue // nhãn phòng luôn viết hoa
     cleaned.push(l)

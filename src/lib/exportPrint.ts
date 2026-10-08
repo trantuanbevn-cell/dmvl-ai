@@ -1,6 +1,7 @@
 import { GROUPS } from './codes'
 import { signedUrls } from './supabase'
-import { cropCanvas } from './crop'
+import { contextCanvas } from './crop'
+import { locationsOf, locationLines } from './locations'
 import { filterEntries, ExportData } from './exportExcel'
 import { STATUS_VN, STATUS_EN } from './types'
 
@@ -14,11 +15,10 @@ export async function printSchedule(d: ExportData, lang: 'vn' | 'en', includePen
   w.document.write('<p style="font-family:sans-serif">Đang dựng trang in…</p>')
   const list = filterEntries(d.entries, includePending)
   const pageById = new Map(d.pages.map(p => [p.id, p]))
-  const roomById = new Map(d.rooms.map(r => [r.id, r]))
   const urls = await signedUrls([...new Set(d.pages.map(p => p.image_path))])
   const H = vn
-    ? ['STT', 'Ký hiệu', 'Ảnh phối cảnh', 'Map', 'Tên hạng mục', 'Phòng / vị trí', 'Mô tả & thông số', 'Tính chất yêu cầu', 'Hãng · Mã · Link', 'SL', 'Ghi chú']
-    : ['No.', 'Code', 'Render', 'Sample', 'Item', 'Room / location', 'Description & specification', 'Performance', 'Manufacturer · Code · Link', 'Qty', 'Remarks']
+    ? ['STT', 'Ký hiệu', 'Ảnh phối cảnh', 'Map', 'Tên hạng mục', 'Vị trí (đủ các phòng)', 'Mô tả & thông số', 'Tính chất yêu cầu', 'Hãng · Mã · Link', 'SL', 'Ghi chú']
+    : ['No.', 'Code', 'Render', 'Sample', 'Item', 'Location (all rooms)', 'Description & specification', 'Performance', 'Manufacturer · Code · Link', 'Qty', 'Remarks']
   let rows = '', stt = 0
   for (const g of GROUPS) {
     const items = list.filter(e => e.group_code === g.code).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }))
@@ -29,9 +29,10 @@ export async function printSchedule(d: ExportData, lang: 'vn' | 'en', includePen
       const occ = d.occ.filter(o => o.entry_id === e.id)
       const best = occ.filter(o => o.bbox && o.page_id).sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0]
       let img = ''
-      if (best) { const p = pageById.get(best.page_id!); if (p) { try { img = `<img src="${(await cropCanvas(urls[p.image_path], best.bbox!, 320)).toDataURL('image/jpeg', 0.85)}">` } catch { /* */ } } }
+      if (best) { const p = pageById.get(best.page_id!); if (p) { try { img = `<img src="${(await contextCanvas(urls[p.image_path], best.bbox!, 520)).toDataURL('image/jpeg', 0.85)}">` } catch { /* */ } } }
       const map = e.product_image_url ? `<img src="${esc(e.product_image_url)}">` : e.color_hex ? `<div class="sw" style="background:${esc(e.color_hex)}"></div><small>${esc(e.color_hex)}</small>` : ''
-      const rooms = [...new Set(occ.map(o => o.room_id).filter(Boolean))].map(id => { const r = roomById.get(id!); return r ? `${r.code} ${vn ? r.name_vn : r.name_en || r.name_vn}` : '' }).join('<br>')
+      const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
+      const rooms = locs.length ? locationLines(locs, vn).map(esc).join('<br>') : '—'
       rows += `<tr class="${e.source === 'inferred' ? 'inf' : ''}"><td>${stt}</td><td class="code">${esc(e.code)}</td><td class="im">${img}</td><td class="im">${map}</td>
         <td><b>${esc(vn ? e.name_vn : e.name_en || e.name_vn)}</b><br><small>${esc(vn ? e.part_vn : e.part_en || e.part_vn)}</small></td><td>${rooms}</td>
         <td>${esc(vn ? e.desc_vn || e.material_vn : e.desc_en || e.material_en)}${e.composition ? `<br><small>${vn ? 'Cấu tạo' : 'Composition'}: ${esc(e.composition)}</small>` : ''}</td>
@@ -48,11 +49,11 @@ export async function printSchedule(d: ExportData, lang: 'vn' | 'en', includePen
   table { width:100%; border-collapse:collapse; table-layout:fixed } th { background:#6B3A1F; color:#fff; padding:4px; font-size:9px }
   td { border:1px solid #c9b9a8; padding:3px; vertical-align:top; word-wrap:break-word } thead { display:table-header-group }
   tr { page-break-inside:avoid } tr.g td { background:#C57542; color:#fff; font-weight:bold; font-size:10px } tr.g span { font-weight:normal }
-  tr.inf td { background:#FFF9E5 } td.code { font-weight:bold; color:#6B3A1F; text-align:center } td.im img { max-width:100%; max-height:90px; display:block }
+  tr.inf td { background:#FFF9E5 } td.code { font-weight:bold; color:#6B3A1F; text-align:center } td.im img { max-width:100%; max-height:130px; display:block }
   .sw { width:60px; height:44px; border:1px solid #aaa } small { color:#666 } .w { color:#c00 } a { color:#1F4E9A; font-size:8px }
   </style></head><body><h1>${vn ? 'BẢNG DANH MỤC VẬT LIỆU HOÀN THIỆN & ĐỒ NỘI THẤT' : 'FINISHES & FF&E MATERIAL SCHEDULE'}</h1>
   <div class="sub">${vn ? 'Dự án' : 'Project'}: ${esc(d.project.name)}${d.project.location ? ' · ' + esc(d.project.location) : ''} · ${new Date().toLocaleDateString(vn ? 'vi-VN' : 'en-GB')}</div>
-  <table><colgroup><col style="width:2.5%"><col style="width:4%"><col style="width:10%"><col style="width:6%"><col style="width:11%"><col style="width:9%"><col style="width:20%"><col style="width:14%"><col style="width:11%"><col style="width:4%"><col style="width:8.5%"></colgroup>
+  <table><colgroup><col style="width:2.5%"><col style="width:4%"><col style="width:13%"><col style="width:5%"><col style="width:10%"><col style="width:12%"><col style="width:17%"><col style="width:12%"><col style="width:11%"><col style="width:4%"><col style="width:8.5%"></colgroup>
   <thead><tr>${H.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>
   <script>window.onload=()=>setTimeout(()=>window.print(),400)</script></body></html>`
   w.document.open(); w.document.write(html); w.document.close()

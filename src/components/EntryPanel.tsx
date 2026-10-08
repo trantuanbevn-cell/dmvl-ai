@@ -5,6 +5,7 @@ import { writeSpecs, applyProduct } from '../lib/pipeline'
 import { librarySuggestions, saveToLibrary, searchLinks, LibProduct } from '../lib/library'
 import type { Entry } from '../lib/types'
 import type { ProjectData } from '../lib/useProject'
+import { locationsOf } from '../lib/locations'
 import Crop from './Crop'
 
 type F = keyof Entry
@@ -71,11 +72,16 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
           const pg = o.page_id ? pageById.get(o.page_id) : undefined
           return (
             <div key={o.id} className="occ">
-              <Crop url={pg ? d.urls[pg.image_path] : undefined} bbox={o.bbox} pageW={pg?.width} pageH={pg?.height} height={86} />
+              <Crop url={pg ? d.urls[pg.image_path] : undefined} bbox={o.bbox} pageW={pg?.width} pageH={pg?.height} height={120} maxWidth={210} />
               <div className="small muted">{o.room_id ? roomById.get(o.room_id)?.code : ''}{pg ? ` · tr.${pg.page_no}` : ''}{o.note ? ` · ${o.note}` : ''}</div>
             </div>)
         })}
         <div className="swatch" style={{ background: entry.color_hex ?? '#ddd' }} title="Màu trích từ ảnh"><span>{entry.color_hex}</span></div>
+      </div>
+
+      <div className="loc-box"><b>Vị trí:</b>{' '}
+        {locationsOf(entry.id, d.occ, d.rooms, d.pages).map(l => <span key={l.room.id} className="loc-tag">{l.room.code} {l.room.name_vn}{l.pages.length ? ` · tr.${l.pages.join(',')}` : ''}</span>)}
+        {!occ.some(o => o.room_id) && <span className="muted">chưa gán phòng</span>}
       </div>
 
       <div className="grid2">

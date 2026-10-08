@@ -1,7 +1,8 @@
 import ExcelJS from 'exceljs'
 import { GROUPS, groupOf, CATEGORIES } from './codes'
 import { signedUrls } from './supabase'
-import { cropCanvas, swatchBase64, loadImage } from './crop'
+import { contextCanvas, swatchBase64, loadImage } from './crop'
+import { locationsOf, locationLines } from './locations'
 import type { Project, Room, Page, Entry, Occurrence } from './types'
 import { STATUS_VN, STATUS_EN, SOURCE_VN, SOURCE_EN } from './types'
 
@@ -30,9 +31,9 @@ export async function exportExcel(d: ExportData, lang: 'vn' | 'en', includePendi
   wb.creator = 'DMVL AI'
   const ws = wb.addWorksheet(vn ? 'DMVL' : 'Schedule', { pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 8 as any } })
   const cols = vn
-    ? ['STT', 'Ký hiệu', 'Ảnh crop phối cảnh', 'Map vật liệu', 'Tên hạng mục / vật liệu', 'Bộ phận áp dụng', 'Phòng / khu vực', 'Mô tả & thông số kỹ thuật', 'Tính chất yêu cầu theo không gian', 'Tiêu chuẩn tham chiếu', 'Hãng', 'Mã sản phẩm', 'Link hãng', 'Xuất xứ', 'SL', 'ĐVT', 'Cờ SL', 'Nguồn', 'Trạng thái', 'Ghi chú TVTK', 'NT: Mã đề xuất', 'NT: Ảnh mẫu', 'NT: Thông số', 'NT: Xuất xứ', 'NT: Bảo hành', 'NT: Giải trình', 'Đánh giá TVTK', 'Đánh giá CĐT']
-    : ['No.', 'Code', 'Render crop', 'Material sample', 'Item / material', 'Application', 'Room / area', 'Description & specification', 'Performance requirements', 'Standards', 'Manufacturer', 'Product code', 'Link', 'Origin', 'Qty', 'Unit', 'Qty flag', 'Source', 'Status', 'Designer remarks', 'Contractor: code', 'Contractor: sample', 'Contractor: spec', 'Contractor: origin', 'Warranty', 'Contractor: clarification', 'Designer review', 'Client review']
-  const widths = [5, 9, 26, 15, 22, 18, 20, 42, 32, 18, 16, 16, 22, 10, 7, 7, 14, 9, 12, 30, 12, 12, 14, 10, 9, 16, 12, 12]
+    ? ['STT', 'Ký hiệu', 'Ảnh crop phối cảnh', 'Map vật liệu', 'Tên hạng mục / vật liệu', 'Bộ phận áp dụng', 'Vị trí (liệt kê đủ các phòng / khu vực)', 'Mô tả & thông số kỹ thuật', 'Tính chất yêu cầu theo không gian', 'Tiêu chuẩn tham chiếu', 'Hãng', 'Mã sản phẩm', 'Link hãng', 'Xuất xứ', 'SL', 'ĐVT', 'Cờ SL', 'Nguồn', 'Trạng thái', 'Ghi chú TVTK', 'NT: Mã đề xuất', 'NT: Ảnh mẫu', 'NT: Thông số', 'NT: Xuất xứ', 'NT: Bảo hành', 'NT: Giải trình', 'Đánh giá TVTK', 'Đánh giá CĐT']
+    : ['No.', 'Code', 'Render crop', 'Material sample', 'Item / material', 'Application', 'Location (all rooms / areas)', 'Description & specification', 'Performance requirements', 'Standards', 'Manufacturer', 'Product code', 'Link', 'Origin', 'Qty', 'Unit', 'Qty flag', 'Source', 'Status', 'Designer remarks', 'Contractor: code', 'Contractor: sample', 'Contractor: spec', 'Contractor: origin', 'Warranty', 'Contractor: clarification', 'Designer review', 'Client review']
+  const widths = [5, 9, 34, 15, 22, 18, 32, 42, 32, 18, 16, 16, 22, 10, 7, 7, 14, 9, 12, 30, 12, 12, 14, 10, 9, 16, 12, 12]
   widths.forEach((w, i) => (ws.getColumn(i + 1).width = w))
 
   ws.mergeCells(1, 1, 1, cols.length)
@@ -57,7 +58,6 @@ export async function exportExcel(d: ExportData, lang: 'vn' | 'en', includePendi
 
   const list = filterEntries(d.entries, includePending)
   const pageById = new Map(d.pages.map(p => [p.id, p]))
-  const roomById = new Map(d.rooms.map(r => [r.id, r]))
   const urls = await signedUrls([...new Set(d.occ.filter(o => o.page_id).map(o => pageById.get(o.page_id!)?.image_path).filter(Boolean) as string[])])
 
   let r = 6, stt = 0
@@ -71,7 +71,8 @@ export async function exportExcel(d: ExportData, lang: 'vn' | 'en', includePendi
     for (const e of items) {
       stt++
       const occ = d.occ.filter(o => o.entry_id === e.id)
-      const roomNames = [...new Set(occ.map(o => o.room_id).filter(Boolean))].map(id => { const rm = roomById.get(id!); return rm ? `${rm.code} – ${vn ? rm.name_vn : rm.name_en || rm.name_vn}` : '' }).join('\n')
+      const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
+      const roomNames = locs.length ? `${locationLines(locs, vn).join('\n')}` : (vn ? '(chưa gán phòng)' : '(no room assigned)')
       const flag = e.qty_flag === 'ok' ? `✓ ${e.qty_note ?? ''}` : `⚠ ${e.qty_note ?? ''}`
       const vals = [stt, e.code, '', '', vn ? e.name_vn : e.name_en || e.name_vn, vn ? e.part_vn : e.part_en || e.part_vn, roomNames,
         [vn ? e.desc_vn || e.material_vn : e.desc_en || e.material_en || e.desc_vn, e.composition ? (vn ? 'Cấu tạo: ' : 'Composition: ') + e.composition : ''].filter(Boolean).join('\n'),
@@ -87,7 +88,7 @@ export async function exportExcel(d: ExportData, lang: 'vn' | 'en', includePendi
       if (e.product_url) { row.getCell(13).value = { text: e.product_url, hyperlink: e.product_url }; row.getCell(13).font = { name: 'Arial', size: 8, color: { argb: 'FF1F4E9A' }, underline: true } }
       if (e.source === 'inferred') for (let i = 5; i <= 20; i++) row.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9E5' } }
       row.getCell(17).font = { name: 'Arial', size: 9, bold: true, color: { argb: e.qty_flag === 'ok' ? 'FF2E7D32' : 'FFC00000' } }
-      row.height = 92
+      row.height = Math.max(120, 13 * (locs.length + 1))
       // ảnh crop
       const best = occ.filter(o => o.bbox && o.page_id).sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0]
       if (best) {
@@ -95,9 +96,9 @@ export async function exportExcel(d: ExportData, lang: 'vn' | 'en', includePendi
         const u = p ? urls[p.image_path] : undefined
         if (u) {
           try {
-            const c = await cropCanvas(u, best.bbox!, 360)
+            const c = await contextCanvas(u, best.bbox!, 520)
             const id = wb.addImage({ base64: c.toDataURL('image/jpeg', 0.85).split(',')[1], extension: 'jpeg' })
-            const scale = Math.min(180 / c.width, 116 / c.height)
+            const scale = Math.min(236 / c.width, 150 / c.height)
             ws.addImage(id, { tl: { col: 2.05, row: r - 1 + 0.05 }, ext: { width: c.width * scale, height: c.height * scale } })
           } catch { /* bỏ qua ảnh lỗi */ }
         }

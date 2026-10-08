@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { GROUPS } from '../../lib/codes'
 import type { ProjectData } from '../../lib/useProject'
 import type { Entry } from '../../lib/types'
+import { locationsOf } from '../../lib/locations'
 import Crop from '../../components/Crop'
 import EntryPanel from '../../components/EntryPanel'
 
@@ -18,7 +19,6 @@ export default function MaterialView({ d }: { d: ProjectData }) {
   const [filter, setFilter] = useState<'all' | 'pending' | 'inferred' | 'nocode'>('all')
   const [busy, setBusy] = useState('')
   const pageById = useMemo(() => new Map(d.pages.map(p => [p.id, p])), [d.pages])
-  const roomById = useMemo(() => new Map(d.rooms.map(r => [r.id, r])), [d.rooms])
   const cur = groups.find(x => x.g.code === gc) ?? groups[0]
   const selEntry = d.entries.find(e => e.id === sel)
 
@@ -52,19 +52,19 @@ export default function MaterialView({ d }: { d: ProjectData }) {
           </div>
           {busy && <div className="note">{busy}</div>}
           <table className="tbl items">
-            <thead><tr><th>Ảnh trong các không gian</th><th>Mã</th><th>Tên / vật liệu</th><th>Phòng</th><th>Hãng · mã</th><th>Nguồn</th><th>Duyệt</th></tr></thead>
+            <thead><tr><th>Ảnh trong các không gian</th><th>Mã</th><th>Tên / vật liệu</th><th>Vị trí (các phòng)</th><th>Hãng · mã</th><th>Nguồn</th><th>Duyệt</th></tr></thead>
             <tbody>{list.map(e => {
               const occ = d.occ.filter(o => o.entry_id === e.id)
-              const rooms = [...new Set(occ.map(o => o.room_id).filter(Boolean))].map(id => roomById.get(id!)?.code).join(', ')
+              const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
               return (
                 <tr key={e.id} className={(e.id === sel ? 'sel ' : '') + 'src-row-' + e.source} onClick={() => setSel(e.id)}>
                   <td><div className="row sm-gap">
-                    {occ.filter(o => o.bbox).slice(0, 4).map(o => { const pg = o.page_id ? pageById.get(o.page_id) : undefined; return <Crop key={o.id} url={pg ? d.urls[pg.image_path] : undefined} bbox={o.bbox} pageW={pg?.width} pageH={pg?.height} height={54} maxWidth={90} /> })}
+                    {occ.filter(o => o.bbox).slice(0, 4).map(o => { const pg = o.page_id ? pageById.get(o.page_id) : undefined; return <Crop key={o.id} url={pg ? d.urls[pg.image_path] : undefined} bbox={o.bbox} pageW={pg?.width} pageH={pg?.height} height={68} maxWidth={120} /> })}
                     {e.color_hex && <span className="swatch sm" style={{ background: e.color_hex }} />}
                   </div></td>
                   <td><b className="code">{e.code}</b></td>
                   <td><b>{e.name_vn}</b><div className="small muted">{e.material_vn}</div></td>
-                  <td className="small">{rooms}</td>
+                  <td className="small loc-cell">{locs.length ? locs.map(l => <div key={l.room.id} title={l.pages.length ? `Trang concept: ${l.pages.join(', ')}` : ''}><b>{l.room.code}</b> {l.room.name_vn}{l.n > 1 ? ` ×${l.n}` : ''}</div>) : <span className="muted">—</span>}</td>
                   <td className="small">{e.brand ? <>{e.brand}<br />{e.product_code}</> : <span className="muted">—</span>}</td>
                   <td><span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></td>
                   <td className="row sm-gap nowrap">

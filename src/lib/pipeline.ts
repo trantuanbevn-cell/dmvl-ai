@@ -1,7 +1,7 @@
 import { supabase, BUCKET, signedUrl, signedUrls } from './supabase'
 import { renderPdf, cleanText } from './pdf'
 import { callAI } from './ai'
-import { sampleColor } from './crop'
+import { sampleColor, normalizeAIBox } from './crop'
 import { GROUPS, CATEGORIES } from './codes'
 import { classifyLocal, norm as normT } from './classify'
 import { inferForRoom } from './infer'
@@ -137,7 +137,7 @@ export async function classifyPages(project: Project, log: Log) {
 // Màu, suy luận hạng mục thiếu, thông số kỹ thuật, tính chất, tiêu chuẩn: phần mềm tự làm.
 type AIItem = {
   ref: string; parent_ref?: string; match_code?: string; group_code: string; category: string; name_vn: string; name_en?: string
-  part_vn?: string; material_vn: string; material_en?: string; bbox?: number[]; qty?: number; unit?: string; qty_basis?: string; confidence?: number
+  part_vn?: string; material_vn: string; material_en?: string; bbox?: number[]; box_2d?: number[]; qty?: number; unit?: string; qty_basis?: string; confidence?: number
 }
 
 class CodeBook {
@@ -205,10 +205,11 @@ async function applyItems(project: Project, room: Room, rawItems: AIItem[], page
       }
     }
     refToEntry.set(it.ref, entry)
-    const ok = Array.isArray(it.bbox) && it.bbox.length === 4
+    const box = normalizeAIBox(it)
+    const ok = !!box
     await must(supabase.from('occurrences').insert({
       entry_id: entry.id, room_id: room.id, page_id: ok ? page.id : null, category,
-      bbox: ok ? it.bbox : null, qty: it.qty ?? null, confidence: it.confidence ?? null,
+      bbox: box, qty: it.qty ?? null, confidence: it.confidence ?? null,
     }))
     if (it.parent_ref) {
       const parent = refToEntry.get(it.parent_ref)
