@@ -34,11 +34,12 @@ const BANDCOL: Record<Col['band'], string> = { content: 'FFB22A2A', ref: 'FFB22A
 
 function columns(o: ExportOpts, h: Ctx['h']): Col[] {
   const c: Col[] = [
-    { key: 'stt', head: h('STT', 'No.'), w: 5, band: 'content' }, { key: 'sym', head: h('KÍ HIỆU BẢN VẼ', 'DRAWING CODE'), w: 13, band: 'content' }, { key: 'mavl', head: h('Mã VL', 'Material code'), w: 15, band: 'content' },
-    { key: 'cat', head: h('Mục', 'Application'), w: 13, band: 'content' }, { key: 'loc', head: h('Vị trí', 'Location'), w: 28, band: 'content' }, { key: 'qty', head: h('Thống kê', 'Qty'), w: 9, band: 'content' },
+    { key: 'stt', head: h('STT', 'No.'), w: 5, band: 'content' }, { key: 'sym', head: h('KÍ HIỆU BẢN VẼ', 'DRAWING CODE'), w: 13, band: 'content' }, { key: 'mavl', head: h('KÍ HIỆU VL', 'MATERIAL CODE'), w: 15, band: 'content' },
+    { key: 'cat', head: h('Hạng mục', 'Item'), w: 13, band: 'content' }, { key: 'loc', head: h('Vị trí', 'Location'), w: 28, band: 'content' },
     { key: 'render', head: h('Hình ảnh phối cảnh', 'Render image'), w: 34, band: 'content' },
-    { key: 'sample', head: h('Mẫu vật liệu định hướng', 'Reference sample'), w: 16, band: 'ref' }, { key: 'spec', head: h('Thông số kỹ thuật', 'Technical specification'), w: 46, band: 'ref' },
-    { key: 'brand', head: h('Xuất xứ / Thương hiệu', 'Origin / Brand'), w: 22, band: 'ref' }, { key: 'link', head: h('Link tham khảo', 'Reference link'), w: 26, band: 'ref' }, { key: 'note', head: h('Ghi chú', 'Remarks'), w: 26, band: 'ref' },
+    { key: 'spec', head: h('Thông số kỹ thuật', 'Technical specification'), w: 46, band: 'ref' },
+    { key: 'brand', head: h('Xuất xứ/ Thương hiệu', 'Origin / Brand'), w: 22, band: 'ref' }, { key: 'sample', head: h('Hình ảnh vật liệu', 'Material image'), w: 16, band: 'ref' },
+    { key: 'link', head: h('Ghi chú', 'Remarks'), w: 26, band: 'ref' }, { key: 'note', head: h('Ghi chú', 'Remarks'), w: 26, band: 'ref' },
     { key: 'c_code', head: h('Mã VL', 'Material code'), w: 14, band: 'ctr' }, { key: 'c_img', head: h('Hình ảnh', 'Image'), w: 14, band: 'ctr' }, { key: 'c_spec', head: h('Thông số kỹ thuật', 'Specification'), w: 26, band: 'ctr' },
     { key: 'c_brand', head: h('Xuất xứ / Thương hiệu', 'Origin / Brand'), w: 16, band: 'ctr' }, { key: 'c_war', head: h('Bảo hành', 'Warranty'), w: 10, band: 'ctr' }, { key: 'c_note', head: h('Ghi chú / Giải trình làm rõ của Nhà thầu', 'Remarks / Contractor clarification'), w: 22, band: 'ctr' },
     { key: 'rev1', head: h('Đánh giá của P.KHKT', 'Technical dept. review'), w: 14, band: 'rev' }, { key: 'rev2', head: h('Đánh giá của K.QHTK', 'Design dept. review'), w: 14, band: 'rev' },
@@ -46,7 +47,7 @@ function columns(o: ExportOpts, h: Ctx['h']): Col[] {
   if (o.quote) c.push(
     { key: 'q_qty', head: h('Số lượng', 'Quantity'), w: 10, band: 'quote' }, { key: 'q_unit', head: h('ĐVT', 'Unit'), w: 8, band: 'quote' },
     { key: 'q_price', head: h('Đơn giá (VNĐ)', 'Unit price (VND)'), w: 16, band: 'quote' }, { key: 'q_total', head: h('Thành tiền (VNĐ)', 'Amount (VND)'), w: 18, band: 'quote' })
-  c.push({ key: 'i_src', head: h('Nguồn', 'Source'), w: 9, band: 'int' }, { key: 'i_st', head: h('Trạng thái', 'Status'), w: 11, band: 'int' }, { key: 'i_flag', head: h('Cờ số lượng', 'Qty flag'), w: 14, band: 'int' })
+  c.push({ key: 'qty', head: h('Thống kê', 'Qty'), w: 10, band: 'int' }, { key: 'i_src', head: h('Nguồn', 'Source'), w: 9, band: 'int' }, { key: 'i_st', head: h('Trạng thái', 'Status'), w: 11, band: 'int' }, { key: 'i_flag', head: h('Cờ số lượng', 'Qty flag'), w: 14, band: 'int' })
   return c
 }
 
@@ -74,6 +75,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
     c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; c.border = border
   })
   hr.height = 34
+  if (ci('note') === ci('link') + 1) ws.mergeCells(5, ci('link'), 5, ci('note')) // “Ghi chú” trải trên 2 ô: link + nội dung, như file mẫu
   ws.views = [{ state: 'frozen', xSplit: 2, ySplit: 5 }]
   const catLabel = (k: string) => { const c = CATEGORIES.find(z => z.key === k); return c ? tx(c.vn, c.en, L) : k }
 

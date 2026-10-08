@@ -19,7 +19,7 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
   const list = filterEntries(d.entries, includePending)
   const pageById = new Map(d.pages.map(p => [p.id, p]))
   const urls = await signedUrls([...new Set(d.pages.map(p => p.image_path))])
-  const H = [h('STT', 'No.'), h('Ký hiệu', 'Code'), h('Mục', 'Application'), h('Vị trí', 'Location'), h('Thống kê', 'Qty'), h('Hình phối cảnh', 'Render'), h('Mẫu', 'Sample'), h('Thông số kỹ thuật', 'Specification'), h('Xuất xứ / Thương hiệu', 'Origin / Brand'), h('Ghi chú', 'Remarks')]
+  const H = [h('STT', 'No.'), h('KÍ HIỆU BẢN VẼ', 'DRAWING CODE'), h('KÍ HIỆU VL', 'MATERIAL CODE'), h('Hạng mục', 'Item'), h('Vị trí', 'Location'), h('Hình ảnh phối cảnh', 'Render image'), h('Thông số kỹ thuật', 'Specification'), h('Xuất xứ/ Thương hiệu', 'Origin / Brand'), h('Hình ảnh vật liệu', 'Material image'), h('Ghi chú', 'Remarks')]
   const sym = exportSymbols(list, o.renumber)
   const catL = (k: string) => { const c = CATEGORIES.find(x => x.key === k); return c ? tx(c.vn, c.en, L) : k }
   let rows = '', lastBand = ''
@@ -42,11 +42,10 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
       const cats = [...new Set(occ.map(o => o.category ?? e.category).filter(Boolean) as string[])].map(catL).join(' / ')
       const spec = [tx(e.name_vn, e.name_en, L) && `<b>${esc(tx(e.name_vn, e.name_en, L))}</b>`, esc(tx(e.desc_vn || e.material_vn, e.desc_en || e.material_en, L)),
         e.composition ? `<small>${h('Cấu tạo', 'Composition')}: ${esc(e.composition)}</small>` : '', e.perf_vn ? `<small>${h('Yêu cầu', 'Requirement')}: ${esc(tx(e.perf_vn, e.perf_en, L))}</small>` : '', e.standards ? `<small>${h('Tiêu chuẩn', 'Standards')}: ${esc(e.standards)}</small>` : ''].filter(Boolean).join('<br>')
-      rows += `<tr class="${e.source === 'inferred' ? 'inf' : ''}"><td>${stt}</td><td class="code">${esc(symbolOf(e, L, sym.legacy, sym.en))}</td><td>${esc(cats)}</td><td>${rooms}</td>
-        <td>${esc(e.qty ?? '')} ${esc(e.unit ?? '')}${e.qty_flag !== 'ok' ? ' <b class="w">⚠</b>' : ''}</td><td class="im">${img}</td><td class="im">${map}</td>
+      rows += `<tr class="${e.source === 'inferred' ? 'inf' : ''}"><td>${stt}</td><td class="code">${esc(symbolOf(e, L, sym.legacy, sym.en))}</td><td class="code">${esc(e.product_code ?? '')}</td><td>${esc(cats)}</td><td>${rooms}</td><td class="im">${img}</td>
         <td>${spec}</td>
-        <td>${esc([e.brand, e.product_code, e.origin].filter(Boolean).join(' · '))}${e.product_url ? `<br><a href="${esc(e.product_url)}">${esc(e.product_url)}</a>` : ''}</td>
-        <td>${esc(tx(e.note_vn, e.note_en, L))}${e.status !== 'approved' ? `<br><i>${esc((vn ? STATUS_VN : STATUS_EN)[e.status])}</i>` : ''}</td></tr>`
+        <td>${esc([e.brand, e.origin].filter(Boolean).join(' / '))}</td><td class="im">${map}</td>
+        <td>${e.product_url ? `<a href="${esc(e.product_url)}">${esc(e.product_url)}</a><br>` : ''}${esc(tx(e.note_vn, e.note_en, L))}${e.qty != null ? `<br><small>${h('Thống kê', 'Qty')}: ${esc(e.qty)} ${esc(e.unit ?? '')}${e.qty_flag !== 'ok' ? ' ⚠' : ''}</small>` : ''}${e.status !== 'approved' ? `<br><i>${esc((vn ? STATUS_VN : STATUS_EN)[e.status])}</i>` : ''}</td></tr>`
     }
   }
   }
@@ -62,7 +61,7 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
   .sw { width:60px; height:44px; border:1px solid #aaa } small { color:#666 } .w { color:#c00 } a { color:#1F4E9A; font-size:8px }
   </style></head><body><h1>${h('BẢNG DANH MỤC VẬT LIỆU HOÀN THIỆN', 'FINISHES & FF&E MATERIAL SCHEDULE')}</h1>
   <div class="sub">${h('Dự án', 'Project')}: ${esc(d.project.name)}${d.project.location ? ' · ' + esc(d.project.location) : ''} · ${new Date().toLocaleDateString(vn ? 'vi-VN' : 'en-GB')}</div>
-  <table><colgroup><col style="width:2.5%"><col style="width:5%"><col style="width:6%"><col style="width:11%"><col style="width:4.5%"><col style="width:14%"><col style="width:6%"><col style="width:24%"><col style="width:15%"><col style="width:12%"></colgroup>
+  <table><colgroup><col style="width:2.5%"><col style="width:6%"><col style="width:7%"><col style="width:7%"><col style="width:11%"><col style="width:16%"><col style="width:24%"><col style="width:10%"><col style="width:9%"><col style="width:7.5%"></colgroup>
   <thead><tr>${H.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>
   <script>window.onload=()=>setTimeout(()=>window.print(),400)</script></body></html>`
   w.document.open(); w.document.write(html); w.document.close()
