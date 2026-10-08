@@ -364,12 +364,19 @@ export async function applyProduct(entry: Entry, p: { brand: string; product_cod
 }
 
 // ---------------------------------------------------------------- Thêm tay
-export async function addManualEntry(project: Project, room: Room | null, group: string, name: string, category: string) {
-  const entries = await must(supabase.from('entries').select('code').eq('project_id', project.id)) as Entry[]
-  const book = new CodeBook(entries as Entry[])
-  const e = await must(supabase.from('entries').insert({
-    project_id: project.id, code: book.next(group), group_code: group, category, name_vn: name, source: 'manual', status: 'pending', qty_flag: 'warn', qty_note: 'Nhập tay',
-  }).select().single()) as Entry
-  if (room) await must(supabase.from('occurrences').insert({ entry_id: e.id, room_id: room.id, category }))
-  return e
+export type ManualExtra = { material_vn?: string; color_hex?: string | null; part_vn?: string | null; parent_id?: string | null; name_en?: string }
+export async function addManualEntry(project: Project, room: Room | null, group: string, name: string, category: string, extra: ManualExtra = {}) {
+  // nhiều người cùng thêm: nếu trùng mã (người khác vừa lấy) thì lấy mã kế tiếp và thử lại
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const entries = await must(supabase.from('entries').select('code').eq('project_id', project.id)) as Entry[]
+    const book = new CodeBook(entries as Entry[])
+    const { data, error } = await supabase.from('entries').insert({
+      project_id: project.id, code: book.next(group), group_code: group, category, name_vn: name, source: 'manual', status: 'pending', qty_flag: 'warn', qty_note: 'Nhập tay', ...extra,
+    }).select().single()
+    if (error) { if (error.code === '23505' && attempt < 4) continue; throw new Error(error.message) }
+    const e = data as Entry
+    if (room) await must(supabase.from('occurrences').insert({ entry_id: e.id, room_id: room.id, category }))
+    return e
+  }
+  throw new Error('Không tạo được mã mới, hãy thử lại')
 }

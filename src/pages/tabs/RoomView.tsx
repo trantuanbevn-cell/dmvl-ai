@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { CATEGORIES, GROUPS, roomTypeLabel } from '../../lib/codes'
-import { addManualEntry } from '../../lib/pipeline'
 import { clampBox } from '../../lib/crop'
 import type { ProjectData } from '../../lib/useProject'
 import type { Entry, Occurrence } from '../../lib/types'
@@ -12,6 +11,7 @@ import { StatusDot } from './MaterialView'
 import Bar from '../../components/Bar'
 import PlanMap from '../../components/PlanMap'
 import RoomSections from '../../components/RoomSections'
+import AddMaterial, { type AddPreset } from '../../components/AddMaterial'
 import type { Lang } from '../../lib/sections'
 import { roomStats, heroUrl } from '../../lib/progress'
 import { useAuth } from '../../lib/auth'
@@ -32,6 +32,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
   const { canEdit, name } = useAuth()
   const online = useOnline()
   const [add, setAdd] = useState({ group: 'DC', name: '', category: 'decor' })
+  const [dlg, setDlg] = useState<AddPreset | null>(null)
   const imgRef = useRef<HTMLDivElement>(null)
 
   const pages = d.pages.filter(p => p.room_id === roomId && (p.kind === 'render' || p.kind === 'plan'))
@@ -68,11 +69,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
     if (!ids.length || !confirm(`Xác nhận ${ids.length} hạng mục nhìn thấy trong ảnh của phòng này? (dòng suy luận vẫn để chờ duyệt)`)) return
     await supabase.from('entries').update({ status: 'approved' }).in('id', ids); d.reload()
   }
-  const addItem = async () => {
-    if (!room || !add.name) return
-    const e = await addManualEntry(d.project!, room, add.group, add.name, add.category)
-    setAdd({ ...add, name: '' }); await d.reload(); setSel(e.id)
-  }
+  const addItem = () => { if (!room) return; setDlg({ group: add.group, category: add.category, name: add.name, hint: 'Hệ thống sẽ kiểm tra xem vật liệu này đã có mã chưa.' }); setAdd({ ...add, name: '' }) }
   const removeOcc = async (o: Occurrence) => { if (confirm('Bỏ hạng mục này khỏi phòng?')) { await supabase.from('occurrences').delete().eq('id', o.id); d.reload() } }
 
   const setWork = async (st: 'todo' | 'doing' | 'done') => {
@@ -172,16 +169,17 @@ export default function RoomView({ d }: { d: ProjectData }) {
             <span className="small muted" style={{ marginLeft: 12 }}>Lọc:</span>
             {([['all', 'Tất cả'], ['pending', 'Chờ duyệt'], ['inferred', 'Suy luận (không thấy trong ảnh)'], ['missing', `⚠ Thiếu thông tin${rm.rows ? ' (' + rm.rows + ')' : ''}`]] as const).map(([k, l]) => <button key={k} className={'chip' + (flt === k ? ' on' : '')} onClick={() => setFlt(k)}>{l}</button>)}
           </div>
-          <RoomSections d={d} room={room!} lang={lang} filter={flt} sel={sel} onPick={pick} onDetail={id => { setSel(id); setSelOcc(null) }} onRemove={removeOcc} />
+          <RoomSections d={d} room={room!} lang={lang} filter={flt} sel={sel} onPick={pick} onDetail={id => { setSel(id); setSelOcc(null) }} onRemove={removeOcc} onAdd={setDlg} />
           {canEdit && <div className="row gap add-row">
             <select value={add.category} onChange={e => setAdd({ ...add, category: e.target.value })}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.vn}</option>)}</select>
             <select value={add.group} onChange={e => setAdd({ ...add, group: e.target.value })}>{GROUPS.map(g => <option key={g.code} value={g.code}>{g.code} – {g.vn}</option>)}</select>
-            <input placeholder="Thêm hạng mục bị thiếu, vd: Ghế băng thay đồ" value={add.name} onChange={e => setAdd({ ...add, name: e.target.value })} style={{ flex: 1 }} />
+            <input placeholder="Thêm hạng mục bị thiếu, vd: Ghế băng thay đồ" value={add.name} onChange={e => setAdd({ ...add, name: e.target.value })} onKeyDown={e => e.key === 'Enter' && addItem()} style={{ flex: 1 }} />
             <button className="btn primary sm" onClick={addItem}>+ Thêm</button>
           </div>}
         </div>
       </div>
 
+      {dlg && room && <AddMaterial d={d} room={room} preset={dlg} onClose={() => setDlg(null)} onDone={id => { setDlg(null); setSel(id); setSelOcc(null) }} />}
       {selEntry && <EntryPanel d={d} entry={selEntry} onClose={() => { setSel(null); setSelOcc(null) }} />}
     </div>
   )

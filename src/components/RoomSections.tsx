@@ -29,9 +29,10 @@ function Ed({ e, k, area, ph, num, w, miss }: { e: Entry; k: K; area?: boolean; 
 const pair = (k: 'name' | 'material' | 'desc' | 'note', lang: Lang): K[] => (lang === 'vn' ? [`${k}_vn`] : lang === 'en' ? [`${k}_en`] : [`${k}_vn`, `${k}_en`]) as K[]
 const flag = (k: K) => (String(k).endsWith('_en') ? 'EN' : String(k).endsWith('_vn') ? 'VN' : '')
 
-export default function RoomSections({ d, room, lang, filter, sel, onPick, onDetail, onRemove }: {
+export default function RoomSections({ d, room, lang, filter, sel, onPick, onDetail, onRemove, onAdd }: {
   d: ProjectData; room: Room; lang: Lang; filter: 'all' | 'pending' | 'inferred' | 'missing'; sel: string | null
   onPick: (o: Occurrence) => void; onDetail: (id: string) => void; onRemove: (o: Occurrence) => void
+  onAdd: (p: { group: string; category: string; name: string; part_vn?: string | null; parent_id?: string | null; hint?: string }) => void
 }) {
   const { canEdit } = useAuth()
   const pageById = useMemo(() => new Map(d.pages.map(p => [p.id, p])), [d.pages])
@@ -54,7 +55,8 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
         return (
           <div key={section.key}>
             {bandRow && <div className={'band band-' + bandRow}>{bandTitle(bandRow, lang)}</div>}
-            <div className="sec-title">{sectionTitle(section, lang)} <span className="cnt">{items.length}</span>{(() => { const n = items.filter(e => missingOf(e, lang).length).length; return n ? <span className="cnt miss-cnt" title="Số dòng còn thiếu thông tin">⚠ {n} dòng thiếu</span> : <span className="cnt ok-cnt">✓ đủ thông tin</span> })()}</div>
+            <div className="sec-title">{sectionTitle(section, lang)} <span className="cnt">{items.length}</span>{(() => { const n = items.filter(e => missingOf(e, lang).length).length; return n ? <span className="cnt miss-cnt" title="Số dòng còn thiếu thông tin">⚠ {n} dòng thiếu</span> : <span className="cnt ok-cnt">✓ đủ thông tin</span> })()}
+              {canEdit && <button className="btn sm add-sib" style={{ marginLeft: 'auto' }} title="Thêm vật liệu khác vào mục này (vd màu sơn thứ 2)" onClick={() => { const f = items[0]; onAdd({ group: f.group_code, category: f.category ?? 'decor', name: f.name_vn, part_vn: f.part_vn, parent_id: f.parent_id, hint: `Thêm vật liệu nhận diện thiếu trong mục “${sectionTitle(section, lang)}”.` }) }}>＋ Thêm vật liệu</button>}</div>
             <table className="sec-table">
               <thead><tr><th style={{ width: 96 }}>Hình ảnh</th><th style={{ width: 86 }}>Ký hiệu</th><th style={{ width: '19%' }}>Hạng mục / vật liệu</th><th style={{ width: 92 }}>Mục</th><th style={{ width: '12%' }}>Vị trí</th><th style={{ width: 82 }}>Thống kê</th><th>Thông số kỹ thuật</th><th style={{ width: '14%' }}>Xuất xứ / Thương hiệu</th><th style={{ width: '10%' }}>Ghi chú</th><th style={{ width: 112 }} /></tr></thead>
               <tbody>{items.map(e => {
@@ -82,6 +84,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                       {canEdit && <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}>✓</button>}
                       {canEdit && <button className="btn ghost sm" title="Loại bỏ mã" onClick={ev => quick(e, 'rejected', ev)}>✕</button>}
                       <button className="btn ghost sm" title="Chi tiết / chọn mã hãng từ thư viện" onClick={ev => { ev.stopPropagation(); onDetail(e.id) }}>⋯</button>
+                      {canEdit && <button className="btn ghost sm" title="Thêm 1 vật liệu nữa cùng hạng mục này (vd màu thứ 2)" onClick={ev => { ev.stopPropagation(); onAdd({ group: e.group_code, category: cat, name: e.name_vn, part_vn: e.part_vn, parent_id: e.parent_id, hint: `Thêm vật liệu cùng loại với ${e.code} – ${e.name_vn}. Sửa tên/màu cho khác đi.` }) }}>＋</button>}
                       {canEdit && <button className="btn ghost sm" title="Bỏ khỏi phòng này" onClick={ev => { ev.stopPropagation(); os[0] && onRemove(os[0]) }}>🗑</button>}</td>
                   </tr>)
               })}</tbody>
