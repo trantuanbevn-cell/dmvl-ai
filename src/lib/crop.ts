@@ -107,21 +107,21 @@ export async function contextCanvas(url: string, bbox: number[], maxEdge = 560, 
   const g = c.getContext('2d')!
   g.drawImage(im, sx, sy, sw, sh, 0, 0, c.width, c.height)
   if (!arrow || G.hide) return c
-  const a = G, W = c.width, H = c.height, lw = Math.max(2, Math.round(Math.max(W, H) / 120))
+  const a = G, W = c.width, H = c.height, lw = Math.max(2, Math.max(W, H) / 240)
   const draw = (color: string, extra: number) => {
     g.strokeStyle = color; g.fillStyle = color; g.lineCap = 'round'; g.lineJoin = 'round'
-    g.lineWidth = lw + extra
+    g.lineWidth = lw * 0.85 + extra
     g.strokeRect(a.box.x * W, a.box.y * H, a.box.w * W, a.box.h * H)
     const x1 = a.tail.x * W, y1 = a.tail.y * H, x2 = a.tip.x * W, y2 = a.tip.y * H
-    const ang = Math.atan2(y2 - y1, x2 - x1), hl = lw * 5.5, hw = lw * 3
+    const ang = Math.atan2(y2 - y1, x2 - x1), hl = lw * 4.8, hw = lw * 2.3
     g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2 - Math.cos(ang) * hl * 0.6, y2 - Math.sin(ang) * hl * 0.6); g.stroke()
     g.beginPath(); g.moveTo(x2, y2)
     g.lineTo(x2 - Math.cos(ang) * hl + Math.sin(ang) * hw, y2 - Math.sin(ang) * hl - Math.cos(ang) * hw)
     g.lineTo(x2 - Math.cos(ang) * hl - Math.sin(ang) * hw, y2 - Math.sin(ang) * hl + Math.cos(ang) * hw)
     g.closePath(); g.fill()
   }
-  g.save(); g.setLineDash([]); draw('rgba(255,255,255,0.95)', lw * 1.2); g.restore()
-  draw('#e11d1d', 0)
+  g.save(); g.setLineDash([]); draw('rgba(255,255,255,0.9)', lw * 0.9); g.restore()
+  draw('#e5322d', 0)
   return c
 }
 

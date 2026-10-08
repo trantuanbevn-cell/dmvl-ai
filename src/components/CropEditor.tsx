@@ -107,7 +107,7 @@ export default function CropEditor({ mode, baseUrl, bbox, pageW, pageH, view, re
                   </div>
                   {bb && <div className="ed-obj" style={{ left: pc(bb[0]), top: pc(bb[1]), width: pc(bb[2]), height: pc(bb[3]) }} />}
                   {occ && arrow && !noArrow && <>
-                    <svg className="ed-arrow" viewBox="0 0 1 1" preserveAspectRatio="none"><line x1={arrow.tail[0]} y1={arrow.tail[1]} x2={arrow.tip[0]} y2={arrow.tip[1]} stroke="#fff" strokeWidth={6} vectorEffect="non-scaling-stroke" strokeLinecap="round" /><line x1={arrow.tail[0]} y1={arrow.tail[1]} x2={arrow.tip[0]} y2={arrow.tip[1]} stroke="#e11d1d" strokeWidth={3} vectorEffect="non-scaling-stroke" strokeLinecap="round" /></svg>
+                    <svg className="ed-arrow" viewBox="0 0 1 1" preserveAspectRatio="none"><line x1={arrow.tail[0]} y1={arrow.tail[1]} x2={arrow.tip[0]} y2={arrow.tip[1]} stroke="#fff" strokeWidth={4} vectorEffect="non-scaling-stroke" strokeLinecap="round" /><line x1={arrow.tail[0]} y1={arrow.tail[1]} x2={arrow.tip[0]} y2={arrow.tip[1]} stroke="#e5322d" strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinecap="round" /></svg>
                     <i className="ed-pt tail" style={{ left: pc(arrow.tail[0]), top: pc(arrow.tail[1]) }} onPointerDown={start('tail')} title="Kéo để dời đuôi mũi tên" />
                     <i className="ed-pt tip" style={{ left: pc(arrow.tip[0]), top: pc(arrow.tip[1]) }} onPointerDown={start('tip')} title="Kéo để dời đầu mũi tên (điểm chỉ vào vật liệu)" />
                   </>}

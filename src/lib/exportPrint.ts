@@ -44,7 +44,7 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
       const rooms = locs.length ? locs.map(l => esc(tx(l.room.name_vn, l.room.name_en, L).replace('\n', ' / '))).join('<br>') : '—'
       const cats = [...new Set(occ.map(o => o.category ?? e.category).filter(Boolean) as string[])].map(catL).join(' / ')
       const spec = [tx(e.name_vn, e.name_en, L) && `<b>${esc(tx(e.name_vn, e.name_en, L))}</b>`, esc(tx(e.desc_vn || e.material_vn, e.desc_en || e.material_en, L)),
-        e.composition ? `<small>${h('Cấu tạo', 'Composition')}: ${esc(e.composition)}</small>` : '', e.perf_vn ? `<small>${h('Yêu cầu', 'Requirement')}: ${esc(tx(e.perf_vn, e.perf_en, L))}</small>` : '', e.standards ? `<small>${h('Tiêu chuẩn', 'Standards')}: ${esc(e.standards)}</small>` : ''].filter(Boolean).join('<br>')
+        e.composition ? `<small>${h('Cấu tạo', 'Composition')}: ${esc(e.composition)}</small>` : ''].filter(Boolean).join('<br>')
       rows += `<tr class="${e.source === 'inferred' ? 'inf' : ''}"><td>${stt}</td><td class="code">${esc(symbolOf(e, L, sym.legacy, sym.en))}</td><td class="code">${esc(e.product_code ?? '')}</td><td>${esc(cats)}</td><td>${rooms}</td><td class="im">${img}</td>
         <td>${spec}</td>
         <td>${esc([e.brand, e.origin].filter(Boolean).join(' / '))}</td><td class="im">${map}</td>

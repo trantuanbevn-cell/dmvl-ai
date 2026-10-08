@@ -104,8 +104,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
       const cats = [...new Set(occ.map(o2 => o2.category ?? e.category).filter(Boolean) as string[])]
       const sy = symbolOf(e, L, sym.legacy, sym.en)
       const spec = [tx(e.name_vn, e.name_en, L), tx(e.desc_vn || e.material_vn, e.desc_en || e.material_en, L),
-        e.part_vn ? `${h('Bộ phận', 'Part')}: ${tx(e.part_vn, e.part_en, L)}` : '', e.composition ? `${h('Cấu tạo', 'Composition')}: ${e.composition}` : '',
-        e.perf_vn ? `${h('Yêu cầu', 'Requirement')}: ${tx(e.perf_vn, e.perf_en, L)}` : '', e.standards ? `${h('Tiêu chuẩn', 'Standards')}: ${e.standards}` : ''].filter(Boolean).join('\n')
+        e.part_vn ? `${h('Bộ phận', 'Part')}: ${tx(e.part_vn, e.part_en, L)}` : '', e.composition ? `${h('Cấu tạo', 'Composition')}: ${e.composition}` : ''].filter(Boolean).join('\n')
       const remarks = [tx(e.note_vn, e.note_en, L), e.status !== 'approved' ? `[${(L === 'en' ? STATUS_EN : STATUS_VN)[e.status]}]` : ''].filter(Boolean).join('\n')
       const brand = [e.brand ? (e.product_name ? `${e.brand} – ${e.product_name}` : e.brand) : '', e.origin].filter(Boolean).join('\n')
       const v: Record<string, any> = { stt, sym: sy, mavl: e.product_code || sy, cat: cats.map(catLabel).join(' / '), loc: roomNames, qty: e.qty != null ? `${e.qty}${e.unit ? ' ' + e.unit : ''}` : '', spec, brand, link: e.product_url, note: remarks,

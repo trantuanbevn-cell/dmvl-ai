@@ -100,17 +100,17 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
         <Field e={entry} k="part_vn" label="Bộ phận áp dụng" onSaved={saved} />
         <Field e={entry} k="material_vn" label="Vật liệu AI nhận diện" area onSaved={saved} />
         <Field e={entry} k="desc_vn" label="Mô tả & thông số kỹ thuật" area onSaved={saved} />
-        <Field e={entry} k="perf_vn" label="Tính chất yêu cầu theo không gian" area onSaved={saved} />
+        <Field e={entry} k="perf_vn" label="Tính chất yêu cầu theo không gian (chỉ để kiểm tra, không xuất file)" area onSaved={saved} />
         <Field e={entry} k="note_vn" label="Ghi chú TVTK" area onSaved={saved} />
       </> : <>
         <Field e={entry} k="name_en" label="Item / material" onSaved={saved} />
         <Field e={entry} k="part_en" label="Application" onSaved={saved} />
         <Field e={entry} k="material_en" label="Detected material" area onSaved={saved} />
         <Field e={entry} k="desc_en" label="Description & specification" area onSaved={saved} />
-        <Field e={entry} k="perf_en" label="Performance requirements" area onSaved={saved} />
+        <Field e={entry} k="perf_en" label="Performance requirements (check only, not exported)" area onSaved={saved} />
         <Field e={entry} k="note_en" label="Designer remarks" area onSaved={saved} />
       </>}
-      <Field e={entry} k="standards" label="Tiêu chuẩn tham chiếu" onSaved={saved} />
+      <Field e={entry} k="standards" label="Tiêu chuẩn tham chiếu (chỉ để kiểm tra, không xuất file)" onSaved={saved} />
       <Field e={entry} k="composition" label="Cấu tạo (vật liệu thành phần theo mã)" onSaved={saved} />
       {(children.length > 0 || parent) && <div className="small muted">
         {parent && <>Thuộc: <b>{parent.code}</b> {parent.name_vn}. </>}

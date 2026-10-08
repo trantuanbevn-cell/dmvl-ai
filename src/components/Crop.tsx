@@ -19,8 +19,8 @@ function CropView({ url, bbox, pageW, pageH, height = 90, maxWidth = 200, onClic
     <div className={'crop repl' + (active ? ' active' : '')} onClick={onClick} onDoubleClick={onDouble} title={onDouble ? 'Kích đúp để phóng to' : undefined}
       style={{ width: cw, height: ch, backgroundImage: `url("${replUrl}")`, backgroundSize: 'contain', backgroundPosition: 'center', backgroundColor: '#f3ede6' }} />)
   const { rx, ry, rw, rh } = G
-  const lw = Math.max(1.5, Math.max(cw, ch) / 70)
-  const hl = lw * 5, hw = lw * 3
+  const lw = Math.max(1.2, Math.min(2.4, Math.max(cw, ch) / 240)) // nét mảnh, tinh tế – không phình theo cỡ ảnh
+  const hl = lw * 4.5, hw = lw * 2.1
   const x1 = G.tail.x * cw, y1 = G.tail.y * ch, x2 = G.tip.x * cw, y2 = G.tip.y * ch
   const ang = Math.atan2(y2 - y1, x2 - x1)
   const head = `${x2},${y2} ${x2 - Math.cos(ang) * hl + Math.sin(ang) * hw},${y2 - Math.sin(ang) * hl - Math.cos(ang) * hw} ${x2 - Math.cos(ang) * hl - Math.sin(ang) * hw},${y2 - Math.sin(ang) * hl + Math.cos(ang) * hw}`
@@ -31,11 +31,11 @@ function CropView({ url, bbox, pageW, pageH, height = 90, maxWidth = 200, onClic
       backgroundPosition: `${rw >= 1 ? 0 : (rx / (1 - rw)) * 100}% ${rh >= 1 ? 0 : (ry / (1 - rh)) * 100}%`,
     }}>
       {arrow && !G.hide && <svg width={cw} height={ch} viewBox={`0 0 ${cw} ${ch}`} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-        <rect x={G.box.x * cw} y={G.box.y * ch} width={G.box.w * cw} height={G.box.h * ch} fill="none" stroke="#e11d1d" strokeWidth={lw * 0.7} />
-        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#fff" strokeWidth={lw * 2.2} strokeLinecap="round" />
-        <polygon points={head} fill="#fff" stroke="#fff" strokeWidth={lw} strokeLinejoin="round" />
-        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#e11d1d" strokeWidth={lw} strokeLinecap="round" />
-        <polygon points={head} fill="#e11d1d" />
+        <rect x={G.box.x * cw} y={G.box.y * ch} width={G.box.w * cw} height={G.box.h * ch} fill="none" stroke="#e5322d" strokeWidth={lw * 0.8} />
+        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#fff" strokeOpacity={0.9} strokeWidth={lw * 2} strokeLinecap="round" />
+        <polygon points={head} fill="#fff" fillOpacity={0.9} stroke="#fff" strokeOpacity={0.9} strokeWidth={lw * 0.8} strokeLinejoin="round" />
+        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#e5322d" strokeWidth={lw} strokeLinecap="round" />
+        <polygon points={head} fill="#e5322d" />
       </svg>}
     </div>
   )
