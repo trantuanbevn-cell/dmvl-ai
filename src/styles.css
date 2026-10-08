@@ -277,3 +277,7 @@ input[readonly], textarea[readonly] { cursor: default }
 .link-cell { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 4px }
 .link-a { font-size: 12px; color: #1f4e9a; text-decoration: underline; word-break: break-all } .link-a.bad { color: #b3261e }
 .link-b { border: 1px solid #ddd; background: #fff; border-radius: 6px; font-size: 11px; line-height: 1; padding: 3px 6px; cursor: pointer }
+.bell { position: relative } .bell-btn { position: relative; font-size: 16px }
+.bell-dot { position: absolute; top: 2px; right: 2px; width: 9px; height: 9px; border-radius: 50%; background: #e53935; border: 1.5px solid #fff }
+.bell-pop { position: absolute; right: 0; top: 36px; width: 300px; background: #fff; color: #222; border: 1px solid #e3d5c8; border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.2); padding: 12px; z-index: 300 }
+.bell-item { display: flex; flex-direction: column; gap: 6px; margin-top: 8px }

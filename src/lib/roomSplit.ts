@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import { autoBackup } from './backup'
 import type { Page, Room, Occurrence } from './types'
 import type { PageViews } from './planPipeline'
+import type { Rect } from './renders'
 import type { ProjectData } from './useProject'
 
 export type Part = { name_vn: string; name_en: string }
@@ -43,11 +44,11 @@ export function suggestParts(room: Room, pages: Page[]): Part[] {
 export const suggestSplits = (rooms: Room[], pages: Page[]) => rooms.map(room => ({ room, parts: suggestParts(room, pages) })).filter(x => x.parts.length >= 2)
 
 /** Ảnh phối cảnh (ô ảnh) của một trang: nếu slide có nhiều ô ảnh thì mỗi ô chọn phòng riêng */
-export const pageRects = (p: Page) => ((p.views as PageViews | null)?.rects ?? []).slice()
+export const pageRects = (p: Page, found: Record<string, Rect[]> = {}): Rect[] => { const a = ((p.views as PageViews | null)?.rects ?? []).slice(); return a.length >= 2 ? a : (found[p.id]?.length ?? 0) >= 2 ? found[p.id] : a }
 const pad = (n: number) => String(n).padStart(2, '0')
 
 /** choice[pageId][i] = chỉ số phòng (trong `parts`) của ô ảnh i (hoặc cả trang nếu không tách được ô ảnh). Giữ nguyên mọi vật liệu đã có, chỉ chia lại theo phòng. */
-export async function splitRoom(d: ProjectData, room: Room, parts: Part[], choice: Record<string, number[]>) {
+export async function splitRoom(d: ProjectData, room: Room, parts: Part[], choice: Record<string, number[]>, found: Record<string, Rect[]> = {}) {
   const project = d.project!
   await autoBackup(project, `Tự động trước khi tách phòng ${room.code}`)
   // 1) phòng đầu giữ mã cũ, các phòng sau tạo mới và xếp liền kề
@@ -79,7 +80,7 @@ export async function splitRoom(d: ProjectData, room: Room, parts: Part[], choic
   const occ = d.occ.filter((o: Occurrence) => o.room_id === room.id && o.page_id && roomOfRect.has(o.page_id))
   let moved = 0
   for (const o of occ) {
-    const p = pages.find(x => x.id === o.page_id)!, rects = pageRects(p), rid = roomOfRect.get(p.id)!
+    const p = pages.find(x => x.id === o.page_id)!, rects = pageRects(p, found), rid = roomOfRect.get(p.id)!
     let target = rid(0)
     if (rects.length && o.bbox) {
       const cx = o.bbox[0] + o.bbox[2] / 2, cy = o.bbox[1] + o.bbox[3] / 2

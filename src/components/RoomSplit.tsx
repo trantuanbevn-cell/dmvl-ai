@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { supabase, BUCKET } from '../lib/supabase'
+import { renderRects, type Rect } from '../lib/renders'
 import { createPortal } from 'react-dom'
 import type { ProjectData } from '../lib/useProject'
 import type { Room } from '../lib/types'
@@ -12,6 +14,30 @@ export default function RoomSplit({ d, room, onClose }: { d: ProjectData; room: 
   // mặc định: ô ảnh thứ i (trái → phải) thuộc phòng thứ i
   const [choice, setChoice] = useState<Record<string, number[]>>(() => Object.fromEntries(pages.map(p => { const n = Math.max(1, pageRects(p).length); return [p.id, Array.from({ length: n }, (_, i) => Math.min(i, 1)) ] })))
   const [busy, setBusy] = useState(false)
+  const [found, setFound] = useState<Record<string, Rect[]>>({})     // ô ảnh tự dò từ PDF cho trang chưa có dữ liệu ô ảnh
+  const [detecting, setDetecting] = useState(false)
+  // Trang chỉ có 1 “ô” (chưa chạy phân tích mặt bằng) → tự dò các ô ảnh phối cảnh ngay từ file PDF để mỗi ảnh có ô chọn riêng
+  useEffect(() => {
+    const need = pages.filter(p => p.kind === 'render' && pageRects(p).length < 2)
+    if (!need.length || !d.project?.pdf_path) return
+    let dead = false
+    ;(async () => {
+      setDetecting(true)
+      try {
+        const blob = (await supabase.storage.from(BUCKET).download(d.project!.pdf_path!)).data
+        if (!blob) return
+        const m = await renderRects(await blob.arrayBuffer(), need.map(p => p.page_no))
+        if (dead) return
+        const f: Record<string, Rect[]> = {}
+        for (const p of need) { const r = m.get(p.page_no) ?? []; if (r.length >= 2) f[p.id] = r }
+        setFound(f)
+        setChoice(c => { const n = { ...c }; for (const [id, r] of Object.entries(f)) n[id] = r.map((_, i) => Math.min(i, parts.length - 1)); return n })
+      } catch { /* giữ nguyên: coi như 1 ảnh */ }
+      if (!dead) setDetecting(false)
+    })()
+    return () => { dead = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const set = (i: number, k: keyof Part, v: string) => setParts(ps => ps.map((p, j) => (j === i ? { ...p, [k]: v } : p)))
   const pick = (pid: string, i: number, v: number) => setChoice(c => ({ ...c, [pid]: c[pid].map((x, j) => (j === i ? v : x)) }))
   const ok = parts.length >= 2 && parts.every(p => p.name_vn.trim())
@@ -19,7 +45,7 @@ export default function RoomSplit({ d, room, onClose }: { d: ProjectData; room: 
     if (!ok) return
     setBusy(true)
     try {
-      const r = await splitRoom(d, room, parts.map(p => ({ name_vn: p.name_vn.trim(), name_en: p.name_en.trim() })), choice)
+      const r = await splitRoom(d, room, parts.map(p => ({ name_vn: p.name_vn.trim(), name_en: p.name_en.trim() })), choice, found)
       toast(`Đã tách thành ${r.rooms} phòng, chia lại ${r.moved} vật liệu theo từng ảnh`, 'ok')
       await d.reload(); onClose()
     } catch (e) { alert(String((e as Error).message ?? e)) }
@@ -45,8 +71,9 @@ export default function RoomSplit({ d, room, onClose }: { d: ProjectData; room: 
           <div><button className="btn sm" onClick={() => setParts(ps => [...ps, { name_vn: '', name_en: '' }])}>＋ Thêm phòng</button></div>
         </div>
         <h4 style={{ marginBottom: 4 }}>Mỗi ảnh thuộc phòng nào?</h4>
+        {detecting && <p className="muted small">Đang dò các ô ảnh phối cảnh trong PDF…</p>}
         {!pages.length && <p className="muted small">Phòng này chưa có trang phối cảnh – vẫn tách được tên, trang gán sau ở danh sách trang.</p>}
-        {pages.map(pg => { const rs = pageRects(pg), url = d.urls[pg.image_path]; return (
+        {pages.map(pg => { const rs = pageRects(pg, found), url = d.urls[pg.image_path]; return (
           <div key={pg.id} className="row gap" style={{ flexWrap: 'wrap', padding: '8px 0', borderTop: '1px solid #eee', alignItems: 'flex-start' }}>
             <div className="small"><b>Trang {pg.page_no}</b>{rs.length ? '' : ' (cả trang)'}</div>
             {(rs.length ? rs : [null]).map((r, i) => (

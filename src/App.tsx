@@ -6,6 +6,7 @@ import ForcePassword from './components/ForcePassword'
 import { AuthProvider, useAuth, ROLE_VN } from './lib/auth'
 import { PresenceProvider, useOnline, colorOf } from './lib/presence'
 import { Toaster } from './lib/toast'
+import UpdateBell from './components/UpdateBell'
 import Login from './pages/Login'
 import Projects from './pages/Projects'
 import ProjectPage from './pages/ProjectPage'
@@ -34,6 +35,7 @@ function Shell({ session }: { session: Session }) {
           <Link to="/">Dự án</Link>
           {isAdmin && <Link to="/team">Thành viên</Link>}
           <Link to="/settings">Cài đặt</Link>
+          <UpdateBell />
           <div className="online" title={online.map(o => `${o.name} (${ROLE_VN[o.role as keyof typeof ROLE_VN] ?? o.role})`).join('\n')}>
             <span className="online-n">● {online.length} online</span>
             <div className="avs">{online.slice(0, 8).map(o => <span key={o.id} className="av" style={{ background: colorOf(o.id) }} title={`${o.name}${o.room ? ' · đang xem một phòng' : ''}`}>{initials(o.name)}</span>)}{online.length > 8 && <span className="av more">+{online.length - 8}</span>}</div>
