@@ -1,5 +1,7 @@
 import { syncLibrary } from '../../lib/matLibrary'
-import { useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useAuth } from '../../lib/auth'
+import { CATEGORY_GROUPS } from '../../lib/codes'
 import { supabase } from '../../lib/supabase'
 import { SECTIONS, BANDS, sectionOf, sectionTitle, type Lang } from '../../lib/sections'
 import RoomSections from '../../components/RoomSections'
@@ -16,6 +18,20 @@ export function StatusDot({ s }: { s: string }) {
 
 export default function MaterialView({ d }: { d: ProjectData }) {
   const live = d.entries.filter(e => e.status !== 'rejected')
+  const { canEdit } = useAuth()
+  const healed = useRef(new Set<string>())
+  // Tự sửa các mục đã được đổi hạng mục sang “Tranh, artwork” từ trước nhưng còn nằm nhóm cũ → chuyển sang nhóm AW + đánh mã mới
+  useEffect(() => {
+    if (!canEdit) return
+    const bad = d.entries.filter(e => e.status !== 'rejected' && !healed.current.has(e.id) && e.group_code !== 'AW' && d.occ.some(o => o.entry_id === e.id && o.category === 'artwork') && !d.occ.some(o => o.entry_id === e.id && o.category && o.category !== 'artwork'))
+    if (!bad.length) return
+    bad.forEach(e => healed.current.add(e.id))
+    let max = d.entries.filter(x => x.group_code === 'AW').reduce((m, x) => Math.max(m, parseInt(x.code.split('-').pop() ?? '0', 10) || 0), 0)
+    ;(async () => {
+      for (const e of bad) { max++; await supabase.from('entries').update({ category: 'artwork', group_code: CATEGORY_GROUPS.artwork[0], code: `AW-${String(max).padStart(2, '0')}` }).eq('id', e.id) }
+      d.reload()
+    })()
+  }, [d.entries, d.occ, canEdit])
   const secs = SECTIONS.map(sec => ({ sec, list: live.filter(e => sectionOf(e).key === sec.key) })).filter(x => x.list.length)
   const [onlyRaw, setOnly] = useState<string>('')          // '' = tất cả
   const only = secs.some(x => x.sec.key === onlyRaw) ? onlyRaw : ''   // tab hết vật liệu thì tự biến mất
