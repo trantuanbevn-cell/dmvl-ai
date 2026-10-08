@@ -20,7 +20,11 @@ export function AuthProvider({ session, children }: { session: Session; children
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     let off = false
-    const load = () => supabase.from('profiles').select('id,email,full_name,role,active').eq('id', session.user.id).maybeSingle().then(({ data }) => { if (!off) { setProfile((data as Profile) ?? null); setLoading(false) } })
+    const load = () => supabase.from('profiles').select('id,email,full_name,role,active').eq('id', session.user.id).maybeSingle().then(({ data, error }) => { if (off) return
+      // Chưa chạy migration (chưa có bảng profiles): chạy như phiên bản cũ, ai đăng nhập cũng toàn quyền
+      if (error && /profiles|relation|schema cache/i.test(error.message)) setProfile({ id: session.user.id, email: session.user.email ?? null, full_name: null, role: 'admin', active: true })
+      else setProfile((data as Profile) ?? null)
+      setLoading(false) })
     load()
     const ch = supabase.channel('profile-' + session.user.id).on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${session.user.id}` }, load).subscribe()
     return () => { off = true; supabase.removeChannel(ch) }
