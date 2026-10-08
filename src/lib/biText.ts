@@ -39,7 +39,7 @@ export function entryCells(e: Entry, L: Lang, occCats: string[], locs: { room: {
   const lab = (a: string, b: string, vn: string | null | undefined, en: string | null | undefined) => pair(vn ? `${a}: ${vn}` : '', vn || en ? `${b}: ${en || vn}` : '', L)
   const spec = [...pair(e.name_vn, e.name_en, L), ...descPairs(e, L),
     ...(e.part_vn ? lab('Bộ phận', 'Part', e.part_vn, e.part_en) : []), ...(e.composition ? lab('Cấu tạo', 'Composition', e.composition, e.composition) : [])]
-  const brand = [...one(e.brand ? (e.product_name ? `${e.brand} – ${e.product_name}` : e.brand) : ''), ...one(e.origin ?? '')]
+  const brand = [...one((e.origin ?? '').trim()), ...one((e.brand ?? '').trim())]   // dòng 1: xuất xứ; dòng 2: hãng / thương hiệu
   const note = [...pair(e.note_vn, e.note_en, L), ...(e.status !== 'approved' ? pair(`[${STATUS_VN[e.status]}]`, `[${STATUS_EN[e.status]}]`, L) : [])]
   return { cat, loc, spec, brand, note }
 }

@@ -131,9 +131,9 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
 
       <h4>Mã thực tế</h4>
       <div className="grid2">
-        <Field e={entry} k="brand" label="Hãng" onSaved={saved} />
+        <Field e={entry} k="brand" label="Hãng / thương hiệu" onSaved={saved} />
         <Field e={entry} k="product_code" label="Mã sản phẩm" onSaved={saved} />
-        <Field e={entry} k="product_name" label="Tên sản phẩm" onSaved={saved} />
+        <Field e={entry} k="product_name" label="Tên sản phẩm (ghi chú nội bộ, không in)" onSaved={saved} />
         <Field e={entry} k="origin" label="Xuất xứ" onSaved={saved} />
       </div>
       <Field e={entry} k="product_url" label="Link hãng" onSaved={saved} />
