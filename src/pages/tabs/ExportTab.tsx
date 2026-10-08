@@ -1,31 +1,68 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { exportExcel, filterEntries } from '../../lib/exportExcel'
 import { printSchedule } from '../../lib/exportPrint'
-import type { Lang } from '../../lib/sections'
+import { SECTIONS, BANDS, PRESETS, defaultOpts, groupBySection, planSheets, type ExportOpts, type SheetTarget, type Lang } from '../../lib/sections'
 import type { ProjectData } from '../../lib/useProject'
 
+const TARGETS: [SheetTarget, string][] = [['main', 'Sheet chính'], ['own', 'Sheet riêng'], ['c1', 'Sheet phụ 1'], ['c2', 'Sheet phụ 2']]
+
 export default function ExportTab({ d }: { d: ProjectData }) {
-  const [inc, setInc] = useState(false)
-  const [lang, setLang] = useState<Lang>('both')
+  const key = 'dmvl-export-' + d.project!.id
+  const [o, setO] = useState<ExportOpts>(() => { try { return { ...defaultOpts(), ...JSON.parse(localStorage.getItem(key) ?? '{}') } } catch { return defaultOpts() } })
+  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(o)) } catch { /* */ } }, [o, key])
   const [busy, setBusy] = useState('')
-  const n = filterEntries(d.entries, inc).length
+  const list = useMemo(() => filterEntries(d.entries, o.includePending), [d.entries, o.includePending])
+  const groups = useMemo(() => groupBySection(list), [list])
+  const sheets = useMemo(() => planSheets(groups, o), [groups, o])
+  const n = list.length
   const pend = d.entries.filter(e => e.status === 'pending' || e.status === 'review').length
+  const roomsMissing = d.rooms.filter(r => !d.occ.some(x => x.room_id === r.id)).length
   const go = async (label: string, fn: () => Promise<void>) => { setBusy(label); try { await fn() } catch (e) { alert(String(e)) } setBusy('') }
   const data = { project: d.project!, rooms: d.rooms, pages: d.pages, entries: d.entries, occ: d.occ }
+  const set = (p: Partial<ExportOpts>) => setO({ ...o, ...p })
+  let lastBand = ''
   return (
     <div className="card stack">
       <h3>Xuất bảng danh mục</h3>
-      <p className="muted">File theo đúng bố cục DMVL của công ty (STT · Ký hiệu bản vẽ · Mã VL · Mục · Vị trí · Thống kê · Hình ảnh phối cảnh · Mẫu vật liệu · Thông số kỹ thuật · Xuất xứ/Thương hiệu · Ghi chú, khối nhà thầu & đánh giá để trống). Nhóm theo vật liệu: <b>sàn – tường – trần</b> trước, rồi vật liệu & cấu kiện khác, nội thất liền tường, nội thất rời, thiết bị, đèn, decor, artwork. Sheet thứ 2 là bảng hoàn thiện theo phòng.</p>
+      <p className="muted">Phần mềm <b>tổng hợp mọi phòng</b> lại: vật liệu giống nhau ở nhiều phòng chỉ là một dòng, cột "Vị trí" liệt kê đủ các phòng và trang concept, và <b>ký hiệu được đánh số đồng bộ</b> trong cả file. Các mục xếp đúng thứ tự như bảng DMVL của công ty (sàn – tường – trần trước, rồi vật liệu khác, nội thất, thiết bị, decor, artwork).</p>
+      {roomsMissing > 0 && <div className="note">⚠ Còn {roomsMissing} phòng chưa có hạng mục nào – kiểm tra lại bước “Theo phòng” trước khi xuất.</div>}
+
       <div className="row gap sm-gap"><b>Ngôn ngữ & ký hiệu:</b>
-        {([['vn', 'Tiếng Việt (ký hiệu SG1, DA1, TH1…)'], ['en', 'English (ký hiệu CT-01, ST-01…)'], ['both', 'Song ngữ cả hai']] as const).map(([k, l]) => <button key={k} className={'chip' + (lang === k ? ' on' : '')} onClick={() => setLang(k)}>{l}</button>)}</div>
-      <label className="row sm-gap"><input type="checkbox" checked={inc} onChange={e => setInc(e.target.checked)} /> Gồm cả mã chưa duyệt ({pend}) – dùng cho bản nháp nội bộ</label>
-      <div className="small">Sẽ xuất <b>{n}</b> mã{!inc && pend > 0 ? ` (còn ${pend} mã chờ duyệt không được xuất)` : ''}.</div>
+        {([['vn', 'Tiếng Việt (SG1, DA1, TH1…)'], ['en', 'English (CT-01, ST-01…)'], ['both', 'Song ngữ cả hai']] as [Lang, string][]).map(([k, l]) => <button key={k} className={'chip' + (o.lang === k ? ' on' : '')} onClick={() => set({ lang: k })}>{l}</button>)}</div>
       <div className="row gap">
-        <button className="btn primary" disabled={!!busy || !n} onClick={() => go('xlsx', () => exportExcel(data, lang, inc))}>⬇ Xuất Excel</button>
-        <button className="btn" disabled={!!busy || !n} onClick={() => go('pdf', () => printSchedule(data, lang, inc))}>🖨 Xuất PDF</button>
+        <label className="row sm-gap"><input type="checkbox" checked={o.includePending} onChange={e => set({ includePending: e.target.checked })} /> Gồm cả mã chưa duyệt ({pend}) – bản nháp nội bộ</label>
+        <label className="row sm-gap"><input type="checkbox" checked={o.renumber} onChange={e => set({ renumber: e.target.checked })} /> Đánh lại số liên tục (bỏ khoảng trống do mã bị loại)</label>
+        <label className="row sm-gap"><input type="checkbox" checked={o.roomSheet} onChange={e => set({ roomSheet: e.target.checked })} /> Thêm sheet “Theo phòng”</label>
+        <label className="row sm-gap"><input type="checkbox" checked={o.quote} onChange={e => set({ quote: e.target.checked })} /> Thêm cột báo giá (Số lượng · Đơn giá · Thành tiền, có tổng cộng)</label>
+      </div>
+
+      <div className="card" style={{ background: 'var(--bg2, #faf6f1)' }}>
+        <div className="row between"><h4 style={{ margin: 0 }}>Gộp hay tách sheet</h4><span className="small muted">Sẽ tạo {sheets.length} sheet: {sheets.map(s => s.name).join(' · ')}</span></div>
+        <div className="chips" style={{ margin: '8px 0' }}>{PRESETS.map(p => <button key={p.key} className="chip" onClick={() => set({ assign: p.make() })}>{p.label}</button>)}</div>
+        <div className="row gap small" style={{ marginBottom: 6 }}>
+          <label>Tên sheet chính <input value={o.names.main} onChange={e => set({ names: { ...o.names, main: e.target.value } })} style={{ width: 130 }} /></label>
+          <label>Sheet phụ 1 <input value={o.names.c1} onChange={e => set({ names: { ...o.names, c1: e.target.value } })} style={{ width: 130 }} /></label>
+          <label>Sheet phụ 2 <input value={o.names.c2} onChange={e => set({ names: { ...o.names, c2: e.target.value } })} style={{ width: 130 }} /></label>
+        </div>
+        <table className="tbl"><tbody>
+          {SECTIONS.map(s => {
+            const cnt = groups.find(g => g.section.key === s.key)?.items.length ?? 0
+            const band = s.band !== lastBand ? s.band : null; lastBand = s.band
+            return [band && <tr key={'b' + s.band}><td colSpan={3} className="small" style={{ background: '#f1e8de', fontWeight: 700 }}>{BANDS[s.band].vn}</td></tr>,
+              <tr key={s.key} style={cnt ? undefined : { opacity: .45 }}><td>{s.vn} <span className="muted small">/ {s.en}</span></td><td style={{ width: 60 }}>{cnt} mã</td>
+                <td style={{ width: 150 }}><select value={o.assign[s.key] ?? 'main'} onChange={e => set({ assign: { ...o.assign, [s.key]: e.target.value as SheetTarget } })}>{TARGETS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td></tr>]
+          })}
+        </tbody></table>
+        <p className="small muted">“Sheet riêng” = mục đó thành một sheet độc lập (vd tách Nội thất rời để lập danh mục/báo giá riêng cho chủ đầu tư). “Sheet phụ 1/2” = gộp nhiều mục vào cùng một sheet phụ (vd Nội thất liền tường + rời). Lựa chọn được nhớ cho dự án này.</p>
+      </div>
+
+      <div className="small">Sẽ xuất <b>{n}</b> mã{!o.includePending && pend > 0 ? ` (còn ${pend} mã chờ duyệt không được xuất)` : ''}.</div>
+      <div className="row gap">
+        <button className="btn primary" disabled={!!busy || !n} onClick={() => go('xlsx', () => exportExcel(data, o))}>⬇ Xuất Excel</button>
+        <button className="btn" disabled={!!busy || !n} onClick={() => go('pdf', () => printSchedule(data, o))}>🖨 Xuất PDF</button>
         {busy && <span className="spinner" />}
       </div>
-      <p className="small muted">PDF: trang in mở ra trong tab mới → chọn “Lưu dưới dạng PDF”, khổ A3 ngang.</p>
+      <p className="small muted">PDF: trang in mở ra trong tab mới → chọn “Lưu dưới dạng PDF”, khổ A3 ngang; mỗi sheet bắt đầu ở một trang mới.</p>
     </div>
   )
 }
