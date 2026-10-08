@@ -9,6 +9,8 @@ import type { Entry, Occurrence } from '../../lib/types'
 import Crop from '../../components/Crop'
 import EntryPanel from '../../components/EntryPanel'
 import { StatusDot } from './MaterialView'
+import Bar from '../../components/Bar'
+import { roomStats, heroUrl } from '../../lib/progress'
 
 export default function RoomView({ d }: { d: ProjectData }) {
   const [sp, setSp] = useSearchParams()
@@ -19,6 +21,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
   const [pageIdx, setPageIdx] = useState(0)
   const [draw, setDraw] = useState(false)
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
+  const [flt, setFlt] = useState<'all' | 'pending' | 'inferred'>('all')
   const [add, setAdd] = useState({ group: 'DC', name: '', category: 'decor' })
   const imgRef = useRef<HTMLDivElement>(null)
 
@@ -29,7 +32,11 @@ export default function RoomView({ d }: { d: ProjectData }) {
   const pageById = useMemo(() => new Map(d.pages.map(p => [p.id, p])), [d.pages])
   const selEntry = sel ? entryById.get(sel) : undefined
 
-  const byCat = CATEGORIES.map(c => ({ c, rows: occ.filter(o => (o.category ?? entryById.get(o.entry_id)?.category) === c.key) })).filter(x => x.rows.length)
+  const stats = useMemo(() => roomStats(d), [d])
+  const passes = (e?: Entry) => !!e && (flt === 'all' || (flt === 'pending' ? e.status === 'pending' || e.status === 'review' : e.source === 'inferred'))
+  const byCat = CATEGORIES.map(c => ({ c, rows: occ.filter(o => (o.category ?? entryById.get(o.entry_id)?.category) === c.key && passes(entryById.get(o.entry_id))) })).filter(x => x.rows.length)
+  const quick = async (e: Entry, status: Entry['status'], ev: React.MouseEvent) => { ev.stopPropagation(); await supabase.from('entries').update({ status }).eq('id', e.id); d.reload() }
+  const goto = (dir: number) => { const i = d.rooms.findIndex(r => r.id === roomId); const r = d.rooms[i + dir]; if (r) { setSp({ room: r.id }); setPageIdx(0); setSel(null) } }
 
   const pick = (o: Occurrence) => {
     setSel(o.entry_id); setSelOcc(o.id)
@@ -65,11 +72,13 @@ export default function RoomView({ d }: { d: ProjectData }) {
     <div className={'room-layout' + (selEntry ? ' with-panel' : '')}>
       <div className="room-list">
         {d.rooms.map(r => {
-          const n = new Set(d.occ.filter(o => o.room_id === r.id).map(o => o.entry_id))
-          const pend = [...n].filter(id => entryById.get(id)?.status === 'pending').length
+          const st = stats.get(r.id)!; const url = heroUrl(d, st.hero)
           return (
             <button key={r.id} className={'room-btn' + (r.id === roomId ? ' on' : '')} onClick={() => { setSp({ room: r.id }); setPageIdx(0); setSel(null) }}>
-              <b>{r.code}</b> {r.name_vn}<br /><span className="small muted">{roomTypeLabel(r.room_type)} · {n.size} mục{pend ? ` · ${pend} chờ` : ''}</span>
+              <div className="rb-img" style={url ? { backgroundImage: `url("${url}")` } : undefined}><span className="rc-code">{r.code}</span><span className={'rb-dot ' + st.state} /></div>
+              <div className="rb-name">{r.name_vn}</div>
+              <Bar approved={st.approved} pending={st.pending + st.review} total={st.total} height={5} />
+              <span className="small muted">{st.approved}/{st.total} mã{st.pending + st.review ? ` · ${st.pending + st.review} chờ` : ''}</span>
             </button>)
         })}
       </div>
@@ -78,7 +87,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
         {page ? (
           <div className="viewer">
             <div className="row between">
-              <div className="row gap sm-gap">{pages.map((p, i) => <button key={p.id} className={'btn sm' + (i === pageIdx ? ' primary' : '')} onClick={() => setPageIdx(i)}>Tr.{p.page_no} {p.kind === 'plan' ? '(MB)' : ''}</button>)}</div>
+              <div className="page-strip">{pages.map((p, i) => <button key={p.id} className={'ps-tile' + (i === pageIdx ? ' on' : '')} onClick={() => setPageIdx(i)}><img src={d.urls[p.thumb_path ?? p.image_path]} alt="" /><span>Tr.{p.page_no}{p.kind === 'plan' ? ' · MB' : ''}</span></button>)}</div>
               <div className="row gap sm-gap">
                 {selOcc && <button className={'btn sm' + (draw ? ' primary' : '')} onClick={() => setDraw(!draw)}>{draw ? 'Kéo chuột trên ảnh để khoanh…' : '✎ Khoanh lại vùng cho mục đang chọn'}</button>}
               </div>
@@ -109,31 +118,41 @@ export default function RoomView({ d }: { d: ProjectData }) {
 
         <div className="card">
           <div className="row between">
-            <h3>{room?.code} {room?.name_vn} – {new Set(occ.map(o => o.entry_id)).size} hạng mục</h3>
+            <div className="row gap sm-gap"><button className="btn ghost sm" onClick={() => goto(-1)}>←</button><h3 style={{ margin: 0 }}>{room?.code} {room?.name_vn} – {new Set(occ.map(o => o.entry_id)).size} hạng mục</h3><button className="btn ghost sm" onClick={() => goto(1)}>→</button></div>
             <button className="btn sm" onClick={approveAll}>✓ Xác nhận tất cả mục nhìn thấy</button>
           </div>
           {room?.concept_counts?.length ? <p className="small muted">Số liệu concept: {room.concept_counts.map(c => `${c.label}: ${c.qty}`).join(' · ')}</p> : null}
           {d.warnings.filter(w => w.room_id === roomId).map(w => <div key={w.id} className="warnline">⚠ {w.text}</div>)}
+          <div className="chips" style={{ margin: '10px 0' }}>
+            {([['all', 'Tất cả'], ['pending', 'Chờ duyệt'], ['inferred', 'Suy luận (không thấy trong ảnh)']] as const).map(([k, l]) => <button key={k} className={'chip' + (flt === k ? ' on' : '')} onClick={() => setFlt(k)}>{l}</button>)}
+          </div>
           {byCat.map(({ c, rows }) => (
             <div key={c.key} className="cat-block">
-              <div className="cat-title">{c.vn} <span className="muted">/ {c.en}</span></div>
-              <table className="tbl items">
-                <tbody>{rows.map(o => {
-                  const e = entryById.get(o.entry_id) as Entry | undefined; if (!e) return null
-                  const pg = o.page_id ? pageById.get(o.page_id) : undefined
-                  return (
-                    <tr key={o.id} className={(e.id === sel ? 'sel ' : '') + 'src-row-' + e.source} onClick={() => pick(o)}>
-                      <td style={{ width: 150 }}><Crop url={pg ? d.urls[pg.image_path] : undefined} bbox={o.bbox} pageW={pg?.width} pageH={pg?.height} height={72} maxWidth={140} /></td>
-                      <td style={{ width: 70 }}><b className="code">{e.code}</b></td>
-                      <td><b>{e.name_vn}</b><div className="small muted">{e.material_vn}</div>{e.composition && <div className="small">Cấu tạo: {e.composition}</div>}</td>
-                      <td className="small" style={{ width: 150 }}>{e.brand ? `${e.brand} · ${e.product_code ?? ''}` : <span className="muted">chưa chọn mã</span>}</td>
-                      <td className="small" style={{ width: 110 }}>{o.qty ?? e.qty ?? ''} {e.unit ?? ''} {e.qty_flag !== 'ok' && <span className="warn-text" title={e.qty_note ?? ''}>⚠</span>}</td>
-                      <td style={{ width: 90 }}><span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></td>
-                      <td style={{ width: 30 }}><StatusDot s={e.status} /></td>
-                      <td style={{ width: 30 }}><button className="btn ghost sm" title="Bỏ khỏi phòng" onClick={ev => { ev.stopPropagation(); removeOcc(o) }}>✕</button></td>
-                    </tr>)
-                })}</tbody>
-              </table>
+              <div className="cat-title">{c.vn} <span className="muted">/ {c.en}</span> <span className="cnt">{rows.length}</span></div>
+              <div className="item-cards">{rows.map(o => {
+                const e = entryById.get(o.entry_id) as Entry | undefined; if (!e) return null
+                const pg = o.page_id ? pageById.get(o.page_id) : undefined
+                return (
+                  <div key={o.id} className={'item-card st-' + e.status + (e.id === sel ? ' sel' : '') + ' src-row-' + e.source} onClick={() => pick(o)}>
+                    <div className="ic-img">
+                      {o.bbox && pg ? <Crop url={d.urls[pg.image_path]} bbox={o.bbox} pageW={pg.width} pageH={pg.height} height={150} maxWidth={270} />
+                        : <div className="ic-none" style={e.color_hex ? { background: e.color_hex } : undefined}><span>{e.source === 'inferred' ? 'Suy luận – không thấy trong ảnh' : 'Chưa có ảnh'}</span></div>}
+                    </div>
+                    <div className="ic-body">
+                      <div className="row between nowrap"><b className="code">{e.code}</b><span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></div>
+                      <div className="ic-name">{e.name_vn}</div>
+                      <div className="small muted ic-mat">{e.material_vn}</div>
+                      <div className="small">{e.brand ? <b>{e.brand} · {e.product_code}</b> : <span className="muted">chưa chọn mã hãng</span>}</div>
+                      <div className="small">{o.qty ?? e.qty ?? '—'} {e.unit ?? ''} {e.qty_flag !== 'ok' && <span className="warn-text" title={e.qty_note ?? ''}>⚠ cần kiểm SL</span>}</div>
+                      <div className="ic-actions">
+                        <StatusDot s={e.status} />
+                        <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}>✓ Xác nhận</button>
+                        <button className="btn ghost sm" title="Loại bỏ mã" onClick={ev => quick(e, 'rejected', ev)}>✕</button>
+                        <button className="btn ghost sm" title="Bỏ khỏi phòng này" onClick={ev => { ev.stopPropagation(); removeOcc(o) }}>🗑</button>
+                      </div>
+                    </div>
+                  </div>)
+              })}</div>
             </div>
           ))}
           <div className="row gap add-row">

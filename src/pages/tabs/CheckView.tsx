@@ -4,6 +4,7 @@ import { CATEGORIES, roomTypeLabel } from '../../lib/codes'
 import { loadSettings, Settings } from '../../lib/settings'
 import { checkRoom } from '../../lib/check'
 import type { ProjectData } from '../../lib/useProject'
+import { roomStats, heroUrl } from '../../lib/progress'
 
 export default function CheckView({ d }: { d: ProjectData }) {
   const [st, setSt] = useState<Settings | null>(null)
@@ -12,6 +13,8 @@ export default function CheckView({ d }: { d: ProjectData }) {
   const entryById = useMemo(() => new Map(d.entries.map(e => [e.id, e])), [d.entries])
   if (!st) return <div className="card muted">Đang tải checklist…</div>
 
+  const stats = roomStats(d)
+  const thumb = (id: string) => { const u = heroUrl(d, stats.get(id)?.hero); return u ? <span className="mini-hero" style={{ backgroundImage: `url("${u}")` }} /> : null }
   const results = new Map(d.rooms.map(r => [r.id, checkRoom(d, r, st.checklist)]))
   const totals = {
     pending: d.entries.filter(e => e.status === 'pending').length,
@@ -42,7 +45,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
             const res = results.get(r.id) ?? []
             return (
               <tr key={r.id}>
-                <td><b>{r.code}</b> {r.name_vn}<div className="small muted">{roomTypeLabel(r.room_type)}</div></td>
+                <td className="row sm-gap nowrap">{thumb(r.id)}<div><b>{r.code}</b> {r.name_vn}<div className="small muted">{roomTypeLabel(r.room_type)}</div></div></td>
                 {CATEGORIES.map(c => {
                   const ids = [...new Set(d.occ.filter(o => o.room_id === r.id && (o.category ?? entryById.get(o.entry_id)?.category) === c.key).map(o => o.entry_id))]
                   const es = ids.map(id => entryById.get(id)).filter(e => e && e.status !== 'rejected')
@@ -63,7 +66,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
           const ws = d.warnings.filter(w => w.room_id === r.id)
           return (
             <div key={r.id} className="card">
-              <h4>{r.code} {r.name_vn} <span className="muted small">({roomTypeLabel(r.room_type)})</span></h4>
+              <div className="row sm-gap nowrap">{thumb(r.id)}<h4 style={{ margin: 0 }}>{r.code} {r.name_vn} <span className="muted small">({roomTypeLabel(r.room_type)})</span></h4></div>
               {!miss.length && !ws.length && <div className="ok-text">✓ Đủ theo checklist</div>}
               {miss.map(x => <div key={x.item.label} className={x.level === 'required' ? 'missline' : 'warnline'}>{x.level === 'required' ? '✗ Thiếu (bắt buộc):' : '? Thường có:'} {x.item.label}</div>)}
               {ws.map(w => <div key={w.id} className="warnline small">⚠ {w.text}</div>)}

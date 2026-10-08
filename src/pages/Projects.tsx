@@ -33,7 +33,7 @@ export default function Projects() {
       <div className="grid-cards">
         {list.map(p => (
           <div key={p.id} className="card project-card">
-            <Link to={`/p/${p.id}`}><h3>{p.name}</h3></Link>
+            <Link to={`/p/${p.id}/overview`}><h3>{p.name}</h3></Link>
             <div className="muted">{p.location}</div>
             <div className="row between"><span className="pill">{STATUS[p.status] ?? p.status}</span>
               <button className="btn ghost sm danger" onClick={() => remove(p)}>Xoá</button></div>

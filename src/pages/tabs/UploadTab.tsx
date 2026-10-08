@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { uploadPdf, classifyPages, classifyLocalPages } from '../../lib/pipeline'
 import { ROOM_TYPES } from '../../lib/codes'
 import type { ProjectData } from '../../lib/useProject'
+import { roomStats, heroUrl } from '../../lib/progress'
 import LogBox, { useLog } from '../../components/LogBox'
 
 const KINDS: Record<string, string> = { cover: 'Bìa', moodboard: 'Moodboard', plan: 'Mặt bằng', render: 'Phối cảnh', other: 'Khác', unknown: 'Chưa phân loại' }
@@ -37,7 +38,7 @@ export default function UploadTab({ d }: { d: ProjectData }) {
     <div className="stack">
       <div className="card">
         <h3>File concept (PDF)</h3>
-        <p className="muted">Phần mềm tách từng trang thành ảnh ngay trong trình duyệt, đọc tiêu đề trang (vd “INTERIOR CONCEPT | LOCKER ROOM”) để phân loại bìa / moodboard / mặt bằng / phối cảnh và gom theo phòng, đọc luôn ô số liệu (số ghế, bàn, locker…) – <b>không dùng AI, không tốn phí</b>. Phòng không có trong concept sẽ không được tạo. Nếu PDF là ảnh scan không có chữ, dùng nút “AI phân loại”.</p>
+        <details className="small muted"><summary>Cách hoạt động</summary><p>Phần mềm tách từng trang thành ảnh ngay trong trình duyệt, đọc chữ trên trang để phân loại bìa / moodboard / mặt bằng / phối cảnh, gom theo phòng và đọc số liệu – <b>không dùng AI, không tốn phí</b>. Nếu PDF là ảnh scan không có chữ, dùng “AI phân loại”.</p></details>
         <div className="row gap">
           <label className="btn primary">{d.pages.length ? 'Tải file khác' : 'Chọn file PDF'}<input type="file" accept="application/pdf" hidden disabled={busy} onChange={e => onFile(e.target.files?.[0])} /></label>
           {d.pages.length > 0 && <button className="btn" disabled={busy} onClick={() => run(() => classifyLocalPages(p, log))}>Phân loại lại (không AI)</button>}
@@ -52,9 +53,10 @@ export default function UploadTab({ d }: { d: ProjectData }) {
         <div className="card">
           <div className="row between"><h3>Phòng ({d.rooms.length})</h3><button className="btn sm" onClick={addRoom}>+ Thêm phòng</button></div>
           <table className="tbl">
-            <thead><tr><th>Mã</th><th>Tên phòng (VN)</th><th>Tên (EN)</th><th>Loại phòng</th><th>Số liệu concept</th><th>Số trang</th><th /></tr></thead>
+            <thead><tr><th /><th>Mã</th><th>Tên phòng (VN)</th><th>Tên (EN)</th><th>Loại phòng</th><th>Số liệu concept</th><th>Số trang</th><th /></tr></thead>
             <tbody>{d.rooms.map(r => (
               <tr key={r.id}>
+                <td style={{ width: 120 }}>{(() => { const u = heroUrl(d, roomStats(d).get(r.id)?.hero); return u ? <span className="mini-hero lg" style={{ backgroundImage: `url("${u}")` }} /> : null })()}</td>
                 <td><input className="code-in" defaultValue={r.code} onBlur={e => e.target.value !== r.code && setRoom(r.id, { code: e.target.value })} /></td>
                 <td><input defaultValue={r.name_vn} onBlur={e => e.target.value !== r.name_vn && setRoom(r.id, { name_vn: e.target.value })} /></td>
                 <td><input defaultValue={r.name_en ?? ''} onBlur={e => setRoom(r.id, { name_en: e.target.value })} /></td>
@@ -74,6 +76,7 @@ export default function UploadTab({ d }: { d: ProjectData }) {
           <div className="page-grid">
             {d.pages.map(pg => (
               <div key={pg.id} className={'page-tile kind-' + pg.kind}>
+                {pg.room_id && <span className="rc-code tile-code">{d.rooms.find(r => r.id === pg.room_id)?.code}</span>}
                 <img src={d.urls[pg.thumb_path ?? pg.image_path]} alt="" loading="lazy" />
                 <div className="row gap sm-gap">
                   <b>Tr.{pg.page_no}</b>

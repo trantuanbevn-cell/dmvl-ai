@@ -36,7 +36,7 @@ export default function MaterialView({ d }: { d: ProjectData }) {
           {groups.map(({ g, list }) => {
             const pend = list.filter(e => e.status === 'pending' || e.status === 'review').length
             return <button key={g.code} className={'chip' + (g.code === cur?.g.code ? ' on' : '')} onClick={() => { setGc(g.code); setSel(null) }}>
-              <b>{g.code}</b> {g.vn} <span className="cnt">{list.length}</span>{pend > 0 && <span className="cnt warn">{pend}</span>}
+              <b>{g.code}</b> {g.vn} <span className="cnt">{list.filter(e => e.status === 'approved').length}/{list.length}</span>{pend > 0 && <span className="cnt warn">{pend}</span>}
             </button>
           })}
         </div>
@@ -51,30 +51,30 @@ export default function MaterialView({ d }: { d: ProjectData }) {
             </div>
           </div>
           {busy && <div className="note">{busy}</div>}
-          <table className="tbl items">
-            <thead><tr><th>Ảnh trong các không gian</th><th>Mã</th><th>Tên / vật liệu</th><th>Vị trí (các phòng)</th><th>Hãng · mã</th><th>Nguồn</th><th>Duyệt</th></tr></thead>
-            <tbody>{list.map(e => {
-              const occ = d.occ.filter(o => o.entry_id === e.id)
-              const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
-              return (
-                <tr key={e.id} className={(e.id === sel ? 'sel ' : '') + 'src-row-' + e.source} onClick={() => setSel(e.id)}>
-                  <td><div className="row sm-gap">
-                    {occ.filter(o => o.bbox).slice(0, 4).map(o => { const pg = o.page_id ? pageById.get(o.page_id) : undefined; return <Crop key={o.id} url={pg ? d.urls[pg.image_path] : undefined} bbox={o.bbox} pageW={pg?.width} pageH={pg?.height} height={68} maxWidth={120} /> })}
-                    {e.color_hex && <span className="swatch sm" style={{ background: e.color_hex }} />}
-                  </div></td>
-                  <td><b className="code">{e.code}</b></td>
-                  <td><b>{e.name_vn}</b><div className="small muted">{e.material_vn}</div></td>
-                  <td className="small loc-cell">{locs.length ? locs.map(l => <div key={l.room.id} title={l.pages.length ? `Trang concept: ${l.pages.join(', ')}` : ''}><b>{l.room.code}</b> {l.room.name_vn}{l.n > 1 ? ` ×${l.n}` : ''}</div>) : <span className="muted">—</span>}</td>
-                  <td className="small">{e.brand ? <>{e.brand}<br />{e.product_code}</> : <span className="muted">—</span>}</td>
-                  <td><span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></td>
-                  <td className="row sm-gap nowrap">
-                    <StatusDot s={e.status} />
-                    <button className="btn ghost sm" title="Xác nhận" onClick={ev => quick(e, 'approved', ev)}>✓</button>
-                    <button className="btn ghost sm" title="Loại bỏ" onClick={ev => quick(e, 'rejected', ev)}>✕</button>
-                  </td>
-                </tr>)
-            })}</tbody>
-          </table>
+          <div className="mat-cards">{list.map(e => {
+            const occ = d.occ.filter(o => o.entry_id === e.id)
+            const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
+            const shots = occ.filter(o => o.bbox)
+            return (
+              <div key={e.id} className={'mat-card st-' + e.status + (e.id === sel ? ' sel' : '') + ' src-row-' + e.source} onClick={() => setSel(e.id)}>
+                <div className="mc-imgs">
+                  {shots.slice(0, 3).map(o => { const pg = o.page_id ? pageById.get(o.page_id) : undefined; return <Crop key={o.id} url={pg ? d.urls[pg.image_path] : undefined} bbox={o.bbox} pageW={pg?.width} pageH={pg?.height} height={120} maxWidth={180} /> })}
+                  {shots.length > 3 && <span className="small muted">+{shots.length - 3} ảnh</span>}
+                  {!shots.length && <div className="ic-none wide" style={e.color_hex ? { background: e.color_hex } : undefined}><span>{e.source === 'inferred' ? 'Suy luận – không thấy trong ảnh' : 'Chưa có ảnh'}</span></div>}
+                  {e.color_hex && shots.length > 0 && <span className="swatch" style={{ background: e.color_hex, height: 120 }}><span>{e.color_hex}</span></span>}
+                </div>
+                <div className="mc-body">
+                  <div className="row between nowrap"><div><b className="code big-code">{e.code}</b> <b>{e.name_vn}</b></div>
+                    <span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></div>
+                  <div className="small muted">{e.material_vn}</div>
+                  <div className="loc-line"><span className="small muted">Có ở {locs.length} phòng:</span>{locs.map(l => <span key={l.room.id} className="loc-tag" title={l.pages.length ? `Trang concept: ${l.pages.join(', ')}` : ''}>{l.room.code} {l.room.name_vn}{l.n > 1 ? ` ×${l.n}` : ''}</span>)}{!locs.length && <span className="muted small">chưa gán phòng</span>}</div>
+                  <div className="row between small"><span>{e.brand ? <b>{e.brand} · {e.product_code}</b> : <span className="muted">chưa chọn mã hãng</span>}</span><span>{e.qty ?? '—'} {e.unit ?? ''} {e.qty_flag !== 'ok' && <span className="warn-text">⚠</span>}</span></div>
+                  <div className="ic-actions"><StatusDot s={e.status} />
+                    <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}>✓ Xác nhận</button>
+                    <button className="btn ghost sm" onClick={ev => quick(e, 'rejected', ev)}>✕ Loại</button></div>
+                </div>
+              </div>)
+          })}</div>
         </div>
       </div>
       {selEntry && <EntryPanel d={d} entry={selEntry} onClose={() => setSel(null)} />}
