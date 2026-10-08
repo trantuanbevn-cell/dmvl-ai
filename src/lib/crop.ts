@@ -164,6 +164,8 @@ export async function regionCanvas(url: string, region?: number[] | null, maxEdg
 }
 /** Ảnh phối cảnh cuối cùng của một lần xuất hiện: ảnh thay thế nếu có, còn lại là crop có khung + mũi tên (đã chỉnh) */
 export async function viewCanvas(pageUrl: string | undefined, bbox: number[], view: CropViewT | null | undefined, replUrl: string | undefined, maxEdge = 560) {
+  // ảnh tải từ máy không thuộc trang concept: pageUrl trùng replUrl → vẽ khung + mũi tên lên chính ảnh đó
+  if (view?.img && replUrl && pageUrl === replUrl) return contextCanvas(replUrl, bbox, maxEdge, true, { ...view, img: null })
   if (view?.img && replUrl) return fitCanvas(replUrl, maxEdge)
   return contextCanvas(pageUrl!, bbox, maxEdge, true, view)
 }

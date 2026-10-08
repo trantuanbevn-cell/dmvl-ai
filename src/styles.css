@@ -269,3 +269,6 @@ input[readonly], textarea[readonly] { cursor: default }
 .link-badge { font-size: 10px; padding: 1px 6px; border-radius: 99px; background: #e8eefc; color: #1f4e9a; white-space: nowrap }
 .link-box { background: #f1f5ff }
 .chk-tag { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 99px; margin: 1px 3px 1px 0; white-space: nowrap } .chk-err { background: #fde2e2; color: #b3261e } .chk-miss { background: #fff0cc; color: #8a5a00 } .chk-info { background: #e8eefc; color: #1f4e9a }
+
+.ed-obj { pointer-events: auto !important; cursor: move; background: rgba(225,29,29,.08) } .ed-h.obj { background: #e11d1d }
+.shot-wrap[draggable=true] { cursor: grab } tr.drop-ok > td { outline: 2px dashed var(--orange); outline-offset: -2px; background: rgba(239,108,0,.08) }

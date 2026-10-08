@@ -32,7 +32,7 @@ export default function AddShot({ d, entry, roomId, onClose }: { d: ProjectData;
       } else {
         if (!file) throw new Error('Chưa chọn ảnh')
         const img = await uploadImage(file, `${d.project!.id}/crops/new-${entry.id}-${Date.now()}.jpg`)
-        const { error } = await supabase.from('occurrences').insert({ entry_id: entry.id, room_id: rid || null, page_id: null, category, bbox: [0.1, 0.1, 0.8, 0.8], view: { img } })
+        const { error } = await supabase.from('occurrences').insert({ entry_id: entry.id, room_id: rid || null, page_id: null, category, bbox: [0.32, 0.3, 0.36, 0.4], view: { img } })
         if (error) throw new Error(error.message)
       }
       await d.reload(); onClose()

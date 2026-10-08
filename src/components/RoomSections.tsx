@@ -1,6 +1,7 @@
 import { syncLibrary } from '../lib/matLibrary'
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { toast } from '../lib/toast'
 import { saveEntry, linkedWith } from '../lib/entryLink'
 import { CATEGORIES, CATEGORY_GROUPS } from '../lib/codes'
 import { groupBySection, sectionOf, sectionTitle, bandTitle, legacyCodes, symbolOf, symbolMap, BANDS, type Lang } from '../lib/sections'
@@ -75,6 +76,25 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     d.reload()
   }
   const [shotFor, setShotFor] = useState<Entry | null>(null)
+  const [dropId, setDropId] = useState<string | null>(null)
+  /** Kéo ảnh phối cảnh từ một vật liệu sang vật liệu khác (giữ Ctrl/Alt để sao chép thay vì chuyển) */
+  const moveShot = async (occId: string, target: Entry, copy: boolean) => {
+    const o = d.occ.find(x => x.id === occId)
+    if (!o || o.entry_id === target.id) return
+    const cat = d.occ.find(x => x.entry_id === target.id)?.category ?? target.category ?? o.category ?? 'decor'
+    if (copy) {
+      const { error } = await supabase.from('occurrences').insert({ entry_id: target.id, room_id: o.room_id, page_id: o.page_id, bbox: o.bbox, view: o.view, qty: null, confidence: o.confidence, category: cat })
+      if (error) { alert(error.message); return }
+    } else {
+      const { error } = await supabase.from('occurrences').update({ entry_id: target.id, category: cat }).eq('id', occId)
+      if (error) { alert(error.message); return }
+      // mã cũ không còn ảnh nào trong phòng này → vẫn giữ vị trí phòng (xoá bằng ✕ ở cột Vị trí nếu sai)
+      const left = d.occ.some(x => x.id !== occId && x.entry_id === o.entry_id && x.room_id === o.room_id)
+      if (!left && o.room_id) await supabase.from('occurrences').insert({ entry_id: o.entry_id, room_id: o.room_id, category: o.category })
+    }
+    toast(copy ? 'Đã sao chép ảnh sang ' + target.code : 'Đã chuyển ảnh sang ' + target.code, 'ok')
+    d.reload()
+  }
   const delShot = async (o: Occurrence) => {
     if (!confirm('Xoá hình phối cảnh này khỏi vật liệu?')) return
     const sameRoom = d.occ.filter(x => x.entry_id === o.entry_id && x.room_id === o.room_id)
@@ -129,7 +149,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                 const M = (k: K) => mk.has(String(k))
                 n++
                 return (
-                  <tr key={e.id} className={(ms.length ? 'has-miss ' : '') + 'st-' + e.status + (e.id === sel ? ' sel' : '') + ' src-row-' + e.source} onClick={() => os[0] && onPick(os[0])}>
+                  <tr key={e.id} onDragOver={ev => { if (canEdit && ev.dataTransfer.types.includes('text/dmvl-occ')) { ev.preventDefault(); ev.dataTransfer.dropEffect = ev.ctrlKey || ev.altKey ? 'copy' : 'move'; if (dropId !== e.id) setDropId(e.id) } }} onDragLeave={ev => { if (!ev.currentTarget.contains(ev.relatedTarget as Node)) setDropId(x => (x === e.id ? null : x)) }} onDrop={ev => { const id = ev.dataTransfer.getData('text/dmvl-occ'); setDropId(null); if (id) { ev.preventDefault(); moveShot(id, e, ev.ctrlKey || ev.altKey) } }} className={(dropId === e.id ? 'drop-ok ' : '') + (ms.length ? 'has-miss ' : '') + 'st-' + e.status + (e.id === sel ? ' sel' : '') + ' src-row-' + e.source} onClick={() => os[0] && onPick(os[0])}>
                     <td className="c-stt">{n}</td>
                     <td className="c-code"><b>{symbolOf(e, lang, legacy, symMap)}</b>{ms.length > 0 && <div><span className="miss-badge" title={'Còn thiếu: ' + missText(ms)}>⚠ thiếu {new Set(ms.map(m => m.label)).size}</span></div>}{e.link_id && <div><span className="link-badge" title={'Liên kết đồng bộ với: ' + (linkedWith(e, d.entries).map(x => x.code).join(', ') || '—')}>🔗 {linkedWith(e, d.entries).map(x => x.code).join(', ')}</span></div>}<div><span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></div></td>
                     <td className="c-vl"><Ed e={e} k="product_code" ph="Mã vật liệu" miss={M('product_code')} /></td>
@@ -137,7 +157,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                       {pair('part', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} ph="Bộ phận áp dụng" /></div>)}</td>
                     <td className="c-loc">{locs.map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room?.id ? ' here' : '')}>{roomName(l.room, lang)}{canEdit && <a className="loc-x" title="Bỏ vị trí này" onClick={ev => { ev.stopPropagation(); delLoc(e, l.room) }}>✕</a>}</span>)}
                       {canEdit && <select className="loc-add" value="" onClick={x => x.stopPropagation()} onChange={x => addLoc(e, x.target.value)}><option value="">＋ thêm phòng…</option>{d.rooms.filter(r => !locs.some(l => l.room.id === r.id)).map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}</select>}</td>
-                    <td className="c-img">{shots.length ? shots.map(o => <span key={o.id} className="shot-wrap"><OccCrop d={d} o={o} height={64} maxWidth={90} />{canEdit && <a className="shot-x" title="Xoá hình này" onClick={ev => { ev.stopPropagation(); delShot(o) }}>✕</a>}</span>)
+                    <td className="c-img">{shots.length ? shots.map(o => <span key={o.id} className="shot-wrap" draggable={canEdit} title={canEdit ? 'Kéo thả sang vật liệu khác để chuyển ảnh (giữ Ctrl để sao chép)' : undefined} onDragStart={ev => { ev.dataTransfer.setData('text/dmvl-occ', o.id); ev.dataTransfer.effectAllowed = 'copyMove' }} onDragEnd={() => setDropId(null)}><OccCrop d={d} o={o} height={64} maxWidth={90} />{canEdit && <a className="shot-x" title="Xoá hình này" onClick={ev => { ev.stopPropagation(); delShot(o) }}>✕</a>}</span>)
                       : <div className="ic-none tiny"><span>{e.source === 'inferred' ? 'Suy luận' : 'Chưa có ảnh'}</span></div>}
                       {canEdit && <button className="btn ghost sm" title="Thêm hình phối cảnh" onClick={ev => { ev.stopPropagation(); setShotFor(e) }}>＋ ảnh</button>}</td>
                     <td>{[...pair('name', lang), ...pair('material', lang), ...pair('desc', lang)].map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} miss={M(k)} area={!String(k).startsWith('name')} ph={String(k).startsWith('name') ? 'Tên hạng mục' : String(k).startsWith('material') ? 'Vật liệu / màu / bề mặt' : 'Thông số kỹ thuật'} /></div>)}
