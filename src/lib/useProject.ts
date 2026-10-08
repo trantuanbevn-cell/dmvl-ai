@@ -31,7 +31,7 @@ export function useProject(id: string): ProjectData {
     const pages = (pg.data ?? []) as Page[]
     const floors = (fl.data ?? []) as FloorPlan[]
     const paths = [...pages.flatMap(x => [x.image_path, x.thumb_path].filter(Boolean) as string[]), ...floors.map(f => f.preview_path).filter(Boolean) as string[],
-      ...occ.map(o => o.view?.img).filter(Boolean) as string[], ...entries.map(e => e.mat_view?.img).filter(Boolean) as string[]]
+      ...occ.map(o => o.view?.img).filter(Boolean) as string[], ...entries.map(e => e.mat_view?.img).filter(Boolean) as string[], ...entries.flatMap(e => ((e.mat_extra ?? []) as { img?: string | null }[]).map(x => x.img)).filter(Boolean) as string[]]
     const urls = paths.length ? await signedUrls(paths) : {}
     setNameOverrides((p.data as any)?.section_names)
     setS({ project: p.data as Project, rooms: (r.data ?? []) as Room[], pages, entries, occ, warnings: (w.data ?? []) as Warning[], floors, rules: (ru.data ?? []) as ProjectRule[], urls, loading: false })

@@ -1,6 +1,7 @@
 import { CATEGORIES } from './codes'
 import { groupBySection, sectionTitle, bandTitle, exportSymbols, symbolOf, tx, planSheets, type ExportOpts } from './sections'
 import { signedUrls } from './supabase'
+import { matMontage, extraPaths } from './matImages'
 import { viewCanvas, regionCanvas } from './crop'
 import { locationsOf, locationLines } from './locations'
 import { filterEntries, ExportData } from './exportExcel'
@@ -21,7 +22,7 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
   w.document.write('<p style="font-family:sans-serif">Đang dựng trang in…</p>')
   const list = filterEntries(d.entries, includePending)
   const pageById = new Map(d.pages.map(p => [p.id, p]))
-  const urls = await signedUrls([...new Set([...d.pages.map(p => p.image_path), ...d.occ.map(x => x.view?.img), ...d.entries.map(x => x.mat_view?.img)].filter(Boolean) as string[])])
+  const urls = await signedUrls([...new Set([...d.pages.map(p => p.image_path), ...d.occ.map(x => x.view?.img), ...d.entries.map(x => x.mat_view?.img), ...d.entries.flatMap(x => extraPaths(x))].filter(Boolean) as string[])])
   const H = [hd('STT', 'No.'), hd('KÍ HIỆU BẢN VẼ', 'DRAWING CODE'), hd('KÍ HIỆU VL', 'MATERIAL CODE'), hd('Hạng mục', 'Item'), hd('Vị trí', 'Location'), hd('Hình ảnh phối cảnh', 'Render image'), hd('Thông số kỹ thuật', 'Specification'), hd('Xuất xứ/ Thương hiệu', 'Origin / Brand'), hd('Hình ảnh vật liệu', 'Material image'), hd('Ghi chú', 'Remarks')]
   const sym = exportSymbols(list, o.renumber)
   const catL = (k: string) => { const c = CATEGORIES.find(x => x.key === k); return c ? tx(c.vn, c.en, L) : k }
@@ -40,8 +41,9 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
       let img = ''
       if (best) { const p = best.page_id ? pageById.get(best.page_id) : undefined; if (p || best.view?.img) { try { img = `<img src="${(await viewCanvas(p ? urls[p.image_path] : undefined, best.bbox!, best.view, best.view?.img ? urls[best.view.img] : undefined, 900, true)).toDataURL('image/jpeg', 0.92)}">` } catch { /* */ } } }
       let matUrl = ''
+      try { matUrl = (await matMontage(e, urls)) ?? '' } catch { /* */ }
       const mvSrc = e.mat_view?.img ? urls[e.mat_view.img] : e.product_image_url
-      if (mvSrc && (e.mat_view?.img || e.mat_view?.region)) { try { matUrl = (await regionCanvas(mvSrc, e.mat_view?.region, 300)).toDataURL('image/png') } catch { /* */ } }
+      if (!matUrl && mvSrc && (e.mat_view?.img || e.mat_view?.region)) { try { matUrl = (await regionCanvas(mvSrc, e.mat_view?.region, 300)).toDataURL('image/png') } catch { /* */ } }
       const map = matUrl ? `<img src="${matUrl}">` : e.product_image_url ? `<img src="${esc(e.product_image_url)}">` : e.color_hex ? `<div class="sw" style="background:${esc(e.color_hex)}"></div><small>${esc(e.color_hex)}</small>` : ''
       const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
       const cl = entryCells(e, L, [...new Set(occ.map(o => o.category ?? e.category).filter(Boolean) as string[])], locs)

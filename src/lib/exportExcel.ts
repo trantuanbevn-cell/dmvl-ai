@@ -3,6 +3,7 @@ import { groupOf, CATEGORIES } from './codes'
 import { GROUPS } from './codes'
 import { PREFIXES, groupBySection, sectionTitle, bandTitle, exportSymbols, symbolOf, tx, planSheets, type Lang, type ExportOpts, type Section } from './sections'
 import { signedUrls } from './supabase'
+import { matMontage, extraPaths } from './matImages'
 import { viewCanvas, regionCanvas, swatchBase64, loadImage } from './crop'
 import { locationsOf, locationLines } from './locations'
 import { entryCells, setLines, splitBoth, wrapCount, fitWidth, hostOf, pair, type Seg, type EntryCells } from './biText'
@@ -144,8 +145,9 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
         row.getCell(rc).font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF7F6000' } }
       }
       let mapB64: string | null = null
+      try { const mm = await matMontage(e, urls); if (mm) mapB64 = mm.split(',')[1] } catch { /* */ }
       const mvSrc = e.mat_view?.img ? urls[e.mat_view.img] : e.product_image_url
-      if (mvSrc && (e.mat_view?.img || e.mat_view?.region)) { try { mapB64 = (await regionCanvas(mvSrc, e.mat_view?.region, 300)).toDataURL('image/png').split(',')[1] } catch { /* ảnh ngoài bị chặn → dùng ảnh gốc */ } }
+      if (!mapB64 && mvSrc && (e.mat_view?.img || e.mat_view?.region)) { try { mapB64 = (await regionCanvas(mvSrc, e.mat_view?.region, 300)).toDataURL('image/png').split(',')[1] } catch { /* ảnh ngoài bị chặn → dùng ảnh gốc */ } }
       if (!mapB64) mapB64 = e.product_image_url ? await productImage(e.product_image_url) : null
       if (!mapB64 && e.color_hex) mapB64 = swatchBase64(e.color_hex)
       if (mapB64) {
@@ -173,7 +175,7 @@ export async function exportExcel(d: ExportData, o: ExportOpts) {
   const list = filterEntries(d.entries, o.includePending)
   const sym = exportSymbols(list, o.renumber)
   const pageById = new Map(d.pages.map(p => [p.id, p]))
-  const urls = await signedUrls([...new Set([...d.occ.filter(x => x.page_id).map(x => pageById.get(x.page_id!)?.image_path), ...d.occ.map(x => x.view?.img), ...d.entries.map(x => x.mat_view?.img)].filter(Boolean) as string[])])
+  const urls = await signedUrls([...new Set([...d.occ.filter(x => x.page_id).map(x => pageById.get(x.page_id!)?.image_path), ...d.occ.map(x => x.view?.img), ...d.entries.map(x => x.mat_view?.img), ...d.entries.flatMap(x => extraPaths(x))].filter(Boolean) as string[])])
   const ctx: Ctx = { wb, d, o, sym, urls, pageById, h }
   const sheets = planSheets(groupBySection(list), o)
   const title = h('BẢNG DANH MỤC VẬT LIỆU HOÀN THIỆN', 'FINISHES & FF&E MATERIAL SCHEDULE')
