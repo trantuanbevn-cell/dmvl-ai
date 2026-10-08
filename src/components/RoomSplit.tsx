@@ -16,6 +16,13 @@ export default function RoomSplit({ d, room, onClose }: { d: ProjectData; room: 
   const [busy, setBusy] = useState(false)
   const [found, setFound] = useState<Record<string, Rect[]>>({})     // ô ảnh tự dò từ PDF cho trang chưa có dữ liệu ô ảnh
   const [detecting, setDetecting] = useState(false)
+  const [drawing, setDrawing] = useState<string | null>(null)   // trang đang khoanh ảnh thủ công
+  const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
+  const setRects = (pid: string, rs: Rect[]) => {
+    const sorted = [...rs].sort((a, b) => (Math.abs(a.x - b.x) > 0.05 ? a.x - b.x : a.y - b.y))
+    setFound(f => ({ ...f, [pid]: sorted }))
+    setChoice(c => ({ ...c, [pid]: sorted.length ? sorted.map((_, i) => Math.min(i, parts.length - 1)) : [0] }))
+  }
   // Trang chỉ có 1 “ô” (chưa chạy phân tích mặt bằng) → tự dò các ô ảnh phối cảnh ngay từ file PDF để mỗi ảnh có ô chọn riêng
   useEffect(() => {
     const need = pages.filter(p => p.kind === 'render' && pageRects(p).length < 2)
@@ -79,6 +86,23 @@ export default function RoomSplit({ d, room, onClose }: { d: ProjectData; room: 
             {(rs.length ? rs : [null]).map((r, i) => (
               <div key={i}>{crop(url, r)}
                 <select value={choice[pg.id]?.[i] ?? 0} onChange={e => pick(pg.id, i, +e.target.value)}>{parts.map((p, j) => <option key={j} value={j}>{p.name_vn || `Phòng ${j + 1}`}</option>)}</select></div>))}
+            {pg.kind === 'render' && <div style={{ width: '100%' }}>
+              <button className="btn sm" onClick={() => { setDrawing(drawing === pg.id ? null : pg.id); setDrag(null) }}>{drawing === pg.id ? '✓ Xong' : '✎ Tự khoanh các ảnh'}</button>
+              {rs.length < 2 && <span className="small muted"> Chưa tự nhận ra các ảnh trong slide này – bấm để tự kéo khung quanh từng ảnh phối cảnh.</span>}
+              {drawing === pg.id && url && <div style={{ marginTop: 6 }}>
+                <div className="small muted">Kéo chuột tạo khung quanh từng ảnh phối cảnh (mỗi ảnh một khung). Bấm vào khung để xoá.</div>
+                <div style={{ position: 'relative', maxWidth: 820, userSelect: 'none', cursor: 'crosshair', marginTop: 4 }}
+                  onMouseDown={e => { const b = e.currentTarget.getBoundingClientRect(); const x = (e.clientX - b.left) / b.width, y = (e.clientY - b.top) / b.height; setDrag({ x0: x, y0: y, x1: x, y1: y }) }}
+                  onMouseMove={e => { if (!drag) return; const b = e.currentTarget.getBoundingClientRect(); setDrag({ ...drag, x1: Math.min(1, Math.max(0, (e.clientX - b.left) / b.width)), y1: Math.min(1, Math.max(0, (e.clientY - b.top) / b.height)) }) }}
+                  onMouseUp={() => { if (!drag) return; const r = { x: Math.min(drag.x0, drag.x1), y: Math.min(drag.y0, drag.y1), w: Math.abs(drag.x1 - drag.x0), h: Math.abs(drag.y1 - drag.y0) }; setDrag(null); if (r.w > 0.04 && r.h > 0.04) setRects(pg.id, [...(found[pg.id] ?? []), r]) }}
+                  onMouseLeave={() => setDrag(null)}>
+                  <img src={url} alt="" draggable={false} style={{ width: '100%', display: 'block', borderRadius: 6 }} />
+                  {(found[pg.id] ?? []).map((r, i) => <div key={i} title="Bấm để xoá khung" onMouseDown={e => e.stopPropagation()} onClick={() => setRects(pg.id, (found[pg.id] ?? []).filter((_, j) => j !== i))}
+                    style={{ position: 'absolute', left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.w * 100}%`, height: `${r.h * 100}%`, border: '3px solid #e53935', background: 'rgba(229,57,53,.12)', cursor: 'pointer', boxSizing: 'border-box' }}><b style={{ background: '#e53935', color: '#fff', padding: '0 6px', fontSize: 12 }}>{i + 1}</b></div>)}
+                  {drag && <div style={{ position: 'absolute', left: `${Math.min(drag.x0, drag.x1) * 100}%`, top: `${Math.min(drag.y0, drag.y1) * 100}%`, width: `${Math.abs(drag.x1 - drag.x0) * 100}%`, height: `${Math.abs(drag.y1 - drag.y0) * 100}%`, border: '2px dashed #e53935', pointerEvents: 'none' }} />}
+                </div>
+              </div>}
+            </div>}
           </div>) })}
         <div className="row gap" style={{ justifyContent: 'flex-end', marginTop: 10 }}>
           <button className="btn" onClick={onClose}>Huỷ</button>

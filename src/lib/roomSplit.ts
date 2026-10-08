@@ -44,7 +44,7 @@ export function suggestParts(room: Room, pages: Page[]): Part[] {
 export const suggestSplits = (rooms: Room[], pages: Page[]) => rooms.map(room => ({ room, parts: suggestParts(room, pages) })).filter(x => x.parts.length >= 2)
 
 /** Ảnh phối cảnh (ô ảnh) của một trang: nếu slide có nhiều ô ảnh thì mỗi ô chọn phòng riêng */
-export const pageRects = (p: Page, found: Record<string, Rect[]> = {}): Rect[] => { const a = ((p.views as PageViews | null)?.rects ?? []).slice(); return a.length >= 2 ? a : (found[p.id]?.length ?? 0) >= 2 ? found[p.id] : a }
+export const pageRects = (p: Page, found: Record<string, Rect[]> = {}): Rect[] => { const a = ((p.views as PageViews | null)?.rects ?? []).slice(); return a.length >= 2 ? a : (found[p.id]?.length ?? 0) >= 1 ? found[p.id] : a }
 const pad = (n: number) => String(n).padStart(2, '0')
 
 /** choice[pageId][i] = chỉ số phòng (trong `parts`) của ô ảnh i (hoặc cả trang nếu không tách được ô ảnh). Giữ nguyên mọi vật liệu đã có, chỉ chia lại theo phòng. */
@@ -96,6 +96,19 @@ export async function splitRoom(d: ProjectData, room: Room, parts: Part[], choic
 }
 async function must<T>(p: PromiseLike<{ data: T; error: any }>): Promise<T> { const { data, error } = await p; if (error) throw new Error(error.message ?? String(error)); return data }
 
+/** Ước lượng ô ảnh của từng phòng từ vị trí các vật liệu đã nhận diện (dùng khi không đọc được ô ảnh từ PDF) */
+function rectsFromOcc(occ: Occurrence[]): Rect[] {
+  const by = new Map<string, number[][]>()
+  for (const o of occ) if (o.bbox && o.room_id) (by.get(o.room_id) ?? by.set(o.room_id, []).get(o.room_id)!).push(o.bbox)
+  const g = [...by.values()].map(bs => ({ cx: bs.reduce((s, b) => s + b[0] + b[2] / 2, 0) / bs.length, x0: Math.min(...bs.map(b => b[0])), x1: Math.max(...bs.map(b => b[0] + b[2])), y0: Math.min(...bs.map(b => b[1])), y1: Math.max(...bs.map(b => b[1] + b[3])) })).sort((a, b) => a.cx - b.cx)
+  if (g.length < 2) return []
+  const cl = (v: number) => Math.max(0, Math.min(1, v))
+  return g.map((r, i) => {
+    const x0 = i === 0 ? cl(r.x0 - 0.02) : (g[i - 1].x1 + r.x0) / 2, x1 = i === g.length - 1 ? cl(r.x1 + 0.02) : (r.x1 + g[i + 1].x0) / 2
+    const y0 = cl(Math.min(...g.map(q => q.y0)) - 0.03), y1 = cl(Math.max(...g.map(q => q.y1)) + 0.03)
+    return { x: x0, y: y0, w: Math.max(0.05, x1 - x0), h: Math.max(0.1, y1 - y0) }
+  })
+}
 /** Sửa các slide đã tách phòng từ trước: dò ô ảnh trong PDF rồi gán mỗi ô cho phòng có nhiều vật liệu nằm trong ô đó nhất. Không đụng vật liệu. */
 export async function syncSharedPages(d: ProjectData): Promise<number> {
   const project = d.project; if (!project?.pdf_path) return 0
@@ -107,8 +120,10 @@ export async function syncSharedPages(d: ProjectData): Promise<number> {
   const found = await renderRects(await blob.arrayBuffer(), cand.map(p => p.page_no))
   let n = 0
   for (const p of cand) {
-    const rs = found.get(p.page_no) ?? []; if (rs.length < 2) continue
+    let rs = found.get(p.page_no) ?? []
     const occ = d.occ.filter(o => o.page_id === p.id && o.bbox)
+    if (rs.length < 2) rs = rectsFromOcc(occ)   // không đọc được ô ảnh từ PDF → ước lượng từ vị trí vật liệu của từng phòng
+    if (rs.length < 2) continue
     const rooms = rs.map(r => {
       const cnt = new Map<string, number>()
       for (const o of occ) { const cx = o.bbox![0] + o.bbox![2] / 2, cy = o.bbox![1] + o.bbox![3] / 2; if (cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h) cnt.set(o.room_id!, (cnt.get(o.room_id!) ?? 0) + 1) }
