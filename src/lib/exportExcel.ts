@@ -39,8 +39,8 @@ function columns(o: ExportOpts, h: Ctx['h']): Col[] {
     { key: 'cat', head: h('Hạng mục', 'Item'), w: 13, band: 'content' }, { key: 'loc', head: h('Vị trí', 'Location'), w: 28, band: 'content' },
     { key: 'render', head: h('Hình ảnh phối cảnh', 'Render image'), w: 34, band: 'content' },
     { key: 'spec', head: h('Thông số kỹ thuật', 'Technical specification'), w: 46, band: 'ref' },
-    { key: 'brand', head: h('Xuất xứ/ Thương hiệu', 'Origin / Brand'), w: 22, band: 'ref' }, { key: 'sample', head: h('Hình ảnh vật liệu', 'Material image'), w: 16, band: 'ref' },
-    { key: 'link', head: h('Ghi chú', 'Remarks'), w: 26, band: 'ref' }, { key: 'note', head: h('Ghi chú', 'Remarks'), w: 26, band: 'ref' },
+    { key: 'brand', head: h('Xuất xứ/ Thương hiệu', 'Origin / Brand'), w: 22, band: 'ref' }, { key: 'sample', head: h('Hình ảnh vật liệu', 'Material image'), w: 24, band: 'ref' },
+    { key: 'note', head: h('Ghi chú', 'Remarks'), w: 26, band: 'ref' },
     { key: 'c_code', head: h('Mã VL', 'Material code'), w: 14, band: 'ctr' }, { key: 'c_img', head: h('Hình ảnh', 'Image'), w: 14, band: 'ctr' }, { key: 'c_spec', head: h('Thông số kỹ thuật', 'Specification'), w: 26, band: 'ctr' },
     { key: 'c_brand', head: h('Xuất xứ / Thương hiệu', 'Origin / Brand'), w: 16, band: 'ctr' }, { key: 'c_war', head: h('Bảo hành', 'Warranty'), w: 10, band: 'ctr' }, { key: 'c_note', head: h('Ghi chú / Giải trình làm rõ của Nhà thầu', 'Remarks / Contractor clarification'), w: 22, band: 'ctr' },
     { key: 'rev1', head: h('Đánh giá của P.KHKT', 'Technical dept. review'), w: 14, band: 'rev' }, { key: 'rev2', head: h('Đánh giá của K.QHTK', 'Design dept. review'), w: 14, band: 'rev' },
@@ -76,7 +76,6 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
     c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; c.border = border
   })
   hr.height = 34
-  if (ci('note') === ci('link') + 1) ws.mergeCells(5, ci('link'), 5, ci('note')) // “Ghi chú” trải trên 2 ô: link + nội dung, như file mẫu
   ws.views = [{ state: 'frozen', xSplit: 2, ySplit: 5 }]
   const catLabel = (k: string) => { const c = CATEGORIES.find(z => z.key === k); return c ? tx(c.vn, c.en, L) : k }
 
@@ -107,7 +106,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
         e.part_vn ? `${h('Bộ phận', 'Part')}: ${tx(e.part_vn, e.part_en, L)}` : '', e.composition ? `${h('Cấu tạo', 'Composition')}: ${e.composition}` : ''].filter(Boolean).join('\n')
       const remarks = [tx(e.note_vn, e.note_en, L), e.status !== 'approved' ? `[${(L === 'en' ? STATUS_EN : STATUS_VN)[e.status]}]` : ''].filter(Boolean).join('\n')
       const brand = [e.brand ? (e.product_name ? `${e.brand} – ${e.product_name}` : e.brand) : '', e.origin].filter(Boolean).join('\n')
-      const v: Record<string, any> = { stt, sym: sy, mavl: e.product_code || sy, cat: cats.map(catLabel).join(' / '), loc: roomNames, qty: e.qty != null ? `${e.qty}${e.unit ? ' ' + e.unit : ''}` : '', spec, brand, link: e.product_url, note: remarks,
+      const v: Record<string, any> = { stt, sym: sy, mavl: e.product_code || sy, cat: cats.map(catLabel).join(' / '), loc: roomNames, qty: e.qty != null ? `${e.qty}${e.unit ? ' ' + e.unit : ''}` : '', spec, brand, note: remarks,
         q_qty: e.qty, q_unit: e.unit, i_src: (L === 'en' ? SOURCE_EN : SOURCE_VN)[e.source], i_st: (L === 'en' ? STATUS_EN : STATUS_VN)[e.status], i_flag: e.qty_flag === 'ok' ? 'OK' : '⚠' }
       const row = ws.getRow(r)
       cols.forEach((col, i) => {
@@ -123,7 +122,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
         row.getCell(p).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAF4EA' } }
         if (!firstData) firstData = r; lastData = r
       }
-      if (e.product_url) { row.getCell(ci('link')).value = { text: e.product_url, hyperlink: e.product_url }; row.getCell(ci('link')).font = { name: 'Arial', size: 8, color: { argb: 'FF1F4E9A' }, underline: true } }
+      if (e.product_url) { const lc = row.getCell(ci('sample')); lc.value = { text: e.product_url, hyperlink: e.product_url }; lc.font = { name: 'Arial', size: 8, color: { argb: 'FF1F4E9A' }, underline: true }; lc.alignment = { vertical: 'bottom', horizontal: 'left', wrapText: true } }  // link sản phẩm nằm ngay dưới hình vật liệu
       if (e.source === 'inferred') for (let i = 1; i <= wide; i++) row.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9E5' } }
       row.height = Math.max(120, 13 * (locs.length + 1), 12 * Math.ceil(spec.length / 48) + 12)
       const best = occ.filter(o2 => o2.bbox && (o2.page_id || o2.view?.img)).sort((a2, b2) => (b2.confidence ?? 0) - (a2.confidence ?? 0))[0]
@@ -151,7 +150,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
       if (mapB64) {
         const id = wb.addImage({ base64: mapB64, extension: 'png' })
         ws.addImage(id, { tl: { col: sc - 1 + 0.08, row: r - 1 + 0.08 }, ext: { width: 92, height: 72 } })
-        if (!e.product_image_url && e.color_hex) { row.getCell(sc).value = `\n\n\n\n\n${e.color_hex}`; row.getCell(sc).font = { name: 'Arial', size: 7, color: { argb: 'FF666666' } } }
+        if (!e.product_image_url && e.color_hex && !e.product_url) { row.getCell(sc).value = `\n\n\n\n\n${e.color_hex}`; row.getCell(sc).font = { name: 'Arial', size: 7, color: { argb: 'FF666666' } } }
       }
       r++
     }

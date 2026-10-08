@@ -144,8 +144,9 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                       </td>
                     <td className="c-brand"><Ed e={e} k="brand" ph="Hãng / thương hiệu" miss={M('brand')} /><Ed e={e} k="product_name" ph="Tên sản phẩm" /><Ed e={e} k="origin" ph="Xuất xứ" miss={M('origin')} /></td>
                     <td className="c-mat"><MatImage d={d} e={e} />
-                      <Ed e={e} k="product_image_url" ph="Link ảnh mẫu" /></td>
-                    <td><Ed e={e} k="product_url" ph="Link sản phẩm" />{pair('note', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} area ph="Ghi chú" /></div>)}</td>
+                      <Ed e={e} k="product_image_url" ph="Link ảnh mẫu" />
+                      <Ed e={e} k="product_url" ph="Link sản phẩm" /></td>
+                    <td>{pair('note', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} area ph="Ghi chú" /></div>)}</td>
                     <td className="c-act"><StatusDot s={e.status} />
                       {canEdit && <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}>✓</button>}
                       <button className="btn ghost sm" title="Chi tiết / chọn mã hãng từ thư viện" onClick={ev => { ev.stopPropagation(); onDetail(e.id) }}>⋯</button>

@@ -47,8 +47,8 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
         e.composition ? `<small>${h('Cấu tạo', 'Composition')}: ${esc(e.composition)}</small>` : ''].filter(Boolean).join('<br>')
       rows += `<tr class="${e.source === 'inferred' ? 'inf' : ''}"><td>${stt}</td><td class="code">${esc(symbolOf(e, L, sym.legacy, sym.en))}</td><td class="code">${esc(e.product_code ?? '')}</td><td>${esc(cats)}</td><td>${rooms}</td><td class="im">${img}</td>
         <td>${spec}</td>
-        <td>${esc([e.brand, e.origin].filter(Boolean).join(' / '))}</td><td class="im">${map}</td>
-        <td>${e.product_url ? `<a href="${esc(e.product_url)}">${esc(e.product_url)}</a><br>` : ''}${esc(tx(e.note_vn, e.note_en, L))}${e.status !== 'approved' ? `<br><i>${esc((vn ? STATUS_VN : STATUS_EN)[e.status])}</i>` : ''}</td></tr>`
+        <td>${esc([e.brand, e.origin].filter(Boolean).join(' / '))}</td><td class="im">${map}${e.product_url ? `<br><a href="${esc(e.product_url)}">${esc(e.product_url)}</a>` : ''}</td>
+        <td>${esc(tx(e.note_vn, e.note_en, L))}${e.status !== 'approved' ? `<br><i>${esc((vn ? STATUS_VN : STATUS_EN)[e.status])}</i>` : ''}</td></tr>`
     }
   }
   }
