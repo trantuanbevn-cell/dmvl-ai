@@ -11,7 +11,7 @@ import { checkEntries } from '../../lib/checks'
 import { linkSuggestions, linkConflicts, linkEntries, resyncGroup } from '../../lib/entryLink'
 import type { Lang } from '../../lib/sections'
 
-function Side({ d, e, tag, onKeep, busy }: { d: ProjectData; e: Entry; tag: string; onKeep?: () => void; busy: boolean }) {
+function Side({ d, e, tag, onKeep, busy, label }: { d: ProjectData; e: Entry; tag: string; onKeep?: () => void; busy: boolean; label?: string }) {
   const shots = d.occ.filter(o => o.entry_id === e.id && o.bbox && o.page_id)
   const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
   const row = (k: string, v?: string | null) => v ? <div className="dc-row"><span>{k}</span>{v}</div> : null
@@ -23,7 +23,7 @@ function Side({ d, e, tag, onKeep, busy }: { d: ProjectData; e: Entry; tag: stri
         {e.color_hex && <span className="swatch" style={{ background: e.color_hex, height: 190, width: 90 }}><span>{e.color_hex}</span></span>}</div>
       {row('Vật liệu', e.material_vn)}{row('Thông số', e.desc_vn)}{row('Bộ phận', e.part_vn)}{row('Hãng', [e.brand, e.product_code].filter(Boolean).join(' · '))}{row('Xuất xứ', e.origin)}
       <div className="dc-row"><span>Có ở</span>{locs.length ? locs.map(l => <span key={l.room.id} className="loc-tag">{l.room.code} {l.room.name_vn}</span>) : 'chưa gán phòng'}</div>
-      {onKeep && <button className="btn primary" disabled={busy} onClick={onKeep}>Gộp – giữ mã {e.code}</button>}
+      {onKeep && <button className="btn primary" disabled={busy} onClick={onKeep}>{label ?? `Gộp – giữ mã ${e.code}`}</button>}
     </div>
   )
 }
@@ -35,6 +35,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
   const [open, setOpen] = useState<string | null>(null) // khoá cặp đang xem chi tiết
   const [lang, setLang] = useState<Lang>('vn')
   const [sel, setSel] = useState<string | null>(null)
+  const [lopen, setLopen] = useState<string | null>(null) // khoá cặp liên kết đang xem chi tiết
   const [ran, setRan] = useState<{ at: Date; n: number } | null>(null)
   const [running, setRunning] = useState(false)
   const [lskip, setLskip] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('dmvl-link-skip') ?? '[]') } catch { return [] } })
@@ -59,6 +60,10 @@ export default function CheckView({ d }: { d: ProjectData }) {
     setRunning(false)
   }
   const linkSkip = (a: Entry, b: Entry) => { const n = [...lskip, a.id + b.id]; setLskip(n); try { localStorage.setItem('dmvl-link-skip', JSON.stringify(n)) } catch { /* */ } }
+  const lkey = (x: { a: Entry; b: Entry }) => x.a.id + x.b.id
+  const lcur = sugg.findIndex(x => lkey(x) === lopen), lpair = lcur >= 0 ? sugg[lcur] : null
+  const lnext = () => { const n = sugg[lcur + 1] ?? sugg[lcur - 1]; setLopen(n ? lkey(n) : null) }
+  const doLink = async (a: Entry, b: Entry) => { setBusy(true); try { await linkEntries(a, b, d.entries); toast(`Đã liên kết ${a.code} ↔ ${b.code}`, 'ok'); lnext(); d.reload() } catch (e) { toast(String(e)) } setBusy(false) }
   const go = (dir: number) => { const n = dups[cur + dir]; setOpen(n ? keyOf(n) : null) }
   return (
     <div className="stack">
@@ -99,6 +104,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
         {sugg.map(({ a, b, why }) => (
           <div key={a.id + b.id} className="row sm-gap" style={{ padding: '8px 0', borderTop: '1px solid #eee', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 260 }}><b>{a.code}</b> {a.name_vn}<br /><b>{b.code}</b> {b.name_vn}<div className="small muted">Gợi ý liên kết: {why}</div></div>
+            <button className="btn sm" onClick={() => setLopen(a.id + b.id)}>🔍 Xem chi tiết</button>
             {canEdit && <><button className="btn primary sm" onClick={async () => { try { await linkEntries(a, b, d.entries); d.reload() } catch (e) { toast(String(e)) } }}>🔗 Liên kết (theo {a.code})</button>
               <button className="btn ghost sm" onClick={() => linkSkip(a, b)}>Không liên quan</button></>}
           </div>))}
@@ -115,6 +121,21 @@ export default function CheckView({ d }: { d: ProjectData }) {
             {canEdit && <button className="btn ghost sm" onClick={() => dismiss(p)}>Khác nhau</button>}
           </div>))}
       </div>
+      {lpair && (
+        <div className="modal-bg center" onMouseDown={() => setLopen(null)}>
+          <div className="modal dup-modal" onMouseDown={e => e.stopPropagation()}>
+            <div className="row between"><h3 style={{ margin: 0 }}>So sánh để liên kết · {lcur + 1}/{sugg.length} <span className="muted small">({lpair.why})</span></h3><button className="btn ghost sm" onClick={() => setLopen(null)}>✕</button></div>
+            <p className="small muted" style={{ margin: '4px 0' }}>Liên kết nghĩa là hai mã dùng chung một vật liệu/màu thật: sau đó sửa mã sản phẩm, màu, hãng, xuất xứ, link ở một mã thì mã kia tự đổi theo. Hai mã vẫn là hai dòng riêng trong bảng.</p>
+            <div className="dc-grid">
+              <Side d={d} e={lpair.a} tag="Mã A" busy={busy} label={`🔗 Liên kết – lấy thông tin theo ${lpair.a.code}`} onKeep={canEdit ? () => doLink(lpair.a, lpair.b) : undefined} />
+              <Side d={d} e={lpair.b} tag="Mã B" busy={busy} label={`🔗 Liên kết – lấy thông tin theo ${lpair.b.code}`} onKeep={canEdit ? () => doLink(lpair.b, lpair.a) : undefined} />
+            </div>
+            <div className="row gap" style={{ justifyContent: 'space-between', marginTop: 8 }}>
+              <div className="row gap"><button className="btn sm" disabled={lcur <= 0} onClick={() => setLopen(lkey(sugg[lcur - 1]))}>← Trước</button><button className="btn sm" disabled={lcur >= sugg.length - 1} onClick={() => setLopen(lkey(sugg[lcur + 1]))}>Tiếp →</button></div>
+              {canEdit && <button className="btn" onClick={() => { linkSkip(lpair.a, lpair.b); lnext() }}>✓ Hai mã KHÔNG liên quan – bỏ gợi ý</button>}
+            </div>
+          </div>
+        </div>)}
       {pair && (
         <div className="modal-bg center" onMouseDown={() => setOpen(null)}>
           <div className="modal dup-modal" onMouseDown={e => e.stopPropagation()}>
