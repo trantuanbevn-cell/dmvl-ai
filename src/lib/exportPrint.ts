@@ -35,7 +35,7 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
       const occ = d.occ.filter(o => o.entry_id === e.id)
       const best = occ.filter(o => o.bbox && (o.page_id || o.view?.img)).sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0]
       let img = ''
-      if (best) { const p = best.page_id ? pageById.get(best.page_id) : undefined; if (p || best.view?.img) { try { img = `<img src="${(await viewCanvas(p ? urls[p.image_path] : undefined, best.bbox!, best.view, best.view?.img ? urls[best.view.img] : undefined, 520)).toDataURL('image/jpeg', 0.85)}">` } catch { /* */ } } }
+      if (best) { const p = best.page_id ? pageById.get(best.page_id) : undefined; if (p || best.view?.img) { try { img = `<img src="${(await viewCanvas(p ? urls[p.image_path] : undefined, best.bbox!, best.view, best.view?.img ? urls[best.view.img] : undefined, 900, true)).toDataURL('image/jpeg', 0.92)}">` } catch { /* */ } } }
       let matUrl = ''
       const mvSrc = e.mat_view?.img ? urls[e.mat_view.img] : e.product_image_url
       if (mvSrc && (e.mat_view?.img || e.mat_view?.region)) { try { matUrl = (await regionCanvas(mvSrc, e.mat_view?.region, 300)).toDataURL('image/png') } catch { /* */ } }

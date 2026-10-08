@@ -97,7 +97,7 @@ export function defaultArrowPage(bbox: number[], reg: { rx: number; ry: number; 
   return { tail: f(a.tail), tip: f(a.tip) }
 }
 /** Ảnh crop RỘNG (có bối cảnh) + khung và mũi tên đỏ chỉ vào đối tượng */
-export async function contextCanvas(url: string, bbox: number[], maxEdge = 560, arrow = true, view?: CropViewT | null): Promise<HTMLCanvasElement> {
+export async function contextCanvas(url: string, bbox: number[], maxEdge = 560, arrow = true, view?: CropViewT | null, bold = false): Promise<HTMLCanvasElement> {
   const im = await loadImage(url)
   const G = viewGeom(bbox, view)
   const { rx, ry, rw, rh } = G
@@ -107,10 +107,10 @@ export async function contextCanvas(url: string, bbox: number[], maxEdge = 560, 
   const g = c.getContext('2d')!
   g.drawImage(im, sx, sy, sw, sh, 0, 0, c.width, c.height)
   if (!arrow || G.hide) return c
-  const a = G, W = c.width, H = c.height, lw = Math.max(2, Math.max(W, H) / 240)
+  const a = G, W = c.width, H = c.height, lw = bold ? Math.max(5, Math.max(W, H) / 85) : Math.max(2, Math.max(W, H) / 240)
   const draw = (color: string, extra: number) => {
     g.strokeStyle = color; g.fillStyle = color; g.lineCap = 'round'; g.lineJoin = 'round'
-    g.lineWidth = lw * 0.85 + extra
+    g.lineWidth = (bold ? lw * 1.0 : lw * 0.85) + extra
     g.strokeRect(a.box.x * W, a.box.y * H, a.box.w * W, a.box.h * H)
     const x1 = a.tail.x * W, y1 = a.tail.y * H, x2 = a.tip.x * W, y2 = a.tip.y * H
     const ang = Math.atan2(y2 - y1, x2 - x1), hl = lw * 4.8, hw = lw * 2.3
@@ -120,8 +120,8 @@ export async function contextCanvas(url: string, bbox: number[], maxEdge = 560, 
     g.lineTo(x2 - Math.cos(ang) * hl - Math.sin(ang) * hw, y2 - Math.sin(ang) * hl + Math.cos(ang) * hw)
     g.closePath(); g.fill()
   }
-  g.save(); g.setLineDash([]); draw('rgba(255,255,255,0.9)', lw * 0.9); g.restore()
-  draw('#e5322d', 0)
+  g.save(); g.setLineDash([]); draw('rgba(255,255,255,0.9)', bold ? lw * 0.7 : lw * 0.9); g.restore()
+  draw(bold ? '#e00000' : '#e5322d', 0)
   return c
 }
 
@@ -163,9 +163,9 @@ export async function regionCanvas(url: string, region?: number[] | null, maxEdg
   c.getContext('2d')!.drawImage(im, sx, sy, sw, sh, 0, 0, c.width, c.height); return c
 }
 /** Ảnh phối cảnh cuối cùng của một lần xuất hiện: ảnh thay thế nếu có, còn lại là crop có khung + mũi tên (đã chỉnh) */
-export async function viewCanvas(pageUrl: string | undefined, bbox: number[], view: CropViewT | null | undefined, replUrl: string | undefined, maxEdge = 560) {
+export async function viewCanvas(pageUrl: string | undefined, bbox: number[], view: CropViewT | null | undefined, replUrl: string | undefined, maxEdge = 560, bold = false) {
   // ảnh tải từ máy không thuộc trang concept: pageUrl trùng replUrl → vẽ khung + mũi tên lên chính ảnh đó
-  if (view?.img && replUrl && pageUrl === replUrl) return contextCanvas(replUrl, bbox, maxEdge, true, { ...view, img: null })
+  if (view?.img && replUrl && pageUrl === replUrl) return contextCanvas(replUrl, bbox, maxEdge, true, { ...view, img: null }, bold)
   if (view?.img && replUrl) return fitCanvas(replUrl, maxEdge)
-  return contextCanvas(pageUrl!, bbox, maxEdge, true, view)
+  return contextCanvas(pageUrl!, bbox, maxEdge, true, view, bold)
 }

@@ -37,7 +37,7 @@ function columns(o: ExportOpts, h: Ctx['h']): Col[] {
   const c: Col[] = [
     { key: 'stt', head: h('STT', 'No.'), w: 5, band: 'content' }, { key: 'sym', head: h('KÍ HIỆU BẢN VẼ', 'DRAWING CODE'), w: 13, band: 'content' }, { key: 'mavl', head: h('KÍ HIỆU VL', 'MATERIAL CODE'), w: 15, band: 'content' },
     { key: 'cat', head: h('Hạng mục', 'Item'), w: 13, band: 'content' }, { key: 'loc', head: h('Vị trí', 'Location'), w: 28, band: 'content' },
-    { key: 'render', head: h('Hình ảnh phối cảnh', 'Render image'), w: 34, band: 'content' },
+    { key: 'render', head: h('Hình ảnh phối cảnh', 'Render image'), w: 44, band: 'content' },
     { key: 'spec', head: h('Thông số kỹ thuật', 'Technical specification'), w: 46, band: 'ref' },
     { key: 'brand', head: h('Xuất xứ/ Thương hiệu', 'Origin / Brand'), w: 22, band: 'ref' }, { key: 'sample', head: h('Hình ảnh vật liệu', 'Material image'), w: 24, band: 'ref' },
     { key: 'note', head: h('Ghi chú', 'Remarks'), w: 26, band: 'ref' },
@@ -120,7 +120,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
       }
       if (e.product_url) { const lc = row.getCell(ci('sample')); lc.value = { text: e.product_url, hyperlink: e.product_url }; lc.font = { name: 'Arial', size: 8, color: { argb: 'FF1F4E9A' }, underline: true }; lc.alignment = { vertical: 'bottom', horizontal: 'left', wrapText: true } }  // link sản phẩm nằm ngay dưới hình vật liệu
       if (e.source === 'inferred') for (let i = 1; i <= wide; i++) row.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9E5' } }
-      row.height = Math.max(120, 13 * (locs.length + 1), 12 * Math.ceil(spec.length / 48) + 12)
+      row.height = Math.max(150, 13 * (locs.length + 1), 12 * Math.ceil(spec.length / 48) + 12)
       const best = occ.filter(o2 => o2.bbox && (o2.page_id || o2.view?.img)).sort((a2, b2) => (b2.confidence ?? 0) - (a2.confidence ?? 0))[0]
       const rc = ci('render'), sc = ci('sample')
       if (best) {
@@ -128,9 +128,9 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
         const u = pg ? urls[pg.image_path] : best.view?.img ? urls[best.view.img] : undefined
         if (u) {
           try {
-            const c = await viewCanvas(u, best.bbox!, best.view, best.view?.img ? urls[best.view.img] : undefined, 520)
-            const id = wb.addImage({ base64: c.toDataURL('image/jpeg', 0.85).split(',')[1], extension: 'jpeg' })
-            const scale = Math.min(236 / c.width, 150 / c.height)
+            const c = await viewCanvas(u, best.bbox!, best.view, best.view?.img ? urls[best.view.img] : undefined, 900, true)
+            const id = wb.addImage({ base64: c.toDataURL('image/jpeg', 0.93).split(',')[1], extension: 'jpeg' })
+            const scale = Math.min(300 / c.width, 190 / c.height)
             ws.addImage(id, { tl: { col: rc - 1 + 0.05, row: r - 1 + 0.05 }, ext: { width: c.width * scale, height: c.height * scale } })
           } catch { /* bỏ qua ảnh lỗi */ }
         }
