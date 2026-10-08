@@ -9,7 +9,7 @@ import { analyzeRoom, applyInference, writeSpecs, fillColors } from '../../lib/p
 import { roomTypeLabel } from '../../lib/codes'
 import type { ProjectData } from '../../lib/useProject'
 import { analyzePlans } from '../../lib/planPipeline'
-import { roomStats, heroUrl } from '../../lib/progress'
+import { roomStats, heroStyle } from '../../lib/progress'
 import Bar from '../../components/Bar'
 import LogBox, { useLog } from '../../components/LogBox'
 
@@ -79,7 +79,7 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
             const n = new Set(d.occ.filter(o => o.room_id === r.id).map(o => o.entry_id)).size
             return (
               <tr key={r.id}>
-                <td style={{ width: 110 }}>{(() => { const u = heroUrl(d, rstats.get(r.id)?.hero); return u ? <span className="mini-hero lg" style={{ backgroundImage: `url("${u}")` }} /> : null })()}</td><td><b>{r.code}</b> {r.name_vn}</td><td>{roomTypeLabel(r.room_type)}</td>
+                <td style={{ width: 110 }}>{(() => { const st = heroStyle(d, rstats.get(r.id)?.hero, r.id, 104 / 64); return st ? <span className="mini-hero lg" style={st} /> : null })()}</td><td><b>{r.code}</b> {r.name_vn}</td><td>{roomTypeLabel(r.room_type)}</td>
                 <td>{pages.map(pg => pg.page_no).join(', ') || <span className="warn-text">chưa có trang</span>}</td>
                 <td style={{ width: 160 }}>{n}{(() => { const s2 = rstats.get(r.id)!; return n ? <Bar approved={s2.approved} pending={s2.pending + s2.review} total={s2.total} height={5} /> : null })()}</td>
                 <td><span className={'pill st-' + r.analysis_status} title={r.analysis_log ?? ''}>{ST[r.analysis_status] ?? r.analysis_status}</span></td>

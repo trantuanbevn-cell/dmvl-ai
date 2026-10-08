@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
+import { syncSharedPages } from '../lib/roomSplit'
 import { NavLink, useParams } from 'react-router-dom'
 import { syncLibrary } from '../lib/matLibrary'
 import { useAuth } from '../lib/auth'
@@ -18,6 +19,9 @@ export default function ProjectPage() {
   const data = useProject(id)
   const { canEdit } = useAuth()
   // mở dự án → đồng bộ các mã vào thư viện công ty (một lần mỗi lần mở)
+  const synced = useRef(false)
+  // Slide đã tách phòng: tự gán ô ảnh cho đúng phòng để ảnh đại diện khớp ở mọi màn hình
+  useEffect(() => { if (canEdit && !synced.current && !data.loading && data.project && data.pages.length && data.occ.length) { synced.current = true; syncSharedPages(data).then(n => { if (n) data.reload() }).catch(() => {}) } }, [canEdit, data.loading, data.pages.length, data.occ.length]) // eslint-disable-line
   useEffect(() => { if (canEdit && !data.loading && data.project && data.entries.length) syncLibrary(data.project.id, data.entries) }, [canEdit, data.loading, data.project?.id]) // eslint-disable-line
   if (!data.project) return <div className="page muted">{data.loading ? 'Đang tải dự án…' : 'Không tìm thấy dự án'}</div>
   const ps = projectStats(data)

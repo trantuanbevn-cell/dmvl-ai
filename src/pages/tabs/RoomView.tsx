@@ -16,7 +16,7 @@ import RoomSuggest from '../../components/RoomSuggest'
 import AddMaterial, { type AddPreset } from '../../components/AddMaterial'
 import type { Lang } from '../../lib/sections'
 import { roomPages } from '../../lib/roomPages'
-import { roomStats, heroUrl } from '../../lib/progress'
+import { roomStats, heroStyle } from '../../lib/progress'
 import { useAuth } from '../../lib/auth'
 import { useOnline, colorOf } from '../../lib/presence'
 import { roomMissing } from '../../lib/missing'
@@ -97,11 +97,11 @@ export default function RoomView({ d }: { d: ProjectData }) {
     <div className={'room-layout' + (selEntry ? ' with-panel' : '')}>
       <div className="room-list">
         {d.rooms.map(r => {
-          const st = stats.get(r.id)!; const url = heroUrl(d, st.hero)
+          const st = stats.get(r.id)!; const hs = heroStyle(d, st.hero, r.id, 16 / 9)
           const rmiss = roomMissing(d, r.id, lang), wk = r.work_status ?? 'todo', hr = here(r.id)
           return (
             <button key={r.id} className={'room-btn' + (r.id === roomId ? ' on' : '')} onClick={() => { setSp({ room: r.id }); setPageIdx(0); setSel(null) }}>
-              <div className="rb-img" style={url ? { backgroundImage: `url("${url}")` } : undefined}><span className="rc-code">{r.code}</span><span className={'rb-dot ' + st.state} />{wk !== 'todo' && <span className={'ws-tag ' + wk}>{wk === 'done' ? '✓ Xong' : '● Đang làm'}</span>}
+              <div className="rb-img" style={hs}><span className="rc-code">{r.code}</span><span className={'rb-dot ' + st.state} />{wk !== 'todo' && <span className={'ws-tag ' + wk}>{wk === 'done' ? '✓ Xong' : '● Đang làm'}</span>}
                 {hr.length > 0 && <span className="rb-here">{hr.slice(0, 3).map(o => <i key={o.id} className="av xs" style={{ background: colorOf(o.id) }} title={o.name + ' đang xem phòng này'}>{o.name.split(/\s+/).slice(-1)[0][0]}</i>)}</span>}</div>
               <div className="rb-name">{r.name_vn}</div>
               <Bar approved={st.approved} pending={st.pending + st.review} total={st.total} height={5} />

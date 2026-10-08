@@ -8,10 +8,10 @@ export type RoomStat = {
   state: RoomState; analyzed: boolean; entryIds: string[]
 }
 
-export function heroStyle(d: ProjectData, p: Page | undefined, roomId: string): React.CSSProperties | undefined {
+export function heroStyle(d: ProjectData, p: Page | undefined, roomId: string, ar = 16 / 9): React.CSSProperties | undefined {
   const url = heroUrl(d, p); if (!url || !p) return undefined
   const r = roomRect(p, roomId)
-  return r ? rectBg(url, p, r) : { backgroundImage: `url("${url}")` }
+  return r ? rectBg(url, p, r, ar) : { backgroundImage: `url("${url}")` }
 }
 export function heroUrl(d: ProjectData, p?: Page): string | undefined { return p ? d.urls[p.thumb_path ?? p.image_path] : undefined }
 

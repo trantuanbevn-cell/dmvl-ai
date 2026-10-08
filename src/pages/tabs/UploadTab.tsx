@@ -5,9 +5,12 @@ import { supabase } from '../../lib/supabase'
 import { uploadPdf, classifyPages, classifyLocalPages } from '../../lib/pipeline'
 import { ROOM_TYPES } from '../../lib/codes'
 import type { ProjectData } from '../../lib/useProject'
-import { roomStats, heroUrl } from '../../lib/progress'
+import { roomStats, heroStyle } from '../../lib/progress'
 import LogBox, { useLog } from '../../components/LogBox'
 import FloorPlans from '../../components/FloorPlans'
+import { roomPages } from '../../lib/roomPages'
+import { syncSharedPages } from '../../lib/roomSplit'
+import { toast } from '../../lib/toast'
 import RoomSplit from '../../components/RoomSplit'
 import { suggestSplits } from '../../lib/roomSplit'
 
@@ -60,7 +63,7 @@ export default function UploadTab({ d }: { d: ProjectData }) {
 
       {d.rooms.length > 0 && (
         <div className="card">
-          <div className="row between"><h3>Phòng ({d.rooms.length})</h3><button className="btn sm" onClick={addRoom}>+ Thêm phòng</button></div>
+          <div className="row between"><h3>Phòng ({d.rooms.length})</h3><span><button className="btn sm" title="Cập nhật ảnh đại diện của các phòng đã tách theo từng ảnh phối cảnh" onClick={async () => { try { const n = await syncSharedPages(d); toast(n ? `Đã cập nhật ảnh cho ${n} slide đã tách` : 'Không có slide nào cần cập nhật (hoặc chưa nhận ra được ảnh)', n ? 'ok' : 'info'); if (n) d.reload() } catch (e) { alert(String((e as Error).message ?? e)) } }}>⟳ Đồng bộ ảnh phòng đã tách</button> <button className="btn sm" onClick={addRoom}>+ Thêm phòng</button></span></div>
           {splits.length > 0 && <div className="warn-box small" style={{ margin: '8px 0', padding: 8, background: '#fff6df', borderRadius: 8 }}>
             ⚠ Phát hiện phòng có thể đang gom nhiều phòng trong cùng một slide: {splits.map(x => <span key={x.room.id} style={{ marginRight: 10 }}><b>{x.room.code} {x.room.name_vn}</b> → {x.parts.map(p => p.name_vn).join(' | ')} <button className="btn sm" onClick={() => setSplitId(x.room.id)}>✂ Tách</button></span>)}
           </div>}
@@ -68,13 +71,13 @@ export default function UploadTab({ d }: { d: ProjectData }) {
             <thead><tr><th /><th>Mã</th><th>Tên phòng (VN)</th><th>Tên (EN)</th><th>Loại phòng</th><th>Số liệu concept</th><th>Số trang</th><th /></tr></thead>
             <tbody>{d.rooms.map(r => (
               <tr key={r.id}>
-                <td style={{ width: 120 }}>{(() => { const u = heroUrl(d, roomStats(d).get(r.id)?.hero); return u ? <span className="mini-hero lg" style={{ backgroundImage: `url("${u}")` }} /> : null })()}</td>
+                <td style={{ width: 120 }}>{(() => { const st = heroStyle(d, roomStats(d).get(r.id)?.hero, r.id, 104 / 64); return st ? <span className="mini-hero lg" style={st} /> : null })()}</td>
                 <td><input className="code-in" defaultValue={r.code} onBlur={e => e.target.value !== r.code && setRoom(r.id, { code: e.target.value })} /></td>
                 <td><input defaultValue={r.name_vn} onBlur={e => e.target.value !== r.name_vn && setRoom(r.id, { name_vn: e.target.value })} /></td>
                 <td><input defaultValue={r.name_en ?? ''} onBlur={e => setRoom(r.id, { name_en: e.target.value })} /></td>
                 <td><select value={r.room_type} onChange={e => setRoom(r.id, { room_type: e.target.value })}>{ROOM_TYPES.map(t => <option key={t.key} value={t.key}>{t.vn}</option>)}</select></td>
                 <td className="small">{(r.concept_counts ?? []).map(c => `${c.label}: ${c.qty}`).join(' · ')}{d.warnings.filter(w => w.room_id === r.id).map(w => <div key={w.id} className="warn-text">⚠ {w.text}</div>)}</td>
-                <td>{d.pages.filter(pg => pg.room_id === r.id).length}</td>
+                <td>{roomPages(d.pages, r.id).length}</td>
                 <td><button className="btn ghost sm" title="Tách phòng này thành nhiều phòng" onClick={() => setSplitId(r.id)}>✂ Tách</button> <button className="btn ghost sm danger" onClick={() => delRoom(r.id)}>Xoá</button></td>
               </tr>))}
             </tbody>
