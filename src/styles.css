@@ -247,3 +247,5 @@ input[readonly], textarea[readonly] { cursor: default }
 .sec-table .c-img > *, .sec-table .c-img > .crop-wrap { margin: 0 0 3px 0 } .sec-table .mat-wrap, .sec-table .mat-img, .sec-table .mat-sw { margin-left: 0; margin-right: 0 }
 .sec-table .c-qty input { text-align: left } .sec-table .c-code .miss-badge { margin-top: 3px }
 .sec-table .ed-line.lab { margin-top: 2px } .sec-table .ed-line.lab input, .sec-table .ed-line.lab textarea { font-size: 11px; color: #6b5a4c }
+
+.proj-pick { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: #faf7f3; max-height: 180px; overflow: auto; margin-top: 4px }

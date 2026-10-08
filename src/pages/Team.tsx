@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth, ROLE_VN, ROLE_HELP, type Role } from '../lib/auth'
 import { useOnline } from '../lib/presence'
-import { listUsers, createUser, updateUser, deleteUser, genPassword, type TeamUser } from '../lib/team'
+import { listUsers, createUser, updateUser, deleteUser, genPassword, listProjectsLite, listMembers, setMemberProjects, type TeamUser, type ProjectLite } from '../lib/team'
 
 const ago = (iso: string | null) => { if (!iso) return 'chưa đăng nhập'; const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); return m < 1 ? 'vừa xong' : m < 60 ? `${m} phút trước` : m < 1440 ? `${Math.round(m / 60)} giờ trước` : `${Math.round(m / 1440)} ngày trước` }
 
@@ -11,7 +11,11 @@ export default function Team() {
   const [users, setUsers] = useState<TeamUser[]>([])
   const [err, setErr] = useState(''), [busy, setBusy] = useState(false), [msg, setMsg] = useState('')
   const [f, setF] = useState({ email: '', full_name: '', role: 'editor' as Role, password: genPassword() })
-  const load = () => listUsers().then(setUsers).catch(e => setErr(String(e.message ?? e)))
+  const [projects, setProjects] = useState<ProjectLite[]>([])
+  const [members, setMembers] = useState<Map<string, string[]> | null>(new Map())
+  const [open, setOpen] = useState<string | null>(null) // user id đang mở bảng chọn dự án
+  const [newProj, setNewProj] = useState<string[]>([])
+  const load = () => Promise.all([listUsers().then(setUsers), listProjectsLite().then(setProjects), listMembers().then(setMembers)]).catch(e => setErr(String(e.message ?? e)))
   useEffect(() => { if (isAdmin) load() }, [isAdmin])
   if (!isAdmin) return <div className="page"><div className="card muted">Chỉ quản trị viên mới xem được trang này.</div></div>
   const act = async (fn: () => Promise<unknown>, ok = '') => { setBusy(true); setErr(''); setMsg(''); try { await fn(); if (ok) setMsg(ok); await load() } catch (e: any) { setErr(String(e.message ?? e)) } setBusy(false) }
@@ -21,7 +25,7 @@ export default function Team() {
       <h1>Thành viên & phân quyền</h1>
       {err && <div className="note warn">⚠ {err}</div>}
       {msg && <div className="note">{msg}</div>}
-      <form className="card stack" onSubmit={e => { e.preventDefault(); act(async () => { await createUser(f); setMsg(`Đã tạo tài khoản ${f.email}. Gửi cho họ email + mật khẩu: ${f.password}`); setF({ email: '', full_name: '', role: 'editor', password: genPassword() }) }) }}>
+      <form className="card stack" onSubmit={e => { e.preventDefault(); act(async () => { const r: any = await createUser(f); if (r?.id && f.role !== 'admin' && newProj.length && members) await setMemberProjects(r.id, newProj); setNewProj([]); setMsg(`Đã tạo tài khoản ${f.email}. Gửi cho họ email + mật khẩu: ${f.password}`); setF({ email: '', full_name: '', role: 'editor', password: genPassword() }) }) }}>
         <h3>Cấp tài khoản mới</h3>
         <div className="row gap">
           <input type="email" placeholder="Email đăng nhập" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} required style={{ flex: 2 }} />
@@ -33,11 +37,13 @@ export default function Team() {
           <button type="button" className="btn ghost" onClick={() => setF({ ...f, password: genPassword() })}>Tạo mật khẩu khác</button>
           <button className="btn primary" disabled={busy}>+ Tạo tài khoản</button>
         </div>
+        {members === null && <div className="note warn">⚠ Chưa bật phân quyền theo dự án trong cơ sở dữ liệu – chạy file <code>0003_project_access.sql</code> trong Supabase SQL Editor. Cho đến lúc đó mọi thành viên thấy tất cả dự án.</div>}
+        {f.role !== 'admin' && members && <div><div className="small"><b>Dự án được truy cập</b> <span className="muted">(quản trị luôn thấy tất cả)</span></div><ProjectPicker projects={projects} value={newProj} onChange={setNewProj} /></div>}
         <div className="small muted">{(['admin', 'editor', 'viewer'] as Role[]).map(r => <div key={r}><b>{ROLE_VN[r]}</b>: {ROLE_HELP[r]}</div>)}</div>
       </form>
       <div className="card">
         <table className="tbl">
-          <thead><tr><th /><th>Tài khoản</th><th>Vai trò</th><th>Hoạt động</th><th>Trạng thái</th><th /></tr></thead>
+          <thead><tr><th /><th>Tài khoản</th><th>Vai trò</th><th>Dự án được truy cập</th><th>Hoạt động</th><th>Trạng thái</th><th /></tr></thead>
           <tbody>{users.map(u => {
             const me = u.id === session.user.id, on = online.find(o => o.id === u.id)
             return (
@@ -45,6 +51,13 @@ export default function Team() {
                 <td style={{ width: 20 }}><span className={'dotc' + (isOn(u.id) ? ' on' : '')} title={isOn(u.id) ? 'Đang online' : 'Offline'} style={{ background: isOn(u.id) ? '#2e7d32' : '#bbb' }} /></td>
                 <td><b>{u.full_name || '—'}</b>{me && ' (bạn)'}<div className="small muted">{u.email}</div></td>
                 <td><select value={u.role} disabled={busy || me} onChange={e => act(() => updateUser(u.id, { role: e.target.value as Role }))}>{(['admin', 'editor', 'viewer'] as Role[]).map(r => <option key={r} value={r}>{ROLE_VN[r]}</option>)}</select></td>
+                <td className="small" style={{ minWidth: 200 }}>
+                  {u.role === 'admin' ? <span className="muted">Tất cả dự án</span> : members === null ? <span className="muted">—</span> : <>
+                    {(members.get(u.id) ?? []).length ? (members.get(u.id) ?? []).map(pid => <span key={pid} className="loc-tag">{projects.find(p => p.id === pid)?.name ?? '…'}</span>) : <span className="bad-text">Chưa được gán dự án nào</span>}
+                    <div><button className="btn ghost sm" onClick={() => setOpen(open === u.id ? null : u.id)}>{open === u.id ? 'Đóng' : '✎ Chọn dự án'}</button></div>
+                    {open === u.id && <ProjectPicker projects={projects} value={members.get(u.id) ?? []} onChange={v => act(async () => { await setMemberProjects(u.id, v) })} disabled={busy} />}
+                  </>}
+                </td>
                 <td className="small">{on ? <span style={{ color: '#2e7d32' }}>● đang online{on.tab ? ` – tab ${on.tab}` : ''}</span> : <span className="muted">đăng nhập {ago(u.last_sign_in_at)}</span>}</td>
                 <td>{u.active ? <span className="pill">Đang dùng</span> : <span className="pill st-error">Đã khoá</span>}</td>
                 <td className="row gap sm-gap">
@@ -58,4 +71,10 @@ export default function Team() {
       </div>
     </div>
   )
+}
+
+function ProjectPicker({ projects, value, onChange, disabled }: { projects: ProjectLite[]; value: string[]; onChange: (v: string[]) => void; disabled?: boolean }) {
+  if (!projects.length) return <div className="small muted">Chưa có dự án nào.</div>
+  return <div className="proj-pick">{projects.map(p => (
+    <label key={p.id} className="row gap sm-gap small"><input type="checkbox" disabled={disabled} checked={value.includes(p.id)} onChange={e => onChange(e.target.checked ? [...value, p.id] : value.filter(x => x !== p.id))} /> {p.name}</label>))}</div>
 }

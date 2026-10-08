@@ -18,3 +18,23 @@ export const createUser = (u: { email: string; password: string; full_name: stri
 export const updateUser = (id: string, patch: { role?: Role; active?: boolean; full_name?: string; password?: string }) => call('update', { id, ...patch })
 export const deleteUser = (id: string) => call('delete', { id })
 export const genPassword = () => { const a = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; return Array.from(crypto.getRandomValues(new Uint8Array(12)), v => a[v % a.length]).join('') }
+
+// ---- Gán dự án cho từng thành viên (bảng project_members; chỉ quản trị ghi được)
+export type ProjectLite = { id: string; name: string }
+export const listProjectsLite = async (): Promise<ProjectLite[]> => { const { data } = await supabase.from('projects').select('id,name').order('created_at', { ascending: false }); return (data ?? []) as ProjectLite[] }
+/** user_id → danh sách project_id. Trả về null nếu chưa chạy migration phân quyền theo dự án */
+export async function listMembers(): Promise<Map<string, string[]> | null> {
+  const { data, error } = await supabase.from('project_members').select('project_id,user_id')
+  if (error) return null
+  const m = new Map<string, string[]>()
+  for (const r of data ?? []) m.set(r.user_id, [...(m.get(r.user_id) ?? []), r.project_id])
+  return m
+}
+export async function setMemberProjects(userId: string, projectIds: string[]) {
+  const { data, error } = await supabase.from('project_members').select('project_id').eq('user_id', userId)
+  if (error) throw new Error(error.message)
+  const have = new Set((data ?? []).map(r => r.project_id as string)), want = new Set(projectIds)
+  const del = [...have].filter(p => !want.has(p)), add = [...want].filter(p => !have.has(p))
+  if (del.length) { const r = await supabase.from('project_members').delete().eq('user_id', userId).in('project_id', del); if (r.error) throw new Error(r.error.message) }
+  if (add.length) { const r = await supabase.from('project_members').insert(add.map(project_id => ({ project_id, user_id: userId }))); if (r.error) throw new Error(r.error.message) }
+}
