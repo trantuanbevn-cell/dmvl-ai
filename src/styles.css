@@ -217,3 +217,8 @@ input[readonly], textarea[readonly] { cursor: default }
 .dup-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid #f0dfa8 } .dup-row:first-of-type { border-top: 0 }
 .dup-row .swatch.sm { width: 34px; flex: none }
 .add-sib { font-size: 11px }
+.lightbox { position: fixed; inset: 0; background: rgba(20,14,10,.82); z-index: 80; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 12px }
+.lb-bar { display: flex; gap: 8px } .lb-bar .chip { background: #fff }
+.lb-body { display: flex; align-items: center; justify-content: center; max-width: 100%; max-height: 88vh }
+.lb-body .crop { cursor: default; border: 0; border-radius: 6px; box-shadow: 0 8px 40px rgba(0,0,0,.5) }
+.lb-full { position: relative; display: inline-block; line-height: 0 } .lb-full img { max-width: 94vw; max-height: 82vh; border-radius: 6px; user-select: none } .lb-full svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none }
