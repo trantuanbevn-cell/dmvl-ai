@@ -6,6 +6,7 @@ import { GROUPS, CATEGORIES } from './codes'
 import { classifyLocal, norm as normT } from './classify'
 import { inferForRoom } from './infer'
 import { specPatch } from './specs'
+import { planContext, fillPlanQty } from './planPipeline'
 import type { Project, Room, Page, Entry, Occurrence } from './types'
 
 type Log = (msg: string) => void
@@ -264,7 +265,7 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
       const url = await signedUrl(page.image_path)
       const r = await callAIPaced('analyze_page', {
         room: { name_vn: room.name_vn, room_type: room.room_type, concept_counts: room.concept_counts },
-        page: { page_no: page.page_no, url },
+        page: { page_no: page.page_no, url, plan_context: planContext(room, page) },
         existing: entries.filter(e => e.source === 'image').map(e => ({ code: e.code, name_vn: e.name_vn, material_vn: e.material_vn })),
       }, log)
       const items = (r.tool?.items ?? []) as AIItem[]
@@ -274,6 +275,7 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
       if (i < pages.length - 1) await sleep(4000) // giãn cách để nằm trong hạn mức miễn phí
     }
     await fillColors(project, room)
+    await fillPlanQty(project)
     const added = await applyInference(project, room)
     log(`  ${room.code} – quy tắc suy luận thêm ${added} hạng mục (không dùng AI)`)
     await writeSpecs(project)

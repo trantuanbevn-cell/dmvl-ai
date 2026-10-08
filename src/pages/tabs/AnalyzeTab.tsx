@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { analyzeRoom, applyInference, writeSpecs, fillColors } from '../../lib/pipeline'
 import { roomTypeLabel } from '../../lib/codes'
 import type { ProjectData } from '../../lib/useProject'
+import { analyzePlans } from '../../lib/planPipeline'
 import { roomStats, heroUrl } from '../../lib/progress'
 import Bar from '../../components/Bar'
 import LogBox, { useLog } from '../../components/LogBox'
@@ -25,7 +26,11 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
     try { await fn() } catch (e) { log('LỖI: ' + String(e)) }
     setBusy(false); await d.reload()
   }
+  const doPlans = () => run(async () => { await analyzePlans(p, d.rooms, d.pages, log); log('Xong phần mặt bằng. Chạy lại phân tích phòng để AI dùng thông tin này.') })
   const doRooms = (ids: string[]) => run(async () => {
+    if (d.pages.some(pg => pg.kind === 'plan') && d.rooms.every(r => !r.plan) && !d.pages.some(pg => pg.camera)) {
+      try { await analyzePlans(p, d.rooms, d.pages, log); await d.reload() } catch (e) { log('Bỏ qua phân tích mặt bằng: ' + String(e)) }
+    }
     for (const id of ids) {
       const room = d.rooms.find(r => r.id === id)!
       log(`▶ ${room.code} ${room.name_vn}`)
@@ -52,6 +57,7 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
         <p className="muted small"><b>AI chỉ nhìn ảnh phối cảnh</b> và liệt kê vật liệu/đồ đạc kèm khung vị trí (Gemini Flash, trong hạn mức miễn phí). Mọi thứ còn lại do phần mềm tự làm. Dự án này cần khoảng <b>{renders} lần gọi AI</b>, giãn cách vài giây giữa các lần.</p>
         <div className="row gap">
           <button className="btn primary" disabled={busy || !d.rooms.length} onClick={() => doRooms(d.rooms.map(r => r.id))}>▶ Phân tích tất cả phòng</button>
+          <button className="btn" disabled={busy || !d.rooms.length} onClick={doPlans} title="Đọc diện tích, đếm ghế/bàn trên mặt bằng và định vị camera của từng ảnh phối cảnh – không dùng AI">Phân tích mặt bằng & camera (không AI)</button>
           <button className="btn" disabled={busy || !d.entries.length} onClick={reapply}>Áp lại quy tắc & viết lại thông số (không AI)</button>
           {busy && <span className="spinner" />}
         </div>

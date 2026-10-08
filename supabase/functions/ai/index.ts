@@ -129,7 +129,7 @@ Gọi công cụ report_pages.`)]
         txt(`Phòng: ${p.room.name_vn} (${p.room.room_type}). Số liệu concept: ${JSON.stringify(p.room.concept_counts ?? [])}
 Mã đã có (code|tên|vật liệu):
 ${ex}
-
+${p.page?.plan_context ? `\nThông tin từ mặt bằng (phần mềm tự đọc): ${p.page.plan_context}\n` : ''}
 Liệt kê MỌI vật liệu hoàn thiện và đồ vật NHÌN THẤY trong phối cảnh (bỏ qua khung chữ, logo, mặt bằng nhỏ):
 - Bề mặt: sàn, len, tường, tường nhấn, trần (cả trần lộ), cửa, cửa sổ.
 - Đồ liền tường (JN) và đồ rời (FF): mỗi món 1 item; vật liệu cấu thành (thùng, cánh, mặt, khung, bọc, chân, tay nắm) là item riêng có parent_ref.

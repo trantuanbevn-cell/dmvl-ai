@@ -10,6 +10,7 @@ import Crop from '../../components/Crop'
 import EntryPanel from '../../components/EntryPanel'
 import { StatusDot } from './MaterialView'
 import Bar from '../../components/Bar'
+import PlanMap from '../../components/PlanMap'
 import { roomStats, heroUrl } from '../../lib/progress'
 
 export default function RoomView({ d }: { d: ProjectData }) {
@@ -92,6 +93,11 @@ export default function RoomView({ d }: { d: ProjectData }) {
                 {selOcc && <button className={'btn sm' + (draw ? ' primary' : '')} onClick={() => setDraw(!draw)}>{draw ? 'Kéo chuột trên ảnh để khoanh…' : '✎ Khoanh lại vùng cho mục đang chọn'}</button>}
               </div>
             </div>
+            {(() => {
+              const cam = page.camera as any, pp = cam?.plan_page_id ? d.pages.find(x => x.id === cam.plan_page_id) : (page.kind === 'plan' ? page : (room?.plan ? d.pages.find(x => x.id === room.plan.page_id) : undefined))
+              if (!pp || (!cam?.plan_page_id && !room?.plan)) return null
+              return <details className="card" style={{ margin: '8px 0' }}><summary><b>Vị trí trên mặt bằng</b> – camera, vùng phòng, ghế/bàn đếm được</summary><PlanMap url={d.urls[pp.image_path]} plan={room?.plan} cam={cam} planPage={pp} room={room} /></details>
+            })()}
             <div ref={imgRef} className={'img-wrap' + (draw ? ' drawing' : '')}
               onMouseDown={e => { if (draw) { const p = rel(e); setDrag({ x0: p.x, y0: p.y, x1: p.x, y1: p.y }) } }}
               onMouseMove={e => { if (draw && drag) { const p = rel(e); setDrag({ ...drag, x1: p.x, y1: p.y }) } }}

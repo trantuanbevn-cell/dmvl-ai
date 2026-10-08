@@ -52,3 +52,26 @@ export async function renderPdf(file: File, onPage?: (i: number, n: number) => v
   }
   return out
 }
+
+export type Word = { t: string; x: number; y: number; w: number; h: number }
+/** Chữ + vị trí (chuẩn hoá 0..1 theo trang) từ PDF gốc – dùng để tìm nhãn phòng trên mặt bằng */
+export async function extractWords(data: ArrayBuffer): Promise<Record<number, Word[]>> {
+  const doc = await pdfjs.getDocument({ data }).promise
+  const out: Record<number, Word[]> = {}
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i)
+    const vp = page.getViewport({ scale: 1 })
+    const tc = await page.getTextContent()
+    const ws: Word[] = []
+    for (const it of tc.items as any[]) {
+      const t = cleanText(String(it.str ?? '')).trim()
+      if (!t) continue
+      const m = pdfjs.Util.transform(vp.transform, it.transform)
+      const h = Math.hypot(m[2], m[3]), w = Math.abs(it.width ?? 0)
+      ws.push({ t, x: m[4] / vp.width, y: (m[5] - h * 0.85) / vp.height, w: w / vp.width, h: h / vp.height })
+    }
+    out[i] = ws
+    page.cleanup()
+  }
+  return out
+}
