@@ -27,8 +27,8 @@ export default function PlanMap({ url, plan, cam, planPage, room }: { url?: stri
         </svg>
       </div>
       <div className="small muted">
-        {room && mine ? <>Phòng {room.code}: ~{Math.round(mine.area_m2)} m² · ước tính <b>{mine.counts.chairs} ghế</b> (chấm xanh), <b>{mine.counts.tables} bàn</b> (chấm cam). </> : null}
-        {cam?.plan_page_id ? <>Camera (chấm đỏ) nhìn <b>{cam.dir_vn}</b>; trong nón nhìn ~{cam.visible.chairs} ghế, ~{cam.visible.tables} bàn{cam.rooms_in_view.length ? `; khu vực: ${cam.rooms_in_view.join(', ')}` : ''}. </> : <>Chưa định vị được camera trên mặt bằng. </>}
+        {room && mine ? <>{mine.cad ? <>✓ Đã đối chiếu mặt bằng gốc <b>{mine.cad.floor_label}</b> ({mine.cad.inliers} phòng khớp, tỉ lệ đo thật). </> : null}Phòng {room.code}: ~{Math.round(mine.area_m2)} m² · ước tính <b>{mine.counts.chairs} ghế</b> (chấm xanh), <b>{mine.counts.tables} bàn</b> (chấm cam). </> : null}
+        {cam?.plan_page_id ? <>Camera (chấm đỏ) nhìn <b>{cam.dir_vn}</b>{cam.cad?.room_id ? <>, đặt trong <b>{cam.cad.names[0] ?? `phòng #${cam.cad.room_id}`}</b> ({cam.cad.floor_label}{cam.cad.area_m2 ? `, ${cam.cad.area_m2} m² theo bản vẽ gốc` : ''})</> : null}; trong nón nhìn ~{cam.visible.chairs} ghế, ~{cam.visible.tables} bàn{cam.rooms_in_view.length ? `; khu vực: ${cam.rooms_in_view.join(', ')}` : ''}. </> : <>Chưa định vị được camera trên mặt bằng. </>}
         <span className="warn-text">Số đếm tự động chỉ là ước lượng – cần kiểm.</span>
       </div>
     </div>

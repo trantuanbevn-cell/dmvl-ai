@@ -156,3 +156,14 @@ textarea.json { font-family: ui-monospace, monospace; font-size: 12px; min-heigh
 .page-tile { position: relative } .tile-code { left: 10px; top: 10px; font-size: 10px }
 .cat-title .cnt { margin-left: 6px }
 @media (max-width: 1100px) { .room-list { position: static; max-height: none; flex-direction: row; overflow-x: auto } .room-btn { min-width: 150px } }
+
+/* mặt bằng gốc theo tầng */
+.floor-card { border: 1px solid var(--line, #e3e6ea); border-radius: 10px; padding: 12px; margin-top: 12px }
+.floor-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; margin-top: 8px }
+@media (max-width: 900px) { .floor-grid { grid-template-columns: 1fr } }
+.floor-rooms { max-height: 380px; overflow: auto; margin-top: 6px }
+.fr { display: flex; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 6px; cursor: pointer; font-size: 13px }
+.fr b { margin-left: auto } .fr.on, .fr:hover { background: rgba(0,0,0,.06) }
+.dotc { width: 10px; height: 10px; border-radius: 50%; flex: none }
+.cls-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px; max-height: 220px; overflow: auto; margin-top: 6px }
+.planmap { margin-top: 8px }

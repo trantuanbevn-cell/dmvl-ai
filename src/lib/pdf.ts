@@ -75,3 +75,14 @@ export async function extractWords(data: ArrayBuffer): Promise<Record<number, Wo
   }
   return out
 }
+
+/** Vẽ một trang PDF thành ảnh JPEG (dùng cho bản xem trước mặt bằng gốc) */
+export async function renderPdfPage(data: ArrayBuffer, pageNo: number, longEdge = 2000): Promise<{ blob: Blob; width: number; height: number }> {
+  const doc = await pdfjs.getDocument({ data: data.slice(0) }).promise
+  const page = await doc.getPage(Math.min(pageNo, doc.numPages))
+  const v1 = page.getViewport({ scale: 1 }), vp = page.getViewport({ scale: longEdge / Math.max(v1.width, v1.height) })
+  const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height)
+  const g = c.getContext('2d')!; g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height)
+  await page.render({ canvasContext: g, viewport: vp }).promise
+  return { blob: await canvasBlob(c, 0.85), width: c.width, height: c.height }
+}

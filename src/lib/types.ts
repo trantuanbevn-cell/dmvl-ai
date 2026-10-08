@@ -21,3 +21,9 @@ export const STATUS_VN: Record<string, string> = { pending: 'Chờ duyệt', app
 export const STATUS_EN: Record<string, string> = { pending: 'Pending', approved: 'Approved', rejected: 'Rejected', review: 'Designer to review' }
 export const SOURCE_VN: Record<string, string> = { image: 'Ảnh', inferred: 'Suy luận', manual: 'Thêm tay' }
 export const SOURCE_EN: Record<string, string> = { image: 'Image', inferred: 'Inferred', manual: 'Manual' }
+export type FloorGeom = {
+  w: number; h: number; m_per_pt: number; door_w: number; leaked: boolean
+  wall_keys: string[]; classes: { key: string; layer: string; lw: number; fill: boolean; len: number; n: number }[]
+  rooms: { id: number; area_m2: number; poly: number[][]; cx: number; cy: number; names: string[]; label_area?: number }[]
+}
+export type FloorPlan = { id: string; project_id: string; floor_label: string; pdf_path: string; page_no: number; scale_den: number; width: number | null; height: number | null; preview_path: string | null; geometry: FloorGeom | null; status: string }

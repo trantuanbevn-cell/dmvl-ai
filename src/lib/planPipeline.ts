@@ -4,7 +4,8 @@ import { loadCv } from './cv'
 import { extractWords } from './pdf'
 import { norm as normT } from './classify'
 import { detectCamera, orbFeatures, freeFeat, matchSimilarity, applyT, roomLabels, segmentRooms, dirWords, type Feat, type RoomRegion } from './plan'
-import type { Project, Room, Page, Entry, Occurrence } from './types'
+import { matchConceptToCad, inPoly } from './cadMatch'
+import type { Project, Room, Page, Entry, Occurrence, FloorPlan } from './types'
 
 type Log = (msg: string) => void
 const MAXW = 2000
@@ -12,12 +13,14 @@ const MAXW = 2000
 export type PlanData = {
   page_id: string; page_no: number; w: number; h: number; k: number; px_per_m: number; basis: string
   regions: (Omit<RoomRegion, 'items'> & { fit: number })[]
+  cad?: { floor_id: string; floor_label: string; lambda: number; T: { a: number; b: number; tx: number; ty: number }; inliers: number; rooms: { label: string; cad_room: number; cad_area: number; cad_names: string[] }[] }
   area_m2: number; counts: { chairs: number; tables: number }; items: { x: number; y: number; t: 'c' | 't' }[]
 }
 export type CameraData = {
   plan_page_id: string; plan_page_no: number; inliers: number
   cam: { x: number; y: number }; dir: { dx: number; dy: number }; half: number; range: number // toạ độ chuẩn hoá theo trang mặt bằng
   thumb: { x: number; y: number; w: number; h: number }; dir_vn: string
+  cad?: { floor_label: string; room_id: number | null; names: string[]; area_m2: number | null; view_rooms: string[] }
   visible: { chairs: number; tables: number }; rooms_in_view: string[]
 }
 
@@ -62,6 +65,9 @@ export async function analyzePlans(project: Project, rooms: Room[], pages: Page[
   const imgs = new Map<string, ImageData>()
   const found: { page: Page; reg: RoomRegion; room: Room; score: number }[] = []
   const planInfo = new Map<string, { k: number; basis: string; w: number; h: number }>()
+  const floors = (await must(supabase.from('floor_plans').select('*').eq('project_id', project.id))) as FloorPlan[]
+  const cadOf = new Map<string, NonNullable<PlanData['cad']> & { fp: FloorPlan }>()
+  await supabase.from('warnings').delete().eq('project_id', project.id).like('text', '[Mặt bằng gốc]%')
   for (const pg of planPages) {
     log(`Mặt bằng trang ${pg.page_no}: đang tìm nhãn phòng...`)
     const img = await loadImage(pg.image_path); imgs.set(pg.id, img)
@@ -69,7 +75,16 @@ export async function analyzePlans(project: Project, rooms: Room[], pages: Page[
     if (seeds.length < 1) { log(`  không thấy nhãn "TÊN / S=..M²" trên mặt bằng`); continue }
     log(`  ${seeds.length} nhãn – đang tách vùng (≈10 giây)...`)
     await new Promise(r => setTimeout(r, 30))
-    const seg = segmentRooms(cv, img, seeds)
+    let seg = segmentRooms(cv, img, seeds)
+    // đối chiếu với mặt bằng gốc vector (nếu có): lấy tỉ lệ thật và diện tích thật
+    let best: { fp: FloorPlan; m: NonNullable<ReturnType<typeof matchConceptToCad>> } | null = null
+    for (const fp of floors) if (fp.geometry) { const m = matchConceptToCad(seeds, fp.geometry, seg.k); if (m && (!best || m.inliers + m.names * 0.5 > best.m.inliers + best.m.names * 0.5)) best = { fp, m } }
+    if (best) {
+      const g = best.fp.geometry!, kTrue = Math.pow(1 / (best.m.lambda * g.m_per_pt), 2)
+      log(`  khớp mặt bằng gốc "${best.fp.floor_label}": ${best.m.inliers}/${seeds.length} nhãn trùng phòng, tỉ lệ thật ${(1 / (best.m.lambda * g.m_per_pt) / 1).toFixed(0)} px/m`)
+      if (Math.abs(kTrue / seg.k - 1) > 0.1) { await new Promise(r => setTimeout(r, 30)); seg = segmentRooms(cv, img, seeds, kTrue) }
+      cadOf.set(pg.id, { fp: best.fp, floor_id: best.fp.id, floor_label: best.fp.floor_label, lambda: best.m.lambda, T: best.m.T, inliers: best.m.inliers, rooms: best.m.pairs.map(pr => { const cr = g.rooms.find(r => r.id === pr.roomId)!; return { label: seeds[pr.li].label, cad_room: cr.id, cad_area: cr.area_m2, cad_names: cr.names } }) })
+    } else if (floors.some(f => f.geometry)) log('  chưa khớp được với mặt bằng gốc nào (kiểm tra tầng/tỉ lệ đã tải)')
     planInfo.set(pg.id, { k: seg.k, basis: seg.kBasis, w: img.width, h: img.height })
     for (const reg of seg.rooms) {
       let best: Room | null = null, bs = 0
@@ -89,6 +104,14 @@ export async function analyzePlans(project: Project, rooms: Room[], pages: Page[
     const data: PlanData = {
       page_id: bestPage.id, page_no: bestPage.page_no, w: info.w, h: info.h, k: info.k, px_per_m: Math.sqrt(info.k), basis: info.basis,
       regions: regs.map(({ items, ...r }) => r), area_m2: regs.reduce((s, r) => s + r.area_m2, 0), counts, items: regs.flatMap(r => r.items),
+    }
+    const cad = cadOf.get(bestPage.id)
+    if (cad) {
+      const { fp, ...c } = cad; data.cad = c
+      for (const r of c.rooms.filter(x => mine.some(f => f.reg.label === x.label))) {
+        const reg = regs.find(x => x.label === r.label)
+        if (reg && Math.abs(reg.area_m2 - r.cad_area) / r.cad_area > 0.15) await supabase.from('warnings').insert({ project_id: project.id, room_id: room.id, text: `[Mặt bằng gốc] "${r.label}": concept ghi ${reg.area_m2} m², bản vẽ gốc ${fp.floor_label} đo được ${r.cad_area} m² – lệch ${Math.round((Math.abs(reg.area_m2 - r.cad_area) / r.cad_area) * 100)}%, cần kiểm tra.` })
+      }
     }
     planOf.set(room.id, data)
     await must(supabase.from('rooms').update({ plan: data }).eq('id', room.id))
@@ -139,11 +162,22 @@ export async function analyzePlans(project: Project, rooms: Room[], pages: Page[
         const sx = f.reg.seed.x * W - c.x, sy = f.reg.seed.y * H - c.y, d = Math.hypot(sx, sy)
         if (d < range && Math.acos(Math.max(-1, Math.min(1, (sx * dx + sy * dy) / Math.max(1, d)))) <= half) inView.push(f.reg.label)
       }
+      let cadInfo: CameraData['cad'] | undefined
+      const cm = cadOf.get(hit.page.id)
+      if (cm) {
+        const g = cm.fp.geometry!, cp = applyT(cm.T, c)
+        const R = g.rooms.map(r => ({ r, poly: r.poly.map(p => [p[0] * g.w, p[1] * g.h]) }))
+        const here = R.find(x => inPoly(x.poly, cp.x, cp.y))
+        const rangePt = 12 / g.m_per_pt, cdx = cm.T.a * dx - cm.T.b * dy, cdy = cm.T.b * dx + cm.T.a * dy, cl = Math.hypot(cdx, cdy) || 1
+        const vr: string[] = []
+        for (const x of R) { const vx = x.r.cx * g.w - cp.x, vy = x.r.cy * g.h - cp.y, d = Math.hypot(vx, vy); if (d < 1 || d > rangePt) continue; if (Math.acos(Math.max(-1, Math.min(1, (vx * cdx + vy * cdy) / (d * cl)))) <= half) vr.push(`${x.r.names[0] ?? '#' + x.r.id} (${x.r.area_m2} m²)`) }
+        cadInfo = { floor_label: cm.floor_label, room_id: here?.r.id ?? null, names: here?.r.names ?? [], area_m2: here?.r.area_m2 ?? null, view_rooms: vr }
+      }
       const data: CameraData = {
         plan_page_id: hit.page.id, plan_page_no: hit.page.page_no, inliers: hit.inliers,
         cam: { x: c.x / W, y: c.y / H }, dir: { dx, dy }, half, range: range / W,
         thumb: { x: cam.thumb.x / img.width, y: cam.thumb.y / img.height, w: cam.thumb.w / img.width, h: cam.thumb.h / img.height },
-        dir_vn: dirWords(dx, dy), visible: vis, rooms_in_view: [...new Set(inView)],
+        dir_vn: dirWords(dx, dy), cad: cadInfo, visible: vis, rooms_in_view: [...new Set(inView)],
       }
       await must(supabase.from('pages').update({ camera: data }).eq('id', pg.id)); ok++
       log(`Trang ${pg.page_no} (${room.code}): camera nhìn ${data.dir_vn}, thấy ~${vis.chairs} ghế, ~${vis.tables} bàn  [khớp ${hit.inliers} điểm]`)
@@ -196,6 +230,7 @@ export function planContext(room: Room & { plan?: PlanData | null }, page: Page 
   const c = page.camera
   if (c?.plan_page_id) {
     parts.push(`Góc chụp: camera ${c.dir_vn} trên mặt bằng; trong tầm nhìn có khoảng ${c.visible.chairs} ghế, ${c.visible.tables} bàn.`)
+    if (c.cad?.room_id) parts.push(`Theo bản vẽ gốc ${c.cad.floor_label}: camera đặt trong ${c.cad.names[0] ?? 'phòng #' + c.cad.room_id}${c.cad.area_m2 ? ` (${c.cad.area_m2} m²)` : ''}${c.cad.view_rooms.length ? `; trong tầm nhìn: ${c.cad.view_rooms.join(', ')}` : ''}.`)
     if (c.rooms_in_view.length) parts.push(`Khu vực trong tầm nhìn: ${c.rooms_in_view.join('; ')}.`)
   }
   return parts.length ? parts.join(' ') + ' Chỉ dùng làm tham chiếu để đếm đúng số lượng; vẫn chỉ liệt kê thứ nhìn thấy.' : null

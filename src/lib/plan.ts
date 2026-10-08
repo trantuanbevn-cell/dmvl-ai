@@ -169,7 +169,7 @@ export function roomLabels(words: Word[], img: ImageData): Seed[] {
 // Cách làm: tường = nét tối DÀY (mở 5×5 để bỏ chữ, đường kích thước, nét đồ rời). Từ nhãn của mỗi phòng loang ra trong phần sàn không bị tường chặn.
 //  - phòng kín: vùng loang xong tự dừng, diện tích ≈ S ghi trên nhãn → tính tỉ lệ pixel/m² từ các phòng kín (trung vị)
 //  - phòng mở (open office…): nhiều nhãn loang đồng thời, mỗi nhãn chỉ lấy tối đa ≈ S·k pixel → hình dạng gần đúng quanh nhãn
-export function segmentRooms(cv: any, img: ImageData, seeds: Seed[]): { rooms: RoomRegion[]; k: number; kBasis: 'closed-rooms' | 'fallback' } {
+export function segmentRooms(cv: any, img: ImageData, seeds: Seed[], kOverride?: number): { rooms: RoomRegion[]; k: number; kBasis: 'closed-rooms' | 'fallback' | 'cad' } {
   const { width: W, height: H, data } = img
   const gray = new Uint8Array(W * H)
   for (let i = 0, p = 0; i < W * H; i++, p += 4) gray[i] = (0.3 * data[p] + 0.59 * data[p + 1] + 0.11 * data[p + 2]) | 0
@@ -223,7 +223,8 @@ export function segmentRooms(cv: any, img: ImageData, seeds: Seed[]): { rooms: R
   // tỉ lệ pixel/m²: phân vị 35% của (diện tích vùng / S) – phòng kín chiếm đa số, phòng bị lan rộng bị loại bớt
   const ratios = seeds.map((s, i) => cnt[i] / s.area).filter(r => r > 0).sort((x, y) => x - y)
   let k = ratios.length ? ratios[Math.floor((ratios.length - 1) * 0.35)] : 0
-  const kBasis: 'closed-rooms' | 'fallback' = ratios.length >= 4 ? 'closed-rooms' : 'fallback'
+  let kBasis: 'closed-rooms' | 'fallback' | 'cad' = ratios.length >= 4 ? 'closed-rooms' : 'fallback'
+  if (kOverride && kOverride > 0) { k = kOverride; kBasis = 'cad' }
   // (b) phòng lan quá S·k → giữ phần gần nhãn nhất (loang theo khoảng cách đường đi)
   const budget = seeds.map(s => Math.round(s.area * k * 1.1))
   seeds.forEach((s, i) => {

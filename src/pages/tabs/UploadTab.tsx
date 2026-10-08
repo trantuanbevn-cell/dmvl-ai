@@ -6,6 +6,7 @@ import { ROOM_TYPES } from '../../lib/codes'
 import type { ProjectData } from '../../lib/useProject'
 import { roomStats, heroUrl } from '../../lib/progress'
 import LogBox, { useLog } from '../../components/LogBox'
+import FloorPlans from '../../components/FloorPlans'
 
 const KINDS: Record<string, string> = { cover: 'Bìa', moodboard: 'Moodboard', plan: 'Mặt bằng', render: 'Phối cảnh', other: 'Khác', unknown: 'Chưa phân loại' }
 
@@ -48,6 +49,8 @@ export default function UploadTab({ d }: { d: ProjectData }) {
         </div>
         <LogBox lines={lines} />
       </div>
+
+      <FloorPlans d={d} />
 
       {d.rooms.length > 0 && (
         <div className="card">
