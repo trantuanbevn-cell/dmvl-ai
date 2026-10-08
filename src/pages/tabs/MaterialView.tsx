@@ -17,7 +17,8 @@ export function StatusDot({ s }: { s: string }) {
 export default function MaterialView({ d }: { d: ProjectData }) {
   const live = d.entries.filter(e => e.status !== 'rejected')
   const secs = SECTIONS.map(sec => ({ sec, list: live.filter(e => sectionOf(e).key === sec.key) })).filter(x => x.list.length)
-  const [only, setOnly] = useState<string>('')          // '' = tất cả
+  const [onlyRaw, setOnly] = useState<string>('')          // '' = tất cả
+  const only = secs.some(x => x.sec.key === onlyRaw) ? onlyRaw : ''   // tab hết vật liệu thì tự biến mất
   const [roomId, setRoomId] = useState<string>('')      // '' = mọi phòng
   const [lang, setLang] = useState<Lang>('vn')
   const [flt, setFlt] = useState<'all' | 'pending' | 'inferred' | 'missing'>('all')
