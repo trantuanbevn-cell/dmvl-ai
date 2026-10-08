@@ -18,6 +18,7 @@ export type Entry = {
   mat_view?: { img?: string | null; region?: number[] | null } | null
 }
 export type Occurrence = { id: string; entry_id: string; room_id: string | null; page_id: string | null; category: string | null; bbox: number[] | null; qty: number | null; confidence: number | null; note: string | null; view?: CropViewT | null }
+export type ProjectRule = { id: string; project_id: string; room_ids: string[]; elements: string[]; title_vn: string | null; title_en: string | null; body_en: string | null; body_vn: string | null; source: string | null; sort: number }
 export type Warning = { id: string; project_id: string; room_id: string | null; text: string; resolved: boolean }
 
 export const STATUS_VN: Record<string, string> = { pending: 'Chờ duyệt', approved: 'Đã xác nhận', rejected: 'Loại bỏ', review: 'Cần TVTK xem lại' }

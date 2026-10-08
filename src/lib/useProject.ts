@@ -2,23 +2,24 @@ import { setNameOverrides } from './sections'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase, signedUrls } from './supabase'
 import { toast } from './toast'
-import type { Project, Room, Page, Entry, Occurrence, Warning, FloorPlan } from './types'
+import type { Project, Room, Page, Entry, Occurrence, Warning, FloorPlan, ProjectRule } from './types'
 
 export type ProjectData = {
-  project: Project | null; rooms: Room[]; pages: Page[]; entries: Entry[]; occ: Occurrence[]; warnings: Warning[]; floors: FloorPlan[]
+  project: Project | null; rooms: Room[]; pages: Page[]; entries: Entry[]; occ: Occurrence[]; warnings: Warning[]; floors: FloorPlan[]; rules: ProjectRule[]
   urls: Record<string, string>; loading: boolean; reload: () => Promise<void>
 }
 
 export function useProject(id: string): ProjectData {
-  const [s, setS] = useState<Omit<ProjectData, 'reload'>>({ project: null, rooms: [], pages: [], entries: [], occ: [], warnings: [], floors: [], urls: {}, loading: true })
+  const [s, setS] = useState<Omit<ProjectData, 'reload'>>({ project: null, rooms: [], pages: [], entries: [], occ: [], warnings: [], floors: [], rules: [], urls: {}, loading: true })
   const reload = useCallback(async () => {
-    const [p, r, pg, e, w, fl] = await Promise.all([
+    const [p, r, pg, e, w, fl, ru] = await Promise.all([
       supabase.from('projects').select('*').eq('id', id).single(),
       supabase.from('rooms').select('*').eq('project_id', id).order('sort'),
       supabase.from('pages').select('*').eq('project_id', id).order('page_no'),
       supabase.from('entries').select('*').eq('project_id', id).order('code'),
       supabase.from('warnings').select('*').eq('project_id', id),
       supabase.from('floor_plans').select('*').eq('project_id', id).order('created_at'),
+      supabase.from('project_rules').select('*').eq('project_id', id).order('sort'),
     ])
     const entries = (e.data ?? []) as Entry[]
     let occ: Occurrence[] = []
@@ -33,7 +34,7 @@ export function useProject(id: string): ProjectData {
       ...occ.map(o => o.view?.img).filter(Boolean) as string[], ...entries.map(e => e.mat_view?.img).filter(Boolean) as string[]]
     const urls = paths.length ? await signedUrls(paths) : {}
     setNameOverrides((p.data as any)?.section_names)
-    setS({ project: p.data as Project, rooms: (r.data ?? []) as Room[], pages, entries, occ, warnings: (w.data ?? []) as Warning[], floors, urls, loading: false })
+    setS({ project: p.data as Project, rooms: (r.data ?? []) as Room[], pages, entries, occ, warnings: (w.data ?? []) as Warning[], floors, rules: (ru.data ?? []) as ProjectRule[], urls, loading: false })
   }, [id])
   useEffect(() => { reload() }, [reload])
   // Đồng bộ trực tiếp: ai sửa gì, mọi người thấy ngay (gộp nhiều thay đổi liên tiếp thành 1 lần tải lại)

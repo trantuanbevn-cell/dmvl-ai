@@ -1,3 +1,4 @@
+import OpRuleBadge from './OpRuleBadge'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import ProductReadDialog from './ProductReadDialog'
@@ -64,6 +65,7 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
         </div>
         <button className="btn ghost sm" onClick={onClose}>✕</button>
       </div>
+      <OpRuleBadge d={d} entryId={entry.id} />
 
       <fieldset className="plain" disabled={!canEdit}>
       <div className="status-row">
