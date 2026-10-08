@@ -14,6 +14,7 @@ export type Entry = {
   qty: number | null; unit: string | null; qty_flag: string | null; qty_note: string | null
   source: 'image' | 'inferred' | 'manual'; status: 'pending' | 'approved' | 'rejected' | 'review'
   note_vn: string | null; note_en: string | null; enriched: boolean; sort: number
+  link_id?: string | null
   mat_view?: { img?: string | null; region?: number[] | null } | null
 }
 export type Occurrence = { id: string; entry_id: string; room_id: string | null; page_id: string | null; category: string | null; bbox: number[] | null; qty: number | null; confidence: number | null; note: string | null; view?: CropViewT | null }

@@ -6,6 +6,10 @@ import { locationsOf } from '../../lib/locations'
 import { toast } from '../../lib/toast'
 import { useAuth } from '../../lib/auth'
 import OccCrop from '../../components/OccCrop'
+import EntryPanel from '../../components/EntryPanel'
+import { checkEntries } from '../../lib/checks'
+import { linkSuggestions, linkConflicts, linkEntries, resyncGroup } from '../../lib/entryLink'
+import type { Lang } from '../../lib/sections'
 
 function Side({ d, e, tag, onKeep, busy }: { d: ProjectData; e: Entry; tag: string; onKeep?: () => void; busy: boolean }) {
   const shots = d.occ.filter(o => o.entry_id === e.id && o.bbox && o.page_id)
@@ -29,6 +33,16 @@ export default function CheckView({ d }: { d: ProjectData }) {
   const [skip, setSkip] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('dmvl-dup-skip') ?? '[]') } catch { return [] } })
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState<string | null>(null) // khoá cặp đang xem chi tiết
+  const [lang, setLang] = useState<Lang>('vn')
+  const [sel, setSel] = useState<string | null>(null)
+  const [ran, setRan] = useState<{ at: Date; n: number } | null>(null)
+  const [running, setRunning] = useState(false)
+  const [lskip, setLskip] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('dmvl-link-skip') ?? '[]') } catch { return [] } })
+  const issues = useMemo(() => checkEntries(d, lang), [d.entries, d.occ, lang])
+  const nErr = issues.filter(r => r.issues.some(i => i.kind === 'err')).length
+  const sugg = useMemo(() => linkSuggestions(d.entries).filter(x => !lskip.includes(x.a.id + x.b.id)), [d.entries, lskip])
+  const conflicts = useMemo(() => linkConflicts(d.entries), [d.entries])
+  const selEntry = d.entries.find(e => e.id === sel)
   const keyOf = (p: DupPair) => p.keep.id + p.dup.id
   const dups = useMemo(() => findDuplicates(d.entries).filter(p => !skip.includes(keyOf(p))), [d.entries, skip])
   const cur = dups.findIndex(p => keyOf(p) === open), pair = cur >= 0 ? dups[cur] : null
@@ -38,9 +52,57 @@ export default function CheckView({ d }: { d: ProjectData }) {
     try { await mergeEntries(keep, dup, d.entries); toast(`Đã gộp ${dup.code} vào ${keep.code}`, 'ok'); setOpen(null) } catch (e) { toast(String(e)) }
     setBusy(false)
   }
+  /** Rà lại toàn bộ: tải lại dữ liệu mới nhất từ mọi người đang sửa rồi tính lại mọi kiểm tra */
+  const runAll = async () => {
+    setRunning(true)
+    try { await d.reload(); setRan({ at: new Date(), n: 0 }); toast('Đã rà lại toàn bộ danh mục theo dữ liệu mới nhất', 'ok') } catch (e) { toast(String(e)) }
+    setRunning(false)
+  }
+  const linkSkip = (a: Entry, b: Entry) => { const n = [...lskip, a.id + b.id]; setLskip(n); try { localStorage.setItem('dmvl-link-skip', JSON.stringify(n)) } catch { /* */ } }
   const go = (dir: number) => { const n = dups[cur + dir]; setOpen(n ? keyOf(n) : null) }
   return (
     <div className="stack">
+      <div className="card">
+        <div className="row between" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <div><h3 style={{ margin: 0 }}>Rà soát toàn bộ danh mục</h3>
+            <div className="small muted">{ran ? `Đã chạy lúc ${ran.at.toLocaleTimeString('vi-VN')} – ` : ''}{dups.length} mã nghi trùng · {issues.length} mã có vấn đề ({nErr} sai/lệch) · {sugg.length} gợi ý liên kết · {conflicts.length} nhóm liên kết lệch</div></div>
+          <div className="row gap">
+            <select value={lang} onChange={e => setLang(e.target.value as Lang)} title="Ngôn ngữ dùng để kiểm tra ô thiếu"><option value="vn">Kiểm tiếng Việt</option><option value="both">Kiểm song ngữ</option></select>
+            <button className="btn primary" disabled={running} onClick={runAll}>{running ? 'Đang rà…' : '▶ Chạy kiểm tra lại toàn bộ'}</button>
+          </div>
+        </div>
+        <p className="small muted" style={{ marginBottom: 0 }}>Dùng ở bước cuối, sau khi mọi người đã nhập xong: nút này tải lại dữ liệu mới nhất rồi rà lại mã trùng, thông tin thiếu/sai và các mã liên kết.</p>
+      </div>
+      <div className="card">
+        <h3>Mã sai hoặc thiếu thông tin ({issues.length})</h3>
+        {!issues.length ? <div className="ok-text">✓ Không phát hiện mã nào sai hoặc thiếu thông tin.</div> : (
+          <div style={{ overflowX: 'auto' }}><table className="tbl small" style={{ width: '100%' }}>
+            <thead><tr><th>Mã</th><th>Hạng mục</th><th>Vấn đề cần xử lý</th><th>Phòng</th><th /></tr></thead>
+            <tbody>{issues.map(({ e, issues: is }) => (
+              <tr key={e.id}>
+                <td><b className="code">{e.code}</b></td>
+                <td>{e.name_vn}</td>
+                <td>{is.map((i, k) => <span key={k} className={'chk-tag chk-' + i.kind}>{i.text}</span>)}</td>
+                <td className="small">{locationsOf(e.id, d.occ, d.rooms, d.pages).map(l => l.room.code).join(', ') || '—'}</td>
+                <td><button className="btn sm" onClick={() => setSel(e.id)}>Mở & sửa</button></td>
+              </tr>))}</tbody>
+          </table></div>)}
+      </div>
+      {(sugg.length > 0 || conflicts.length > 0) && <div className="card">
+        <h3>Vật liệu liên kết với nhau</h3>
+        <p className="small muted">Các mã dùng chung một vật liệu/màu thật (vd cùng mã sơn xanh dùng cho tường và cho tranh). Khi đã liên kết, sửa mã sản phẩm, màu, hãng, xuất xứ, link ở một mã thì các mã kia tự đổi theo.</p>
+        {conflicts.map(c => (
+          <div key={c.link_id} className="row sm-gap" style={{ padding: '8px 0', borderTop: '1px solid #eee', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 260 }}><span className="chk-tag chk-err">Đang lệch</span> {c.members.map(m => <b key={m.id} style={{ marginRight: 8 }}>{m.code}</b>)}<div className="small muted">Khác nhau ở: {c.keys.join(', ')}</div></div>
+            {canEdit && c.members.map(m => <button key={m.id} className="btn sm" onClick={async () => { try { await resyncGroup(m, c.members); d.reload() } catch (e) { toast(String(e)) } }}>Đồng bộ theo {m.code}</button>)}
+          </div>))}
+        {sugg.map(({ a, b, why }) => (
+          <div key={a.id + b.id} className="row sm-gap" style={{ padding: '8px 0', borderTop: '1px solid #eee', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 260 }}><b>{a.code}</b> {a.name_vn}<br /><b>{b.code}</b> {b.name_vn}<div className="small muted">Gợi ý liên kết: {why}</div></div>
+            {canEdit && <><button className="btn primary sm" onClick={async () => { try { await linkEntries(a, b, d.entries); d.reload() } catch (e) { toast(String(e)) } }}>🔗 Liên kết (theo {a.code})</button>
+              <button className="btn ghost sm" onClick={() => linkSkip(a, b)}>Không liên quan</button></>}
+          </div>))}
+      </div>}
       <div className="card">
         <h3>Kiểm tra mã trùng ({dups.length})</h3>
         <p className="small muted">Cùng một vật liệu thật nhưng đang có nhiều mã (thường do nhiều góc camera hoặc do nhiều người cùng thêm). Bấm <b>Xem chi tiết</b> để so hai mã cạnh nhau kèm ảnh crop trên phối cảnh, rồi xác nhận gộp hoặc khác nhau. Các mục còn thiếu thông tin xem ngay trong từng phòng.</p>
@@ -67,6 +129,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
             </div>
           </div>
         </div>)}
+      {selEntry && <EntryPanel d={d} entry={selEntry} onClose={() => setSel(null)} />}
     </div>
   )
 }

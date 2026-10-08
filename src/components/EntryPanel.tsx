@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { saveEntry, linkedWith, linkEntries, unlinkEntry, SYNC_LABEL } from '../lib/entryLink'
 import { GROUPS, CATEGORIES } from '../lib/codes'
 import { writeSpecs, applyProduct } from '../lib/pipeline'
 import { librarySuggestions, saveToLibrary, searchLinks, LibProduct } from '../lib/library'
@@ -17,7 +18,7 @@ function Field({ e, k, label, area, onSaved, type = 'text' }: { e: Entry; k: F; 
     const old = (e[k] as any) ?? ''
     if (String(old) === v) return
     const val = type === 'number' ? (v === '' ? null : Number(v)) : v || null
-    const { error } = await supabase.from('entries').update({ [k]: val }).eq('id', e.id)
+    const error = await saveEntry(e, { [k]: val })
     if (error) alert(error.message); else onSaved()
   }
   return (
@@ -33,7 +34,7 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
   const [busy, setBusy] = useState('')
   const [lang, setLang] = useState<'vn' | 'en'>('vn')
   const saved = () => d.reload()
-  const set = async (patch: Partial<Entry>) => { await supabase.from('entries').update(patch).eq('id', entry.id); d.reload() }
+  const set = async (patch: Partial<Entry>) => { await saveEntry(entry, patch); d.reload() }
   const occ = d.occ.filter(o => o.entry_id === entry.id)
   const pageById = new Map(d.pages.map(p => [p.id, p]))
   const roomById = new Map(d.rooms.map(r => [r.id, r]))
@@ -42,7 +43,7 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
 
   const [lib, setLib] = useState<(LibProduct & { dE: number | null })[]>([])
   useEffect(() => { librarySuggestions(entry).then(setLib) }, [entry.id, entry.color_hex, entry.group_code])
-  const choose = async (c: LibProduct) => { await applyProduct(entry, c); d.reload() }
+  const choose = async (c: LibProduct) => { await applyProduct(entry, c); if (entry.link_id) { const { data } = await supabase.from('entries').select('product_code,color_hex,brand,product_name,origin,product_url,product_image_url').eq('id', entry.id).single(); if (data) await supabase.from('entries').update(data).eq('link_id', entry.link_id) } d.reload() }
   const save = async () => { try { await saveToLibrary(entry); setLib(await librarySuggestions(entry)); alert('Đã lưu vào thư viện công ty – lần sau sẽ được gợi ý tự động.') } catch (e) { alert(String(e)) } }
   const rewrite = async () => { setBusy('enrich'); try { await writeSpecs(d.project!, { ids: [entry.id] }); await d.reload() } catch (e) { alert(String(e)) } setBusy('') }
   const del = async () => { if (confirm(`Xoá mã ${entry.code}?`)) { await supabase.from('entries').delete().eq('id', entry.id); onClose(); d.reload() } }
@@ -82,6 +83,12 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
         <div className="swatch" style={{ background: entry.color_hex ?? '#ddd' }} title="Màu trích từ ảnh"><span>{entry.color_hex}</span></div>
       </div>
 
+      <div className="loc-box link-box"><b>🔗 Liên kết đồng bộ:</b>{' '}
+        {linkedWith(entry, d.entries).map(x => <span key={x.id} className="loc-tag">{x.code} {x.name_vn}{canEdit && <a className="loc-x" title="Bỏ liên kết" onClick={async () => { await unlinkEntry(x, d.entries); d.reload() }}>✕</a>}</span>)}
+        {!entry.link_id && <span className="muted small">chưa liên kết – </span>}
+        <span className="muted small">sửa {Object.values(SYNC_LABEL).join(', ').toLowerCase()} ở mã này thì các mã liên kết đổi theo.</span>
+        {canEdit && <select className="loc-add" value="" onChange={async x => { const o = d.entries.find(y => y.id === x.target.value); if (!o) return; try { await linkEntries(entry, o, d.entries); d.reload() } catch (err) { alert(String((err as Error).message ?? err)) } }}><option value="">＋ liên kết với mã khác…</option>{d.entries.filter(y => y.id !== entry.id && y.status !== 'rejected' && !(entry.link_id && y.link_id === entry.link_id)).map(y => <option key={y.id} value={y.id}>{y.code} – {y.name_vn}</option>)}</select>}
+      </div>
       <div className="loc-box"><b>Vị trí:</b>{' '}
         {locationsOf(entry.id, d.occ, d.rooms, d.pages).map(l => <span key={l.room.id} className="loc-tag">{l.room.code} {l.room.name_vn}{l.pages.length ? ` · tr.${l.pages.join(',')}` : ''}</span>)}
         {!occ.some(o => o.room_id) && <span className="muted">chưa gán phòng</span>}
