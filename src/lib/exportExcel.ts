@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs'
 import { groupOf, CATEGORIES } from './codes'
 import { GROUPS } from './codes'
-import { intlPrefix, groupBySection, sectionTitle, bandTitle, exportSymbols, symbolOf, tx, planSheets, type Lang, type ExportOpts, type Section } from './sections'
+import { PREFIXES, groupBySection, sectionTitle, bandTitle, exportSymbols, symbolOf, tx, planSheets, type Lang, type ExportOpts, type Section } from './sections'
 import { signedUrls } from './supabase'
 import { viewCanvas, regionCanvas, swatchBase64, loadImage } from './crop'
 import { locationsOf, locationLines } from './locations'
@@ -202,12 +202,13 @@ export async function exportExcel(d: ExportData, o: ExportOpts) {
   }
   // 3) Chú giải ký hiệu (chuẩn viết tắt tiếng Anh) – chỉ các nhóm có trong file
   {
-    const used = GROUPS.filter(g => list.some(e => e.group_code === g.code))
+    const used = PREFIXES.filter(p => list.some(e => p.groups.includes(e.group_code)))
     const ls = wb.addWorksheet(L === 'en' ? 'Legend' : 'Chú giải ký hiệu')
-    ls.getRow(1).values = [h('KÍ HIỆU', 'CODE'), h('Tên tiếng Anh', 'English name'), h('Tên tiếng Việt', 'Vietnamese name')]
+    ls.getRow(1).values = [h('KÍ HIỆU', 'CODE'), h('Tên tiếng Anh', 'English name'), h('Tên tiếng Việt', 'Vietnamese name'), h('Bao gồm', 'Includes')]
     ls.getRow(1).eachCell(c => { c.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BROWN } }; c.alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' } })
-    ls.getColumn(1).width = 12; ls.getColumn(2).width = 50; ls.getColumn(3).width = 50
-    used.forEach((g, i) => { const r = ls.getRow(i + 2); r.values = [intlPrefix(g.code), g.en, g.vn]; r.eachCell(c => { c.font = { name: 'Arial', size: 9 }; c.alignment = { vertical: 'top', horizontal: 'left', wrapText: true }; c.border = border }); r.getCell(1).font = { name: 'Arial', size: 9, bold: true, color: { argb: BROWN } } })
+    ls.getColumn(1).width = 12; ls.getColumn(2).width = 32; ls.getColumn(3).width = 32; ls.getColumn(4).width = 70
+    used.forEach((p, i) => { const r = ls.getRow(i + 2); r.values = [p.prefix, p.en, p.vn, L === 'en' ? p.includes_en : L === 'vn' ? p.includes_vn : `${p.includes_vn}\n${p.includes_en}`]; r.eachCell(c => { c.font = { name: 'Arial', size: 9 }; c.alignment = { vertical: 'top', horizontal: 'left', wrapText: true }; c.border = border }); r.getCell(1).font = { name: 'Arial', size: 9, bold: true, color: { argb: BROWN } } })
+    const note = ls.getRow(used.length + 3); note.getCell(1).value = h('Ghi chú: ký hiệu = viết tắt tiếng Anh của họ vật liệu; loại con (gỗ tự nhiên, gỗ công nghiệp…) ghi ở cột Hạng mục/Thông số.', 'Note: code = English abbreviation of the material family; sub-types (solid wood, engineered wood…) are described in the Item / Specification columns.'); note.getCell(1).font = { name: 'Arial', size: 9, italic: true }
   }
   const buf = await wb.xlsx.writeBuffer()
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })

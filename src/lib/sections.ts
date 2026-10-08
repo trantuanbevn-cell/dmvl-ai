@@ -67,29 +67,64 @@ export function legacyCodes(entries: Entry[]): Map<string, string> {
   for (const e of sorted) { const p = legacyPrefix(e.group_code); const k = (n.get(p) ?? 0) + 1; n.set(p, k); out.set(e.id, `${p}${k}`) }
   return out
 }
-/** Tiền tố ký hiệu theo thông lệ quốc tế (bảng finish schedule / FF&E bằng tiếng Anh): CPT thảm, PT sơn, CT gạch, ST đá, WD gỗ, LAM laminate, MTL kim loại, FAB vải, LTH da, MWK đồ liền tường (millwork)… */
-export const INTL: Record<string, string> = {
-  CT: 'CT', ST: 'ST', ES: 'ES', LVT: 'LVT', CPT: 'CPT', BS: 'WB', PT: 'PT', SP: 'SC', WC: 'WC', WP: 'WP', GWB: 'GWB', ACT: 'ACT',
-  WD: 'WD', LM: 'LAM', MT: 'MTL', GL: 'GL', MR: 'MR', FB: 'FAB', LE: 'LTH', DR: 'DR', HW: 'HW', JN: 'MWK', FH: 'FH', FF: 'FF',
-  LT: 'LT', SF: 'PF', BA: 'BA', EQ: 'EQ', AW: 'ART', DC: 'ACC', WT: 'WT', SN: 'SGN', ME: 'ME',
-}
+/** Bảng tiền tố ký hiệu: MỘT họ vật liệu = MỘT tiền tố (viết tắt tiếng Anh của tên chung); loại con (gỗ tự nhiên, gỗ công nghiệp…) ghi ở tên hạng mục, không đổi tiền tố.
+ *  Tham chiếu: danh mục viết tắt bản vẽ nội thất (CT, WD, LAM, CPT, MTL, GL, MIR, MWK, PLUMB…) và bảng vật liệu hoàn thiện VA 09 06 00 (WD, CPT, GWB, ACT…). Không có chuẩn quốc tế duy nhất. */
+export type Prefix = { prefix: string; en: string; vn: string; includes_en: string; includes_vn: string; groups: string[] }
+export const PREFIXES: Prefix[] = [
+  { prefix: 'CT', en: 'Ceramic / Porcelain Tile', vn: 'Gạch ốp lát', includes_en: 'ceramic, porcelain, mosaic tile', includes_vn: 'gạch gốm, porcelain, mosaic', groups: ['CT'] },
+  { prefix: 'ST', en: 'Stone', vn: 'Đá', includes_en: 'natural stone (marble, granite…), engineered stone, quartz, terrazzo, solid surface', includes_vn: 'đá tự nhiên (marble, granite…), đá nhân tạo, quartz, terrazzo, solid surface', groups: ['ST', 'ES'] },
+  { prefix: 'WD', en: 'Wood', vn: 'Gỗ', includes_en: 'solid wood, veneer, engineered wood (MDF/MFC), melamine, laminate, acrylic panels', includes_vn: 'gỗ tự nhiên, veneer, gỗ công nghiệp (MDF/MFC), melamine, laminate, acrylic', groups: ['WD', 'LM'] },
+  { prefix: 'LVT', en: 'Resilient Flooring', vn: 'Sàn nhựa', includes_en: 'luxury vinyl tile, vinyl sheet', includes_vn: 'sàn vinyl, sàn nhựa', groups: ['LVT'] },
+  { prefix: 'CPT', en: 'Carpet', vn: 'Thảm', includes_en: 'broadloom, carpet tile', includes_vn: 'thảm cuộn, thảm tấm', groups: ['CPT'] },
+  { prefix: 'PNT', en: 'Paint', vn: 'Sơn', includes_en: 'emulsion paint, special / epoxy coatings', includes_vn: 'sơn nước, sơn đặc biệt, epoxy', groups: ['PT', 'SP'] },
+  { prefix: 'WC', en: 'Wallcovering', vn: 'Giấy / vải dán tường', includes_en: 'wallpaper, fabric wallcovering', includes_vn: 'giấy dán tường, vải dán tường', groups: ['WC'] },
+  { prefix: 'WP', en: 'Wall Panelling', vn: 'Tấm ốp tường', includes_en: 'timber slats, acoustic and decorative panels', includes_vn: 'lam gỗ, tấm tiêu âm, tấm ốp trang trí', groups: ['WP'] },
+  { prefix: 'GWB', en: 'Gypsum Board', vn: 'Thạch cao', includes_en: 'gypsum board ceiling and partition', includes_vn: 'trần, vách thạch cao', groups: ['GWB'] },
+  { prefix: 'ACT', en: 'Acoustic Ceiling', vn: 'Trần tiêu âm / đặc biệt', includes_en: 'acoustic and specialty ceilings', includes_vn: 'trần tiêu âm, trần đặc biệt', groups: ['ACT'] },
+  { prefix: 'SKT', en: 'Skirting / Base', vn: 'Len chân tường', includes_en: 'skirting, wall base, floor transition strip', includes_vn: 'len chân tường, nẹp chuyển sàn', groups: ['BS'] },
+  { prefix: 'MTL', en: 'Metal', vn: 'Kim loại', includes_en: 'stainless steel, brass, aluminium, powder-coated steel', includes_vn: 'inox, đồng thau, nhôm, thép sơn tĩnh điện', groups: ['MT'] },
+  { prefix: 'GL', en: 'Glass', vn: 'Kính', includes_en: 'clear, frosted, tempered, laminated glass', includes_vn: 'kính trong, mờ, cường lực, dán an toàn', groups: ['GL'] },
+  { prefix: 'MIR', en: 'Mirror', vn: 'Gương', includes_en: 'mirror', includes_vn: 'gương', groups: ['MR'] },
+  { prefix: 'FAB', en: 'Fabric', vn: 'Vải bọc / vải rèm', includes_en: 'upholstery and curtain fabric', includes_vn: 'vải bọc, vải rèm', groups: ['FB'] },
+  { prefix: 'LTH', en: 'Leather', vn: 'Da / giả da', includes_en: 'leather, faux leather', includes_vn: 'da thật, giả da', groups: ['LE'] },
+  { prefix: 'DR', en: 'Door', vn: 'Cửa đi', includes_en: 'door leaf, frame', includes_vn: 'cánh cửa, khung cửa', groups: ['DR'] },
+  { prefix: 'HW', en: 'Door Hardware', vn: 'Phụ kiện cửa', includes_en: 'handle, hinge, closer, lock, stop', includes_vn: 'tay nắm, bản lề, closer, khoá, chặn cửa', groups: ['HW'] },
+  { prefix: 'MWK', en: 'Millwork', vn: 'Đồ liền tường', includes_en: 'built-in joinery, casework, cabinetry', includes_vn: 'tủ, kệ, quầy, vách trang trí liền tường', groups: ['JN'] },
+  { prefix: 'FHW', en: 'Furniture Hardware', vn: 'Phụ kiện nội thất', includes_en: 'furniture and joinery hardware', includes_vn: 'phụ kiện đồ nội thất, ray, bản lề tủ', groups: ['FH'] },
+  { prefix: 'FUR', en: 'Loose Furniture', vn: 'Đồ rời', includes_en: 'chairs, tables, sofas, loose furniture (FF&E)', includes_vn: 'ghế, bàn, sofa, đồ rời', groups: ['FF'] },
+  { prefix: 'LGT', en: 'Lighting', vn: 'Thiết bị chiếu sáng', includes_en: 'luminaires, lamps', includes_vn: 'đèn, thiết bị chiếu sáng', groups: ['LT'] },
+  { prefix: 'PLB', en: 'Plumbing Fixtures', vn: 'Thiết bị vệ sinh', includes_en: 'basins, WCs, taps, showers', includes_vn: 'lavabo, bồn cầu, vòi, sen tắm', groups: ['SF'] },
+  { prefix: 'WRA', en: 'Washroom Accessories', vn: 'Phụ kiện phòng vệ sinh', includes_en: 'soap dispenser, paper holder, hand dryer', includes_vn: 'hộp xà phòng, giấy, máy sấy tay', groups: ['BA'] },
+  { prefix: 'EQP', en: 'Equipment', vn: 'Thiết bị', includes_en: 'appliances, kitchen and special equipment', includes_vn: 'thiết bị điện tử, bếp, chuyên dụng', groups: ['EQ'] },
+  { prefix: 'ART', en: 'Artwork', vn: 'Tranh / tác phẩm nghệ thuật', includes_en: 'paintings, murals, art pieces', includes_vn: 'tranh, mural, tác phẩm', groups: ['AW'] },
+  { prefix: 'DEC', en: 'Decorative Accessories', vn: 'Đồ trang trí', includes_en: 'plants, cushions, decor items', includes_vn: 'cây, gối, phụ kiện decor', groups: ['DC'] },
+  { prefix: 'WT', en: 'Window Treatment', vn: 'Rèm / màn', includes_en: 'curtains, blinds', includes_vn: 'rèm, màn', groups: ['WT'] },
+  { prefix: 'SGN', en: 'Signage', vn: 'Biển báo', includes_en: 'room signs, wayfinding', includes_vn: 'biển tên phòng, chỉ dẫn', groups: ['SN'] },
+  { prefix: 'MEP', en: 'MEP Interface', vn: 'Đầu chờ MEP', includes_en: 'exposed MEP items for coordination', includes_vn: 'đầu chờ MEP lộ ra không gian', groups: ['ME'] },
+]
+export const INTL: Record<string, string> = Object.fromEntries(PREFIXES.flatMap(p => p.groups.map(g => [g, p.prefix])))
 export const intlPrefix = (group: string) => INTL[group] ?? group
 const intlCode = (e: Entry) => { const m = /^[A-Z]+-(\d+)/.exec(e.code); return m ? `${intlPrefix(e.group_code)}-${m[1]}` : e.code }
 /** Ký hiệu bản vẽ: luôn dùng chuẩn viết tắt tiếng Anh, cho cả bản tiếng Việt và tiếng Anh (tham số lang/legacy giữ lại cho tương thích) */
 export function symbolOf(e: Entry, _lang?: Lang, _legacy?: Map<string, string>, en?: Map<string, string>): string {
   return en?.get(e.id) ?? intlCode(e)
 }
+/** Bản đồ ký hiệu cho cả danh sách (các nhóm cùng tiền tố – vd gỗ tự nhiên + melamine – dùng chung một dãy số, không trùng) */
+export const symbolMap = (entries: Entry[]) => exportSymbols(entries.filter(e => e.status !== 'rejected'), true).en
 /** Ký hiệu dùng khi xuất: tính trên đúng danh sách được xuất, có thể đánh lại số liên tục (bỏ khoảng trống do mã bị loại) */
 export function exportSymbols(list: Entry[], renumber: boolean) {
   const legacy = legacyCodes(list)
   const en = new Map<string, string>()
-  if (renumber) {
-    const gi = (c: string) => GROUPS.findIndex(g => g.code === c)
-    const n = new Map<string, number>()
-    for (const e of [...list].sort((a, b) => gi(a.group_code) - gi(b.group_code) || a.code.localeCompare(b.code, undefined, { numeric: true }))) {
-      const k = (n.get(e.group_code) ?? 0) + 1; n.set(e.group_code, k); en.set(e.id, `${intlPrefix(e.group_code)}-${String(k).padStart(2, '0')}`)
-    }
-  } else for (const e of list) en.set(e.id, intlCode(e))
+  const gi = (c: string) => GROUPS.findIndex(g => g.code === c)
+  const cnt = new Map<string, number>(), used = new Map<string, Set<number>>()
+  for (const e of [...list].sort((a, b) => gi(a.group_code) - gi(b.group_code) || a.code.localeCompare(b.code, undefined, { numeric: true }))) {
+    const pf = intlPrefix(e.group_code), u = used.get(pf) ?? new Set<number>(); used.set(pf, u)
+    let k: number
+    if (renumber) k = (cnt.get(pf) ?? 0) + 1
+    else { k = Number(/(\d+)$/.exec(e.code)?.[1] ?? 0); if (!k || u.has(k)) k = Math.max(0, ...u) + 1 }
+    cnt.set(pf, k); u.add(k)
+    en.set(e.id, `${pf}-${String(k).padStart(2, '0')}`)
+  }
   return { legacy, en }
 }
 

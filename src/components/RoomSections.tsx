@@ -2,7 +2,7 @@ import { syncLibrary } from '../lib/matLibrary'
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { CATEGORIES } from '../lib/codes'
-import { groupBySection, sectionOf, sectionTitle, bandTitle, legacyCodes, symbolOf, BANDS, type Lang } from '../lib/sections'
+import { groupBySection, sectionOf, sectionTitle, bandTitle, legacyCodes, symbolOf, symbolMap, BANDS, type Lang } from '../lib/sections'
 import { locationsOf } from '../lib/locations'
 import type { ProjectData } from '../lib/useProject'
 import type { Entry, Occurrence, Room } from '../lib/types'
@@ -47,6 +47,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   const { canEdit } = useAuth()
   const pageById = useMemo(() => new Map(d.pages.map(p => [p.id, p])), [d.pages])
   const legacy = useMemo(() => legacyCodes(d.entries), [d.entries])
+  const symMap = useMemo(() => symbolMap(d.entries), [d.entries])
   const occ = room ? d.occ.filter(o => o.room_id === room.id) : d.occ
   const ids = [...new Set(occ.map(o => o.entry_id))]
   let ents = d.entries.filter(e => (room ? ids.includes(e.id) : true) && e.status !== 'rejected')
@@ -96,7 +97,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                 return (
                   <tr key={e.id} className={(ms.length ? 'has-miss ' : '') + 'st-' + e.status + (e.id === sel ? ' sel' : '') + ' src-row-' + e.source} onClick={() => os[0] && onPick(os[0])}>
                     <td className="c-stt">{n}</td>
-                    <td className="c-code"><b>{symbolOf(e, lang, legacy)}</b>{ms.length > 0 && <div><span className="miss-badge" title={'Còn thiếu: ' + missText(ms)}>⚠ thiếu {new Set(ms.map(m => m.label)).size}</span></div>}<div><span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></div></td>
+                    <td className="c-code"><b>{symbolOf(e, lang, legacy, symMap)}</b>{ms.length > 0 && <div><span className="miss-badge" title={'Còn thiếu: ' + missText(ms)}>⚠ thiếu {new Set(ms.map(m => m.label)).size}</span></div>}<div><span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></div></td>
                     <td className="c-vl"><Ed e={e} k="product_code" ph="Mã vật liệu" miss={M('product_code')} /></td>
                     <td><select value={cat} disabled={!canEdit} onClick={x => x.stopPropagation()} onChange={x => setCat(os, x.target.value)}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{lang === 'en' ? c.en : c.vn}</option>)}</select>
                       {pair('part', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} ph="Bộ phận áp dụng" /></div>)}</td>
