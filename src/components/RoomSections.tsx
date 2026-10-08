@@ -6,7 +6,7 @@ import LinkCell from './LinkCell'
 import { toast } from '../lib/toast'
 import { saveEntry, linkedWith } from '../lib/entryLink'
 import { CATEGORIES, CATEGORY_GROUPS } from '../lib/codes'
-import { groupBySection, sectionOf, sectionTitle, bandTitle, legacyCodes, symbolOf, symbolMap, BANDS, type Lang } from '../lib/sections'
+import { groupBySection, sectionOf, SECTIONS, sectionTitle, bandTitle, legacyCodes, symbolOf, symbolMap, BANDS, type Lang } from '../lib/sections'
 import { locationsOf } from '../lib/locations'
 import type { ProjectData } from '../lib/useProject'
 import type { Entry, Occurrence, Room } from '../lib/types'
@@ -115,13 +115,16 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     if (!confirm(`Bỏ ${e.code} ${e.name_vn} khỏi phòng ${r.code} ${r.name_vn}? (hình phối cảnh của phòng này cũng bị bỏ)`)) return
     await supabase.from('occurrences').delete().eq('entry_id', e.id).eq('room_id', r.id); d.reload()
   }
-  /** Đổi hạng mục: nếu hạng mục thuộc nhóm khác (vd Biển báo → Tranh) thì chuyển luôn nhóm + đánh lại mã → tự sang tab mới */
-  const setCat = async (e: Entry, os: Occurrence[], category: string) => {
-    if (os.length) await supabase.from('occurrences').update({ category }).in('id', os.map(o => o.id))
-    const ok = CATEGORY_GROUPS[category]
+  /** Đổi hạng mục = chuyển sang tab (nhóm vật liệu) khác: đổi nhóm mã + đánh lại mã → tự sang tab mới. Danh sách lấy từ chính các tab nên luôn khớp (kể cả tên đã đổi). */
+  const SEC_CAT: Record<string, string> = { floor: 'floor', skirting: 'base', ceiling: 'ceiling', door: 'door', curtain: 'window', joinery: 'joinery', loose: 'loose', lighting: 'lighting', sanitary: 'sanitary', equipment: 'equipment', decor: 'decor', art: 'artwork', sign: 'signage', mep: 'mep' }
+  const setSection = async (e: Entry, os: Occurrence[], key: string) => {
+    const sec = SECTIONS.find(x => x.key === key); if (!sec || sectionOf(e).key === key) return
+    const cur = os[0]?.category ?? e.category ?? 'decor'
+    const category = SEC_CAT[key] ?? (key === 'wood' && cur === 'floor' ? 'joinery' : cur)
+    if (os.length && category !== cur) await supabase.from('occurrences').update({ category }).in('id', os.map(o => o.id))
     const patch: Record<string, unknown> = { category }
-    if (ok && !ok.includes(e.group_code)) {
-      const g = ok[0]
+    if (!sec.groups.includes(e.group_code)) {
+      const g = sec.groups[0]
       const max = d.entries.filter(x => x.group_code === g).reduce((m, x) => Math.max(m, parseInt(x.code.split('-').pop() ?? '0', 10) || 0), 0)
       patch.group_code = g; patch.code = `${g}-${String(max + 1).padStart(2, '0')}`
     }
@@ -155,7 +158,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                     <td className="c-stt">{n}</td>
                     <td className="c-code"><b>{symbolOf(e, lang, legacy, symMap)}</b>{ms.length > 0 && <div><span className="miss-badge" title={'Còn thiếu: ' + missText(ms)}>⚠ thiếu {new Set(ms.map(m => m.label)).size}</span></div>}{e.link_id && <div><span className="link-badge" title={'Liên kết đồng bộ với: ' + (linkedWith(e, d.entries).map(x => x.code).join(', ') || '—')}>🔗 {linkedWith(e, d.entries).map(x => x.code).join(', ')}</span></div>}<div><span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></div></td>
                     <td className="c-vl"><Ed e={e} k="product_code" ph="Mã vật liệu" miss={M('product_code')} /></td>
-                    <td><select value={cat} disabled={!canEdit} onClick={x => x.stopPropagation()} onChange={x => setCat(e, os, x.target.value)}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{lang === 'en' ? c.en : c.vn}</option>)}</select>
+                    <td><select value={sectionOf(e).key} disabled={!canEdit} onClick={x => x.stopPropagation()} onChange={x => setSection(e, os, x.target.value)}>{Object.keys(BANDS).map(b => <optgroup key={b} label={bandTitle(b, lang)}>{SECTIONS.filter(x => x.band === b).map(x => <option key={x.key} value={x.key}>{sectionTitle(x, lang)}</option>)}</optgroup>)}</select>
                       {pair('part', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} ph="Bộ phận áp dụng" /></div>)}</td>
                     <td className="c-loc">{locs.map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room?.id ? ' here' : '')}>{roomName(l.room, lang)}{canEdit && <a className="loc-x" title="Bỏ vị trí này" onClick={ev => { ev.stopPropagation(); delLoc(e, l.room) }}>✕</a>}</span>)}
                       {canEdit && <select className="loc-add" value="" onClick={x => x.stopPropagation()} onChange={x => addLoc(e, x.target.value)}><option value="">＋ thêm phòng…</option>{d.rooms.filter(r => !locs.some(l => l.room.id === r.id)).map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}</select>}</td>
