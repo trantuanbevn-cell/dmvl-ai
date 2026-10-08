@@ -289,3 +289,5 @@ input[readonly], textarea[readonly] { cursor: default }
 .oprule-card { border: 1px solid #efc4c0; border-left: 4px solid #d93025; border-radius: 8px; padding: 10px 12px; margin: 8px 0; background: #fffafa }
 .oprule-lab { font-size: 11px; font-weight: 700; color: #b3261e; text-transform: uppercase; margin-top: 6px }
 .oprule-txt { white-space: pre-wrap; color: #b3261e; font-size: 13px; line-height: 1.45 } .oprule-txt.en { font-style: italic }
+
+.sec-table .ed-pre { display: flex; align-items: flex-start; gap: 4px } .sec-table .ed-pre > b { flex: none; font-size: 11px; color: #6b5a4c; padding-top: 7px; white-space: nowrap } .sec-table .ed-pre > *:last-child { flex: 1; min-width: 0 }
