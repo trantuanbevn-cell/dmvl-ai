@@ -1,3 +1,4 @@
+import { translateSpec } from './specTranslate'
 // Đọc thông tin kỹ thuật từ trang sản phẩm của nhà sản xuất – KHÔNG dùng AI:
 // dữ liệu có cấu trúc (JSON-LD schema.org/Product, meta og:) + bảng thông số (table, dl, danh sách "Tên: giá trị").
 import type { Entry } from './types'
@@ -118,6 +119,11 @@ export function planFill(e: Entry, ex: Extracted, overwrite = false): FieldChang
   put(ex.lang === 'vn' ? 'material_vn' : 'material_en', ex.lang === 'vn' ? 'Vật liệu' : 'Material', ex.material)
   const st = specText(ex)
   put(ex.lang === 'vn' ? 'desc_vn' : 'desc_en', ex.lang === 'vn' ? 'Thông số kỹ thuật' : 'Specification', st)
+  // Thông số tiếng Việt vừa điền → dịch luôn sang tiếng Anh theo từng dòng (từ điển) để hai ngôn ngữ luôn khớp nhau; không đè bản EN tự soạn nếu không dịch hết
+  if (ex.lang === 'vn' && ch.some(c => c.key === 'desc_vn')) {
+    const t = translateSpec(st)
+    if (t.ok && t.en) ch.push({ key: 'desc_en', label: 'Thông số (EN)', old: String(e.desc_en ?? ''), value: t.en })
+  }
   put('product_image_url', 'Ảnh mẫu', ex.image)
   return ch
 }

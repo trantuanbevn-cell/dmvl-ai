@@ -1,5 +1,6 @@
 // Dàn chữ song ngữ cho file xuất: mỗi ý một dòng tiếng Việt (in đậm) rồi ngay bên dưới một dòng tiếng Anh (in nghiêng) – không bao giờ chung một dòng.
 import { tx, type Lang } from './sections'
+import { translateLine } from './specTranslate'
 import { STATUS_VN, STATUS_EN } from './types'
 import { CATEGORIES } from './codes'
 import type { Entry } from './types'
@@ -19,13 +20,24 @@ const one = (t: string): Seg[] => (t ? [{ t, k: 'n' }] : [])
 /** Chuỗi h(): “VN\nEN” khi song ngữ → hai dòng đúng loại */
 export const splitBoth = (s: string, both: boolean): Seg[] => (both ? s.split('\n').map((t, i) => ({ t, k: i === 0 ? 'vn' as const : 'en' as const })) : one(s))
 
+/** Mô tả: nếu thông số tiếng Việt là nhiều dòng “Tên: giá trị” mà bản EN lưu sẵn không cùng cấu trúc (vd EN do AI viết từ trước, VN lấy từ trang hãng) → dịch từng dòng VN sang EN để hai bên khớp nhau */
+function descPairs(e: Entry, L: Lang): Seg[] {
+  const vn = (e.desc_vn ?? '').split('\n').map(x => x.trim()).filter(Boolean), en = (e.desc_en ?? '').split('\n').map(x => x.trim()).filter(Boolean)
+  if (L !== 'vn' && vn.length >= 2 && en.length !== vn.length) {
+    const tr = vn.map(translateLine)
+    if (L === 'en') return tr.map(t => ({ t: t.en, k: 'n' as const }))
+    return vn.flatMap((t, i) => [{ t, k: 'vn' as const }, { t: tr[i].en, k: 'en' as const }])
+  }
+  if (L === 'both' && vn.length >= 2 && vn.length === en.length) return vn.flatMap((t, i) => [{ t, k: 'vn' as const }, { t: en[i], k: 'en' as const }])
+  return pair(e.desc_vn || e.material_vn, e.desc_en || e.material_en, L)
+}
 export type EntryCells = { cat: Seg[]; loc: Seg[]; spec: Seg[]; brand: Seg[]; note: Seg[] }
 export function entryCells(e: Entry, L: Lang, occCats: string[], locs: { room: { name_vn: string; name_en: string | null } }[]): EntryCells {
   const flat = (s: string | null | undefined) => (s ?? '').replace(/\n/g, ' ')
   const cat = occCats.flatMap(k => { const c = CATEGORIES.find(z => z.key === k); return c ? pair(c.vn, c.en, L) : one(k) })
   const loc = locs.length ? locs.flatMap(l => pair(flat(l.room.name_vn), flat(l.room.name_en), L)) : pair('(chưa gán phòng)', '(no room assigned)', L)
   const lab = (a: string, b: string, vn: string | null | undefined, en: string | null | undefined) => pair(vn ? `${a}: ${vn}` : '', vn || en ? `${b}: ${en || vn}` : '', L)
-  const spec = [...pair(e.name_vn, e.name_en, L), ...pair(e.desc_vn || e.material_vn, e.desc_en || e.material_en, L),
+  const spec = [...pair(e.name_vn, e.name_en, L), ...descPairs(e, L),
     ...(e.part_vn ? lab('Bộ phận', 'Part', e.part_vn, e.part_en) : []), ...(e.composition ? lab('Cấu tạo', 'Composition', e.composition, e.composition) : [])]
   const brand = [...one(e.brand ? (e.product_name ? `${e.brand} – ${e.product_name}` : e.brand) : ''), ...one(e.origin ?? '')]
   const note = [...pair(e.note_vn, e.note_en, L), ...(e.status !== 'approved' ? pair(`[${STATUS_VN[e.status]}]`, `[${STATUS_EN[e.status]}]`, L) : [])]
