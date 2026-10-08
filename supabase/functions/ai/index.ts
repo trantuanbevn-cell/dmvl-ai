@@ -63,6 +63,30 @@ const REPORT_ITEMS_LITE = {
   input_schema: { type: 'object', properties: { items: { type: 'array', items: ITEM_LITE } }, required: ['items'] },
 }
 
+const REPORT_MATCH = {
+  name: 'report_match',
+  description: 'Ghép từng ảnh phối cảnh với camera trên mặt bằng',
+  input_schema: {
+    type: 'object',
+    properties: {
+      matches: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            render: { type: 'integer', description: 'số thứ tự ảnh phối cảnh (1,2,...)' },
+            camera: { type: 'string', description: 'nhãn camera trên mặt bằng (A,B,...) hoặc "?" nếu không xác định' },
+            confidence: { type: 'number', description: '0..1' },
+            reason: { type: 'string', description: '≤ 15 từ: vật mốc nhìn thấy trong ảnh giúp xác định' },
+          },
+          required: ['render', 'camera', 'confidence'],
+        },
+      },
+    },
+    required: ['matches'],
+  },
+}
+
 const REPORT_PAGES = {
   name: 'report_pages',
   description: 'Phân loại các trang concept và gom theo phòng',
@@ -123,6 +147,14 @@ Gọi công cụ report_pages.`)]
       return { model: MODEL, max_tokens: 8000, system: BASE_SYSTEM, tools: [REPORT_PAGES], tool_choice: { type: 'tool', name: 'report_pages' }, messages: [{ role: 'user', content }] }
     }
 
+    case 'match_views': {
+      const content: any[] = [txt(`Mặt bằng nhỏ dưới đây có ${p.cams.length} camera, đánh nhãn ${p.cams.map((c: any) => c.label).join(', ')} (chấm/nón đỏ kèm chữ). Sau đó là ${p.renders.length} ảnh phối cảnh 3D lấy từ cùng một slide, đánh số ${p.renders.map((r: any) => r.idx).join(', ')}.
+Nhiệm vụ: với mỗi ảnh phối cảnh, xác định nó được chụp từ camera nào. Dựa vào hướng nhìn (nón đỏ), vị trí, và các vật mốc nhìn thấy (bàn, quầy, cửa, cột, kiểu sàn/trần...) có trên mặt bằng. Mỗi camera tương ứng nhiều nhất một ảnh. Nếu không chắc, trả camera "?" với confidence thấp – không đoán bừa.${p.context ? '\n' + p.context : ''}
+Gọi report_match.`), txt('MẶT BẰNG:'), img(p.plan)]
+      for (const r of p.renders) { content.push(txt(`ẢNH PHỐI CẢNH ${r.idx}:`)); content.push(img(r)) }
+      return { model: MODEL, max_tokens: 1500, system: BASE_SYSTEM, tools: [REPORT_MATCH], tool_choice: { type: 'tool', name: 'report_match' }, messages: [{ role: 'user', content }] }
+    }
+
     case 'analyze_page': {
       const ex = (p.existing ?? []).map((e: any) => `${e.code}|${e.name_vn}|${e.material_vn ?? ''}`).join('\n') || '(chưa có)'
       const content: any[] = [
@@ -130,11 +162,11 @@ Gọi công cụ report_pages.`)]
 Mã đã có (code|tên|vật liệu):
 ${ex}
 ${p.page?.plan_context ? `\nThông tin từ mặt bằng (phần mềm tự đọc): ${p.page.plan_context}\n` : ''}
-Liệt kê MỌI vật liệu hoàn thiện và đồ vật NHÌN THẤY trong phối cảnh (bỏ qua khung chữ, logo, mặt bằng nhỏ):
+Liệt kê MỌI vật liệu hoàn thiện và đồ vật NHÌN THẤY trong phối cảnh (bỏ qua khung chữ, logo, mặt bằng nhỏ, và các ảnh phối cảnh khác nếu có):
 - Bề mặt: sàn, len, tường, tường nhấn, trần (cả trần lộ), cửa, cửa sổ.
 - Đồ liền tường (JN) và đồ rời (FF): mỗi món 1 item; vật liệu cấu thành (thùng, cánh, mặt, khung, bọc, chân, tay nắm) là item riêng có parent_ref.
 - Đèn (LT), thiết bị vệ sinh (SF), phụ kiện WC (BA), thiết bị (EQ), decor/cây (DC), tranh/mural (AW), đầu chờ MEP nhìn thấy (ME).
-Quy tắc: cùng vật liệu xuất hiện nhiều chỗ = 1 item; trùng mã đã có thì ghi match_code; box_2d = khung ôm sát món đồ (hoặc một mảng đại diện rõ nhất của bề mặt sàn/tường/trần – KHÔNG phủ cả ảnh), tọa độ [ymin,xmin,ymax,xmax] thang 0..1000 so với toàn bộ ảnh, và CHỈ nằm trong vùng ảnh phối cảnh 3D (không khoanh mặt bằng nhỏ, tiêu đề, logo, ô chữ); mô tả ngắn gọn; qty theo số liệu concept nếu có (concept_text), đếm được rõ thì counted_render, còn lại bỏ trống. KHÔNG liệt kê thứ không nhìn thấy.
+${p.page?.view_label ? `\nẢnh này chỉ là MỘT góc nhìn (camera ${p.page.view_label}) trong một không gian lớn có nhiều góc nhìn khác; các góc nhìn dùng chung bộ vật liệu của dự án.\n` : ''}Quy tắc THỐNG NHẤT DANH MỤC: vật liệu thật chỉ có ít loại (gỗ vài mã, kính 1–2 loại, khung cửa/khuôn cùng một màu sơn, cùng loại đá/thảm/sơn...). Trước khi tạo item mới, PHẢI đối chiếu danh sách mã đã có: nếu cùng chất liệu/màu/hoàn thiện thì ghi match_code, KHÔNG tạo mã mới chỉ vì góc nhìn, ánh sáng hay vị trí khác. Chỉ tạo mã mới khi thật sự khác loại hoặc khác màu/vân rõ rệt. Cùng vật liệu xuất hiện nhiều chỗ = 1 item; trùng mã đã có thì ghi match_code; box_2d = khung ôm sát món đồ (hoặc một mảng đại diện rõ nhất của bề mặt sàn/tường/trần – KHÔNG phủ cả ảnh), tọa độ [ymin,xmin,ymax,xmax] thang 0..1000 so với toàn bộ ảnh, và CHỈ nằm trong vùng ảnh phối cảnh 3D (không khoanh mặt bằng nhỏ, tiêu đề, logo, ô chữ); mô tả ngắn gọn; qty theo số liệu concept nếu có (concept_text), đếm được rõ thì counted_render, còn lại bỏ trống. KHÔNG liệt kê thứ không nhìn thấy.
 Gọi report_items.`),
         img(p.page),
       ]

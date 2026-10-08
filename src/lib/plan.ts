@@ -15,7 +15,8 @@ export type RoomRegion = {
 }
 
 // ------------------------------------------------------------------ 1. Camera
-export function detectCamera(cv: any, img: ImageData): Camera | null {
+/** Tất cả biểu tượng camera (hình nón đỏ) trên trang phối cảnh – 1 slide có thể có 2+ camera cho 2+ ảnh */
+export function detectCameras(cv: any, img: ImageData): Camera[] {
   const { width: W, height: H, data } = img
   const mask = new cv.Mat(H, W, cv.CV_8UC1)
   const m = mask.data as Uint8Array
@@ -23,39 +24,53 @@ export function detectCamera(cv: any, img: ImageData): Camera | null {
   const labels = new cv.Mat(), stats = new cv.Mat(), cen = new cv.Mat()
   const n = cv.connectedComponentsWithStats(mask, labels, stats, cen, 8, cv.CV_32S)
   const minA = W * H * 0.00003, maxA = W * H * 0.003
-  let best = -1, bestA = 0
+  const cand: { i: number; a: number }[] = []
   for (let i = 1; i < n; i++) {
     const a = stats.data32S[i * 5 + 4], w = stats.data32S[i * 5 + 2], h = stats.data32S[i * 5 + 3]
     if (a < minA || a > maxA || Math.max(w, h) / Math.max(1, Math.min(w, h)) > 4.5) continue
-    if (a > bestA) { best = i; bestA = a }
+    cand.push({ i, a })
   }
-  let res: Camera | null = null
-  if (best > 0) {
-    const bx = stats.data32S[best * 5], by = stats.data32S[best * 5 + 1], bw = stats.data32S[best * 5 + 2], bh = stats.data32S[best * 5 + 3]
-    const L = labels.data32S as Int32Array
-    const xs: number[] = [], ys: number[] = []
-    for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) if (L[y * W + x] === best) { xs.push(x); ys.push(y) }
-    const N = xs.length, mx = xs.reduce((s, v) => s + v, 0) / N, my = ys.reduce((s, v) => s + v, 0) / N
-    let sxx = 0, syy = 0, sxy = 0
-    for (let i = 0; i < N; i++) { const dx = xs[i] - mx, dy = ys[i] - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy }
-    const th = 0.5 * Math.atan2(2 * sxy, sxx - syy)
-    let ux = Math.cos(th), uy = Math.sin(th)
-    const t = xs.map((x, i) => (x - mx) * ux + (ys[i] - my) * uy)
-    const tmin = Math.min(...t), tmax = Math.max(...t), mid = (tmin + tmax) / 2
-    const mean = t.reduce((s, v) => s + v, 0) / N
-    if (mean < mid) { ux = -ux; uy = -uy; for (let i = 0; i < N; i++) t[i] = -t[i] } // hướng về đầu rộng
-    const t0 = Math.min(...t), t1 = Math.max(...t), len = t1 - t0
-    let apex = 0; for (let i = 0; i < N; i++) if (t[i] < t[apex]) apex = i
-    // bề rộng ở 20% xa nhất
-    let pmin = 1e9, pmax = -1e9
-    for (let i = 0; i < N; i++) if (t[i] > t1 - 0.2 * len) { const pp = -(xs[i] - mx) * uy + (ys[i] - my) * ux; pmin = Math.min(pmin, pp); pmax = Math.max(pmax, pp) }
-    const half = Math.min(1.05, Math.max(0.26, Math.atan(((pmax - pmin) / 2) / Math.max(1, len * 0.9))))
-    res = { x: xs[apex], y: ys[apex], dx: ux, dy: uy, half, len, thumb: { x: 0, y: 0, w: 0, h: 0 } }
-    // vùng mặt bằng nhỏ: cụm nét tường tối chứa camera
-    res.thumb = thumbRegion(cv, img, res)
+  cand.sort((x, y) => y.a - x.a)
+  const L = labels.data32S as Int32Array
+  const out: Camera[] = []
+  for (const c of cand) {
+    if (!out.length || c.a >= cand[0].a * 0.4) { // chỉ nhận các biểu tượng cùng cỡ (loại vết đỏ lẻ)
+      const cam = camFromComponent(img, stats, L, c.i)
+      if (cam && !out.some(o => Math.hypot(o.x - cam.x, o.y - cam.y) < Math.max(o.len, cam.len) * 1.5)) out.push(cam)
+    }
+    if (out.length >= 6) break
   }
+  for (const cam of out) cam.thumb = thumbRegion(cv, img, cam)
   mask.delete(); labels.delete(); stats.delete(); cen.delete()
-  return res
+  // sắp xếp ổn định: trên → dưới, trái → phải
+  return out.sort((p, q) => p.y - q.y || p.x - q.x)
+}
+export function detectCamera(cv: any, img: ImageData): Camera | null {
+  const all = detectCameras(cv, img)
+  return all.length ? all.reduce((a, b) => (b.len > a.len ? b : a)) : null
+}
+function camFromComponent(img: ImageData, stats: any, L: Int32Array, best: number): Camera | null {
+  const { width: W } = img
+  const bx = stats.data32S[best * 5], by = stats.data32S[best * 5 + 1], bw = stats.data32S[best * 5 + 2], bh = stats.data32S[best * 5 + 3]
+  const xs: number[] = [], ys: number[] = []
+  for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) if (L[y * W + x] === best) { xs.push(x); ys.push(y) }
+  const N = xs.length; if (N < 4) return null
+  const mx = xs.reduce((s, v) => s + v, 0) / N, my = ys.reduce((s, v) => s + v, 0) / N
+  let sxx = 0, syy = 0, sxy = 0
+  for (let i = 0; i < N; i++) { const dx = xs[i] - mx, dy = ys[i] - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy }
+  const th = 0.5 * Math.atan2(2 * sxy, sxx - syy)
+  let ux = Math.cos(th), uy = Math.sin(th)
+  const t = xs.map((x, i) => (x - mx) * ux + (ys[i] - my) * uy)
+  const tmin = Math.min(...t), tmax = Math.max(...t), mid = (tmin + tmax) / 2
+  const mean = t.reduce((s, v) => s + v, 0) / N
+  if (mean < mid) { ux = -ux; uy = -uy; for (let i = 0; i < N; i++) t[i] = -t[i] } // hướng về đầu rộng
+  const t0 = Math.min(...t), t1 = Math.max(...t), len = t1 - t0
+  let apex = 0; for (let i = 0; i < N; i++) if (t[i] < t[apex]) apex = i
+  // bề rộng ở 20% xa nhất
+  let pmin = 1e9, pmax = -1e9
+  for (let i = 0; i < N; i++) if (t[i] > t1 - 0.2 * len) { const pp = -(xs[i] - mx) * uy + (ys[i] - my) * ux; pmin = Math.min(pmin, pp); pmax = Math.max(pmax, pp) }
+  const half = Math.min(1.05, Math.max(0.26, Math.atan(((pmax - pmin) / 2) / Math.max(1, len * 0.9))))
+  return { x: xs[apex], y: ys[apex], dx: ux, dy: uy, half, len, thumb: { x: 0, y: 0, w: 0, h: 0 } }
 }
 
 function thumbRegion(cv: any, img: ImageData, cam: Camera) {

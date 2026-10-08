@@ -121,7 +121,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
             {(() => {
               const cam = page.camera as any, pp = cam?.plan_page_id ? d.pages.find(x => x.id === cam.plan_page_id) : (page.kind === 'plan' ? page : (room?.plan ? d.pages.find(x => x.id === room.plan.page_id) : undefined))
               if (!pp || (!cam?.plan_page_id && !room?.plan)) return null
-              return <details className="card" style={{ margin: '8px 0' }}><summary><b>Vị trí trên mặt bằng</b> – camera, vùng phòng, ghế/bàn đếm được</summary><PlanMap url={d.urls[pp.image_path]} plan={room?.plan} cam={cam} planPage={pp} room={room} /></details>
+              return <details className="card" style={{ margin: '8px 0' }}><summary><b>Vị trí trên mặt bằng</b> – camera, vùng phòng, ghế/bàn đếm được</summary><PlanMap url={d.urls[pp.image_path]} plan={room?.plan} cam={cam} cams={(page.views as any)?.cams} planPage={pp} room={room} /></details>
             })()}
             <div ref={imgRef} className={'img-wrap' + (draw ? ' drawing' : '')}
               onMouseDown={e => { if (draw) { const p = rel(e); setDrag({ x0: p.x, y0: p.y, x1: p.x, y1: p.y }) } }}

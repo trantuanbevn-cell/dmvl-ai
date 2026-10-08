@@ -7,6 +7,10 @@ import { classifyLocal, norm as normT } from './classify'
 import { inferForRoom } from './infer'
 import { specPatch } from './specs'
 import { planContext, fillPlanQty } from './planPipeline'
+import type { Rect } from './renders'
+import { autoMerge } from './merge'
+import { cropBase64, cropCanvas } from './crop'
+import type { PageViews, CameraData } from './planPipeline'
 import type { Project, Room, Page, Entry, Occurrence } from './types'
 
 type Log = (msg: string) => void
@@ -175,7 +179,7 @@ function cleanItem<T extends Record<string, any>>(o: T): T {
   return r
 }
 
-async function applyItems(project: Project, room: Room, rawItems: AIItem[], page: Page, book: CodeBook, log: Log) {
+async function applyItems(project: Project, room: Room, rawItems: AIItem[], page: Page, book: CodeBook, log: Log, view?: { rect: Rect; roomId?: string | null }) {
   const items = rawItems.filter(i => i && i.name_vn).map(cleanItem)
   const refToEntry = new Map<string, Entry>()
   const ordered = [...items.filter(i => !i.parent_ref), ...items.filter(i => i.parent_ref)]
@@ -206,10 +210,11 @@ async function applyItems(project: Project, room: Room, rawItems: AIItem[], page
       }
     }
     refToEntry.set(it.ref, entry)
-    const box = normalizeAIBox(it)
+    let box = normalizeAIBox(it)
+    if (box && view) { const r = view.rect; box = [+(r.x + box[0] * r.w).toFixed(4), +(r.y + box[1] * r.h).toFixed(4), +(box[2] * r.w).toFixed(4), +(box[3] * r.h).toFixed(4)] }
     const ok = !!box
     await must(supabase.from('occurrences').insert({
-      entry_id: entry.id, room_id: room.id, page_id: ok ? page.id : null, category,
+      entry_id: entry.id, room_id: view?.roomId ?? room.id, page_id: ok ? page.id : null, category,
       bbox: box, qty: it.qty ?? null, confidence: it.confidence ?? null,
     }))
     if (it.parent_ref) {
@@ -248,6 +253,37 @@ async function callAIPaced(task: string, payload: unknown, log: Log) {
   }
 }
 
+/** Ghép từng ô ảnh với camera đúng trên mặt bằng bằng AI (1 lần/trang, lưu lại); lỗi thì giữ cách ghép theo thứ tự */
+async function pairViews(room: Room, page: Page, v: PageViews, url: string, log: Log) {
+  if (v.pairing === 'ai') return
+  try {
+    const t = v.cams[0].thumb, pad = 0.01
+    const reg = [Math.max(0, t.x - pad), Math.max(0, t.y - pad), Math.min(1, t.w + 2 * pad), Math.min(1, t.h + 2 * pad)]
+    const cv = await cropCanvas(url, reg, 900)
+    const g = cv.getContext('2d')!
+    g.font = `bold ${Math.round(cv.width / 14)}px sans-serif`; g.lineWidth = 4
+    for (const c of v.cams) if (c.src) {
+      const x = ((c.src.x - reg[0]) / reg[2]) * cv.width, y = ((c.src.y - reg[1]) / reg[3]) * cv.height
+      g.strokeStyle = '#fff'; g.fillStyle = '#0033cc'; g.strokeText(c.label ?? '?', x + 8, y - 8); g.fillText(c.label ?? '?', x + 8, y - 8)
+    }
+    const plan = { base64: cv.toDataURL('image/jpeg', 0.9).split(',')[1] }
+    const renders = await Promise.all(v.rects.map(async (r, i) => ({ idx: i + 1, base64: await cropBase64(url, [r.x, r.y, r.w, r.h], 700) })))
+    const res = await callAIPaced('match_views', { plan, cams: v.cams.map(c => ({ label: c.label })), renders, context: `Phòng: ${room.name_vn}.` }, log)
+    const ms = (res.tool?.matches ?? []) as { render: number; camera: string; confidence?: number; reason?: string }[]
+    const pair = v.rects.map(() => -1), used = new Set<number>(); let conf = 0, n = 0
+    for (const m of ms.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))) {
+      const ri = m.render - 1, ci = v.cams.findIndex(c => c.label === String(m.camera).trim().toUpperCase())
+      if (ri < 0 || ri >= pair.length || ci < 0 || used.has(ci) || pair[ri] >= 0 || (m.confidence ?? 0) < 0.5) continue
+      pair[ri] = ci; used.add(ci); conf += m.confidence ?? 0; n++
+    }
+    if (n) {
+      v.pair = pair; v.pairing = 'ai'; v.conf = +(conf / n).toFixed(2)
+      await must(supabase.from('pages').update({ views: v, camera: v.cams[pair.find(x => x >= 0)!] }).eq('id', page.id))
+      log(`    Ghép camera↔ảnh (AI): ${pair.map((c, i) => `ảnh ${i + 1}→${c >= 0 ? v.cams[c].label : '?'}`).join(', ')}`)
+    } else log('    AI chưa chắc cách ghép camera↔ảnh – dùng thứ tự trái→phải (cần kiểm tra)')
+  } catch (e) { log(`    Không ghép được bằng AI (${String(e).slice(0, 80)}) – dùng thứ tự trái→phải`) }
+}
+
 export async function analyzeRoom(project: Project, room: Room, log: Log) {
   await must(supabase.from('rooms').update({ analysis_status: 'running' }).eq('id', room.id))
   try {
@@ -263,6 +299,32 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
       const book = new CodeBook(entries)
       log(`  ${room.code} · trang ${page.page_no} (${i + 1}/${pages.length}) – AI đang nhìn ảnh...`)
       const url = await signedUrl(page.image_path)
+      await must(supabase.from('occurrences').delete().eq('page_id', page.id)) // làm lại sạch kể cả các dòng đã gán cho phòng khác
+      const views = page.views as PageViews | null
+      if (views && views.rects.length >= 2 && views.cams.length >= 2) {
+        await pairViews(room, page, views, url, log)
+        const roomIds = new Set((await must(supabase.from('rooms').select('id').eq('project_id', project.id)) as { id: string }[]).map(x => x.id))
+        for (const [vi, rect] of views.rects.entries()) {
+          const cam = views.pair[vi] >= 0 ? views.cams[views.pair[vi]] : null
+          const label = cam?.label ?? `${vi + 1}`
+          const ents = (await must(supabase.from('entries').select('*').eq('project_id', project.id)) as Entry[])
+          const bk = new CodeBook(ents)
+          log(`    Ảnh ${vi + 1}/${views.rects.length} (camera ${cam ? label : 'chưa rõ'}) – AI đang nhìn...`)
+          const rr = await callAIPaced('analyze_page', {
+            room: { name_vn: room.name_vn, room_type: room.room_type, concept_counts: room.concept_counts },
+            page: { page_no: page.page_no, base64: await cropBase64(url, [rect.x, rect.y, rect.w, rect.h], 1600), view_label: label, plan_context: planContext(room, page, cam) },
+            existing: ents.filter(e => e.source === 'image').map(e => ({ code: e.code, name_vn: e.name_vn, material_vn: e.material_vn })),
+          }, log)
+          const its = (rr.tool?.items ?? []) as AIItem[]
+          log(`      AI nhận diện ${its.length} hạng mục`)
+          const rid = cam?.room_id && roomIds.has(cam.room_id) ? cam.room_id : room.id
+          await applyItems(project, room, its, page, bk, log, { rect, roomId: rid })
+          await sleep(3000)
+        }
+        await must(supabase.from('pages').update({ analyzed: true }).eq('id', page.id))
+        if (i < pages.length - 1) await sleep(4000)
+        continue
+      }
       const r = await callAIPaced('analyze_page', {
         room: { name_vn: room.name_vn, room_type: room.room_type, concept_counts: room.concept_counts },
         page: { page_no: page.page_no, url, plan_context: planContext(room, page) },
@@ -275,6 +337,7 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
       if (i < pages.length - 1) await sleep(4000) // giãn cách để nằm trong hạn mức miễn phí
     }
     await fillColors(project, room)
+    try { const m = await autoMerge(await must(supabase.from('entries').select('*').eq('project_id', project.id)) as Entry[]); if (m) log(`  ${room.code} – tự gộp ${m} mã trùng (cùng vật liệu, khác góc nhìn)`) } catch (e) { log(`  (không tự gộp được mã trùng: ${String(e).slice(0, 80)})`) }
     await fillPlanQty(project)
     const added = await applyInference(project, room)
     log(`  ${room.code} – quy tắc suy luận thêm ${added} hạng mục (không dùng AI)`)

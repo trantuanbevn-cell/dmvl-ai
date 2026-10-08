@@ -5,11 +5,16 @@ import { loadSettings, Settings } from '../../lib/settings'
 import { checkRoom } from '../../lib/check'
 import type { ProjectData } from '../../lib/useProject'
 import { roomStats, heroUrl } from '../../lib/progress'
+import { findDuplicates, mergeEntries } from '../../lib/merge'
+import { toast } from '../../lib/toast'
 
 export default function CheckView({ d }: { d: ProjectData }) {
   const [st, setSt] = useState<Settings | null>(null)
   const nav = useNavigate()
   useEffect(() => { loadSettings().then(setSt) }, [])
+  const [skip, setSkip] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('dmvl-dup-skip') ?? '[]') } catch { return [] } })
+  const [busy, setBusy] = useState(false)
+  const dups = useMemo(() => findDuplicates(d.entries).filter(p => !skip.includes(p.keep.id + p.dup.id)).slice(0, 12), [d.entries, skip])
   const entryById = useMemo(() => new Map(d.entries.map(e => [e.id, e])), [d.entries])
   if (!st) return <div className="card muted">Đang tải checklist…</div>
 
@@ -35,6 +40,18 @@ export default function CheckView({ d }: { d: ProjectData }) {
         <div className="kpi"><b>{totals.nocode}</b>mã chưa chọn hãng</div>
         <div className="kpi"><b>{totals.review}</b>cần TVTK xem lại</div>
       </div>
+
+      {dups.length > 0 && (
+        <div className="card">
+          <h3>Gợi ý gộp mã trùng ({dups.length})</h3>
+          <p className="small muted">Cùng một vật liệu thật nhưng đang có nhiều mã (thường do nhiều góc camera trong một không gian lớn). Gộp sẽ giữ mã nhỏ hơn, chuyển toàn bộ vị trí xuất hiện sang mã đó.</p>
+          {dups.map(p => (
+            <div key={p.keep.id + p.dup.id} className="row sm-gap" style={{ padding: '6px 0', borderTop: '1px solid var(--line, #eee)', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 240 }}><b>{p.keep.code}</b> {p.keep.name_vn} <span className="muted">· {p.keep.material_vn}</span><br /><b>{p.dup.code}</b> {p.dup.name_vn} <span className="muted">· {p.dup.material_vn}</span><div className="small muted">Giống {Math.round(p.score * 100)}%{p.why.length ? ' – ' + p.why.join(', ') : ''}</div></div>
+              <button className="btn" disabled={busy} onClick={async () => { setBusy(true); try { await mergeEntries(p.keep, p.dup, d.entries); toast(`Đã gộp ${p.dup.code} vào ${p.keep.code}`, 'ok') } catch (e) { toast(String(e)) } setBusy(false) }}>Gộp</button>
+              <button className="btn ghost" onClick={() => { const n = [...skip, p.keep.id + p.dup.id]; setSkip(n); try { localStorage.setItem('dmvl-dup-skip', JSON.stringify(n)) } catch { /* */ } }}>Khác nhau</button>
+            </div>))}
+        </div>)}
 
       <div className="card scroll-x">
         <h3>Ma trận phòng × hạng mục</h3>
