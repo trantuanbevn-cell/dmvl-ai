@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../lib/auth'
 import { CATEGORY_GROUPS } from '../../lib/codes'
 import { supabase } from '../../lib/supabase'
-import { SECTIONS, BANDS, sectionOf, sectionTitle, type Lang } from '../../lib/sections'
+import { SECTIONS, BANDS, sectionOf, sectionTitle, bandTitle, type Lang } from '../../lib/sections'
+import SectionNames from '../../components/SectionNames'
 import RoomSections from '../../components/RoomSections'
 import AddMaterial, { type AddPreset } from '../../components/AddMaterial'
 import type { ProjectData } from '../../lib/useProject'
@@ -38,6 +39,7 @@ export default function MaterialView({ d }: { d: ProjectData }) {
   const [roomId, setRoomId] = useState<string>('')      // '' = mọi phòng
   const [lang, setLang] = useState<Lang>('vn')
   const [flt, setFlt] = useState<'all' | 'pending' | 'inferred' | 'missing'>('all')
+  const [renaming, setRenaming] = useState(false)
   const [sel, setSel] = useState<string | null>(null)
   const [dlg, setDlg] = useState<AddPreset | null>(null)
   const selEntry = d.entries.find(e => e.id === sel)
@@ -55,15 +57,16 @@ export default function MaterialView({ d }: { d: ProjectData }) {
             <select value={roomId} onChange={e => setRoomId(e.target.value)}><option value="">Tất cả phòng</option>{d.rooms.map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}</select>
             <span className="small muted" style={{ marginLeft: 8 }}>Ngôn ngữ:</span>
             {([['vn', 'Tiếng Việt'], ['en', 'English'], ['both', 'Song ngữ']] as const).map(([k, l]) => <button key={k} className={'chip' + (lang === k ? ' on' : '')} onClick={() => setLang(k)}>{l}</button>)}
+            {canEdit && <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setRenaming(true)} title="Đổi tên các hạng mục / nhóm">✎ Đổi tên hạng mục</button>}
             <span className="small muted" style={{ marginLeft: 8 }}>Lọc:</span>
             {([['all', 'Tất cả'], ['pending', 'Chờ duyệt'], ['inferred', 'Suy luận'], ['missing', '⚠ Thiếu thông tin']] as const).map(([k, l]) => <button key={k} className={'chip' + (flt === k ? ' on' : '')} onClick={() => setFlt(k)}>{l}</button>)}
           </div>
           <div className="nav-row"><button className={'chip' + (!only ? ' on' : '')} onClick={() => { setOnly(''); setSel(null) }}>Tất cả vật liệu <span className="cnt">{live.filter(inRoom).length}</span></button></div>
           {Object.keys(BANDS).map(b => {
             const row = secs.filter(x => x.sec.band === b); if (!row.length) return null
-            return <div key={b} className="nav-row"><span className="nav-band">{BANDS[b].vn.split(' – ')[0].replace(/^[A-D]\. /, '')}</span>
+            return <div key={b} className="nav-row"><span className="nav-band">{bandTitle(b, 'vn').split(' – ')[0].replace(/^[A-D]\. /, '')}</span>
               {row.map(({ sec, list }) => { const n = list.filter(inRoom).length, m = nMiss(list); return (
-                <button key={sec.key} className={'chip' + (only === sec.key ? ' on' : '')} onClick={() => { setOnly(sec.key); setSel(null) }} title={sec.en}>{sec.vn} <span className="cnt">{n}</span>{m > 0 && <span className="cnt warn" title="dòng còn thiếu thông tin">⚠{m}</span>}</button>) })}
+                <button key={sec.key} className={'chip' + (only === sec.key ? ' on' : '')} onClick={() => { setOnly(sec.key); setSel(null) }} title={sec.en}>{sectionTitle(sec, 'vn')} <span className="cnt">{n}</span>{m > 0 && <span className="cnt warn" title="dòng còn thiếu thông tin">⚠{m}</span>}</button>) })}
             </div>
           })}
         </div>
@@ -73,6 +76,7 @@ export default function MaterialView({ d }: { d: ProjectData }) {
           <RoomSections d={d} room={room} only={only || undefined} lang={lang} filter={flt} sel={sel} onPick={o => setSel(o.entry_id)} onDetail={id => setSel(id)} onRemove={() => {}} onAdd={setDlg} />
         </div>
       </div>
+      {renaming && <SectionNames d={d} onClose={() => setRenaming(false)} />}
       {dlg && <AddMaterial d={d} room={room} preset={dlg} onClose={() => setDlg(null)} onDone={id => { setDlg(null); setSel(id) }} />}
       {selEntry && <EntryPanel d={d} entry={selEntry} onClose={() => setSel(null)} />}
     </div>

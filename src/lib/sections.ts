@@ -43,8 +43,17 @@ export function sectionOf(e: Pick<Entry, 'group_code' | 'category'>): Section {
   if ((e.group_code === 'WD' || e.group_code === 'LM') && e.category === 'floor') return SECTIONS.find(s => s.key === 'floor')!
   return SECTIONS.find(s => s.groups.includes(e.group_code)) ?? SECTIONS[SECTIONS.length - 1]
 }
-export const sectionTitle = (s: Section, lang: Lang) => (lang === 'vn' ? s.vn : lang === 'en' ? s.en : `${s.vn} / ${s.en}`)
-export const bandTitle = (b: string, lang: Lang) => (lang === 'vn' ? BANDS[b].vn : lang === 'en' ? BANDS[b].en : `${BANDS[b].vn} / ${BANDS[b].en}`)
+// Tên hạng mục do người dùng đổi (lưu theo dự án: projects.section_names) – dùng chung cho bảng, xuất Excel và bản in
+export type NameOverrides = Record<string, { vn?: string; en?: string }>
+let OVR: NameOverrides = {}
+export const setNameOverrides = (o: NameOverrides | null | undefined) => { OVR = o ?? {} }
+const pick = (base: { vn: string; en: string }, o: { vn?: string; en?: string } | undefined, lang: Lang) => {
+  const vn = o?.vn?.trim() || base.vn, en = o?.en?.trim() || base.en
+  return lang === 'vn' ? vn : lang === 'en' ? en : `${vn} / ${en}`
+}
+export const sectionTitle = (s: Section, lang: Lang) => pick(s, OVR[s.key], lang)
+export const sectionName = (s: Section, lang: 'vn' | 'en') => pick(s, OVR[s.key], lang)
+export const bandTitle = (b: string, lang: Lang) => pick(BANDS[b], OVR['band:' + b], lang)
 
 /** Nhóm các mã theo mục chuẩn, đúng thứ tự công ty; mã sắp theo ký hiệu */
 export function groupBySection<T extends Entry>(entries: T[]): { section: Section; items: T[] }[] {
