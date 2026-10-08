@@ -41,14 +41,10 @@ function columns(o: ExportOpts, h: Ctx['h']): Col[] {
     { key: 'spec', head: h('Thông số kỹ thuật', 'Technical specification'), w: 46, band: 'ref' },
     { key: 'brand', head: h('Xuất xứ/ Thương hiệu', 'Origin / Brand'), w: 22, band: 'ref' }, { key: 'sample', head: h('Hình ảnh vật liệu', 'Material image'), w: 24, band: 'ref' },
     { key: 'note', head: h('Ghi chú', 'Remarks'), w: 26, band: 'ref' },
-    { key: 'c_code', head: h('Mã VL', 'Material code'), w: 14, band: 'ctr' }, { key: 'c_img', head: h('Hình ảnh', 'Image'), w: 14, band: 'ctr' }, { key: 'c_spec', head: h('Thông số kỹ thuật', 'Specification'), w: 26, band: 'ctr' },
-    { key: 'c_brand', head: h('Xuất xứ / Thương hiệu', 'Origin / Brand'), w: 16, band: 'ctr' }, { key: 'c_war', head: h('Bảo hành', 'Warranty'), w: 10, band: 'ctr' }, { key: 'c_note', head: h('Ghi chú / Giải trình làm rõ của Nhà thầu', 'Remarks / Contractor clarification'), w: 22, band: 'ctr' },
-    { key: 'rev1', head: h('Đánh giá của P.KHKT', 'Technical dept. review'), w: 14, band: 'rev' }, { key: 'rev2', head: h('Đánh giá của K.QHTK', 'Design dept. review'), w: 14, band: 'rev' },
   ]
   if (o.quote) c.push(
     { key: 'q_qty', head: h('Số lượng', 'Quantity'), w: 10, band: 'quote' }, { key: 'q_unit', head: h('ĐVT', 'Unit'), w: 8, band: 'quote' },
     { key: 'q_price', head: h('Đơn giá (VNĐ)', 'Unit price (VND)'), w: 16, band: 'quote' }, { key: 'q_total', head: h('Thành tiền (VNĐ)', 'Amount (VND)'), w: 18, band: 'quote' })
-  c.push({ key: 'i_src', head: h('Nguồn', 'Source'), w: 9, band: 'int' }, { key: 'i_st', head: h('Trạng thái', 'Status'), w: 11, band: 'int' }, { key: 'i_flag', head: h('Cờ số lượng', 'Qty flag'), w: 14, band: 'int' })
   return c
 }
 
