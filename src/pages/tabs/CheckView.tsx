@@ -1,96 +1,72 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { CATEGORIES, roomTypeLabel } from '../../lib/codes'
-import { loadSettings, Settings } from '../../lib/settings'
-import { checkRoom } from '../../lib/check'
+import { useMemo, useState } from 'react'
 import type { ProjectData } from '../../lib/useProject'
-import { roomStats, heroUrl } from '../../lib/progress'
-import { findDuplicates, mergeEntries } from '../../lib/merge'
+import type { Entry } from '../../lib/types'
+import { findDuplicates, mergeEntries, type DupPair } from '../../lib/merge'
+import { locationsOf } from '../../lib/locations'
 import { toast } from '../../lib/toast'
+import { useAuth } from '../../lib/auth'
+import OccCrop from '../../components/OccCrop'
+
+function Side({ d, e, tag, onKeep, busy }: { d: ProjectData; e: Entry; tag: string; onKeep?: () => void; busy: boolean }) {
+  const shots = d.occ.filter(o => o.entry_id === e.id && o.bbox && o.page_id)
+  const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
+  const row = (k: string, v?: string | null) => v ? <div className="dc-row"><span>{k}</span>{v}</div> : null
+  return (
+    <div className="dc-side">
+      <div className="dc-head"><b className="code big-code">{e.code}</b> <b>{e.name_vn}</b> <span className="src">{tag}</span></div>
+      <div className="dc-shots">{shots.slice(0, 4).map(o => <OccCrop key={o.id} d={d} o={o} height={190} maxWidth={300} />)}
+        {!shots.length && <div className="ic-none wide" style={e.color_hex ? { background: e.color_hex } : undefined}><span>Chưa có ảnh crop</span></div>}
+        {e.color_hex && <span className="swatch" style={{ background: e.color_hex, height: 190, width: 90 }}><span>{e.color_hex}</span></span>}</div>
+      {row('Vật liệu', e.material_vn)}{row('Thông số', e.desc_vn)}{row('Bộ phận', e.part_vn)}{row('Hãng', [e.brand, e.product_code].filter(Boolean).join(' · '))}{row('Xuất xứ', e.origin)}
+      <div className="dc-row"><span>Có ở</span>{locs.length ? locs.map(l => <span key={l.room.id} className="loc-tag">{l.room.code} {l.room.name_vn}</span>) : 'chưa gán phòng'}</div>
+      {onKeep && <button className="btn primary" disabled={busy} onClick={onKeep}>Gộp – giữ mã {e.code}</button>}
+    </div>
+  )
+}
 
 export default function CheckView({ d }: { d: ProjectData }) {
-  const [st, setSt] = useState<Settings | null>(null)
-  const nav = useNavigate()
-  useEffect(() => { loadSettings().then(setSt) }, [])
+  const { canEdit } = useAuth()
   const [skip, setSkip] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('dmvl-dup-skip') ?? '[]') } catch { return [] } })
   const [busy, setBusy] = useState(false)
-  const dups = useMemo(() => findDuplicates(d.entries).filter(p => !skip.includes(p.keep.id + p.dup.id)).slice(0, 12), [d.entries, skip])
-  const entryById = useMemo(() => new Map(d.entries.map(e => [e.id, e])), [d.entries])
-  if (!st) return <div className="card muted">Đang tải checklist…</div>
-
-  const stats = roomStats(d)
-  const thumb = (id: string) => { const u = heroUrl(d, stats.get(id)?.hero); return u ? <span className="mini-hero" style={{ backgroundImage: `url("${u}")` }} /> : null }
-  const results = new Map(d.rooms.map(r => [r.id, checkRoom(d, r, st.checklist).filter(x => !(r.dismissed_suggest ?? []).includes(x.item.label))]))
-  const totals = {
-    pending: d.entries.filter(e => e.status === 'pending').length,
-    review: d.entries.filter(e => e.status === 'review').length,
-    inferred: d.entries.filter(e => e.source === 'inferred' && e.status === 'pending').length,
-    qty: d.entries.filter(e => e.status !== 'rejected' && e.qty_flag !== 'ok').length,
-    nocode: d.entries.filter(e => e.status !== 'rejected' && !e.product_code && !['ME'].includes(e.group_code)).length,
-    missing: [...results.values()].flat().filter(r => !r.ok && r.level === 'required').length,
+  const [open, setOpen] = useState<string | null>(null) // khoá cặp đang xem chi tiết
+  const keyOf = (p: DupPair) => p.keep.id + p.dup.id
+  const dups = useMemo(() => findDuplicates(d.entries).filter(p => !skip.includes(keyOf(p))), [d.entries, skip])
+  const cur = dups.findIndex(p => keyOf(p) === open), pair = cur >= 0 ? dups[cur] : null
+  const dismiss = (p: DupPair) => { const n = [...skip, keyOf(p)]; setSkip(n); try { localStorage.setItem('dmvl-dup-skip', JSON.stringify(n)) } catch { /* */ } }
+  const merge = async (keep: Entry, dup: Entry) => {
+    setBusy(true)
+    try { await mergeEntries(keep, dup, d.entries); toast(`Đã gộp ${dup.code} vào ${keep.code}`, 'ok'); setOpen(null) } catch (e) { toast(String(e)) }
+    setBusy(false)
   }
-
+  const go = (dir: number) => { const n = dups[cur + dir]; setOpen(n ? keyOf(n) : null) }
   return (
     <div className="stack">
-      <div className="kpis">
-        <div className={'kpi' + (totals.missing ? ' bad' : ' good')}><b>{totals.missing}</b>mục bắt buộc còn thiếu</div>
-        <div className="kpi warn"><b>{totals.pending}</b>mã chờ duyệt</div>
-        <div className="kpi warn"><b>{totals.inferred}</b>mục suy luận chờ xác nhận</div>
-        <div className="kpi warn"><b>{totals.qty}</b>mã cần nhập/kiểm số lượng</div>
-        <div className="kpi"><b>{totals.nocode}</b>mã chưa chọn hãng</div>
-        <div className="kpi"><b>{totals.review}</b>cần TVTK xem lại</div>
+      <div className="card">
+        <h3>Kiểm tra mã trùng ({dups.length})</h3>
+        <p className="small muted">Cùng một vật liệu thật nhưng đang có nhiều mã (thường do nhiều góc camera hoặc do nhiều người cùng thêm). Bấm <b>Xem chi tiết</b> để so hai mã cạnh nhau kèm ảnh crop trên phối cảnh, rồi xác nhận gộp hoặc khác nhau. Các mục còn thiếu thông tin xem ngay trong từng phòng.</p>
+        {!dups.length && <div className="ok-text">✓ Không phát hiện mã nào nghi trùng.</div>}
+        {dups.map(p => (
+          <div key={keyOf(p)} className="row sm-gap" style={{ padding: '8px 0', borderTop: '1px solid #eee', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 260 }}><b>{p.keep.code}</b> {p.keep.name_vn} <span className="muted">· {p.keep.material_vn}</span><br /><b>{p.dup.code}</b> {p.dup.name_vn} <span className="muted">· {p.dup.material_vn}</span>
+              <div className="small muted">Giống {Math.round(p.score * 100)}%{p.why.length ? ' – ' + p.why.join(', ') : ''}</div></div>
+            <button className="btn primary sm" onClick={() => setOpen(keyOf(p))}>🔍 Xem chi tiết</button>
+            {canEdit && <button className="btn ghost sm" onClick={() => dismiss(p)}>Khác nhau</button>}
+          </div>))}
       </div>
-
-      {dups.length > 0 && (
-        <div className="card">
-          <h3>Gợi ý gộp mã trùng ({dups.length})</h3>
-          <p className="small muted">Cùng một vật liệu thật nhưng đang có nhiều mã (thường do nhiều góc camera trong một không gian lớn). Gộp sẽ giữ mã nhỏ hơn, chuyển toàn bộ vị trí xuất hiện sang mã đó.</p>
-          {dups.map(p => (
-            <div key={p.keep.id + p.dup.id} className="row sm-gap" style={{ padding: '6px 0', borderTop: '1px solid var(--line, #eee)', flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: 240 }}><b>{p.keep.code}</b> {p.keep.name_vn} <span className="muted">· {p.keep.material_vn}</span><br /><b>{p.dup.code}</b> {p.dup.name_vn} <span className="muted">· {p.dup.material_vn}</span><div className="small muted">Giống {Math.round(p.score * 100)}%{p.why.length ? ' – ' + p.why.join(', ') : ''}</div></div>
-              <button className="btn" disabled={busy} onClick={async () => { setBusy(true); try { await mergeEntries(p.keep, p.dup, d.entries); toast(`Đã gộp ${p.dup.code} vào ${p.keep.code}`, 'ok') } catch (e) { toast(String(e)) } setBusy(false) }}>Gộp</button>
-              <button className="btn ghost" onClick={() => { const n = [...skip, p.keep.id + p.dup.id]; setSkip(n); try { localStorage.setItem('dmvl-dup-skip', JSON.stringify(n)) } catch { /* */ } }}>Khác nhau</button>
-            </div>))}
+      {pair && (
+        <div className="modal-bg center" onMouseDown={() => setOpen(null)}>
+          <div className="modal dup-modal" onMouseDown={e => e.stopPropagation()}>
+            <div className="row between"><h3 style={{ margin: 0 }}>So sánh mã nghi trùng · {cur + 1}/{dups.length} <span className="muted small">(giống {Math.round(pair.score * 100)}%{pair.why.length ? ' – ' + pair.why.join(', ') : ''})</span></h3><button className="btn ghost sm" onClick={() => setOpen(null)}>✕</button></div>
+            <div className="dc-grid">
+              <Side d={d} e={pair.keep} tag="Mã giữ (nhỏ hơn)" busy={busy} onKeep={canEdit ? () => merge(pair.keep, pair.dup) : undefined} />
+              <Side d={d} e={pair.dup} tag="Mã trùng" busy={busy} onKeep={canEdit ? () => merge(pair.dup, pair.keep) : undefined} />
+            </div>
+            <div className="row gap" style={{ justifyContent: 'space-between', marginTop: 8 }}>
+              <div className="row gap"><button className="btn sm" disabled={cur <= 0} onClick={() => go(-1)}>← Trước</button><button className="btn sm" disabled={cur >= dups.length - 1} onClick={() => go(1)}>Tiếp →</button></div>
+              {canEdit && <button className="btn" onClick={() => { const n = dups[cur + 1] ?? dups[cur - 1]; dismiss(pair); setOpen(n ? keyOf(n) : null) }}>✓ Hai mã KHÁC nhau – bỏ gợi ý</button>}
+            </div>
+          </div>
         </div>)}
-
-      <div className="card scroll-x">
-        <h3>Ma trận phòng × hạng mục</h3>
-        <p className="small muted">Số trong ô = số mã. <span className="lg ok" /> đã xác nhận hết · <span className="lg pend" /> còn chờ duyệt · <span className="lg miss" /> thiếu mục BẮT BUỘC theo checklist · bấm ô để mở phòng.</p>
-        <table className="tbl matrix">
-          <thead><tr><th>Phòng</th>{CATEGORIES.map(c => <th key={c.key}>{c.vn}</th>)}</tr></thead>
-          <tbody>{d.rooms.map(r => {
-            const res = results.get(r.id) ?? []
-            return (
-              <tr key={r.id}>
-                <td className="row sm-gap nowrap">{thumb(r.id)}<div><b>{r.code}</b> {r.name_vn}<div className="small muted">{roomTypeLabel(r.room_type)}</div></div></td>
-                {CATEGORIES.map(c => {
-                  const ids = [...new Set(d.occ.filter(o => o.room_id === r.id && (o.category ?? entryById.get(o.entry_id)?.category) === c.key).map(o => o.entry_id))]
-                  const es = ids.map(id => entryById.get(id)).filter(e => e && e.status !== 'rejected')
-                  const miss = res.some(x => x.item.category === c.key && x.level === 'required' && !x.ok)
-                  const pend = es.some(e => e!.status !== 'approved')
-                  const cls = miss ? 'miss' : !es.length ? 'none' : pend ? 'pend' : 'ok'
-                  return <td key={c.key} className={'cell ' + cls} onClick={() => nav(`/p/${d.project!.id}/rooms?room=${r.id}`)}>{es.length || (miss ? '!' : '')}</td>
-                })}
-              </tr>)
-          })}</tbody>
-        </table>
-      </div>
-
-      <div className="grid-rooms">
-        {d.rooms.map(r => {
-          const res = results.get(r.id) ?? []
-          const miss = res.filter(x => !x.ok)
-          const ws = d.warnings.filter(w => w.room_id === r.id)
-          return (
-            <div key={r.id} className="card">
-              <div className="row sm-gap nowrap">{thumb(r.id)}<h4 style={{ margin: 0 }}>{r.code} {r.name_vn} <span className="muted small">({roomTypeLabel(r.room_type)})</span></h4></div>
-              {!miss.length && !ws.length && <div className="ok-text">✓ Đủ theo checklist</div>}
-              {miss.map(x => <div key={x.item.label} className={x.level === 'required' ? 'missline' : 'warnline'}>{x.level === 'required' ? '✗ Thiếu (bắt buộc):' : '? Thường có:'} {x.item.label}</div>)}
-              {ws.map(w => <div key={w.id} className="warnline small">⚠ {w.text}</div>)}
-              <button className="btn sm" onClick={() => nav(`/p/${d.project!.id}/rooms?room=${r.id}`)}>Mở phòng để bổ sung / xử lý đề xuất →</button>
-            </div>)
-        })}
-      </div>
     </div>
   )
 }

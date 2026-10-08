@@ -105,8 +105,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                       : <div className="ic-none tiny"><span>{e.source === 'inferred' ? 'Suy luận' : 'Chưa có ảnh'}</span></div>}</td>
                     <td>{[...pair('name', lang), ...pair('material', lang), ...pair('desc', lang)].map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} miss={M(k)} area={!String(k).startsWith('name')} ph={String(k).startsWith('name') ? 'Tên hạng mục' : String(k).startsWith('material') ? 'Vật liệu / màu / bề mặt' : 'Thông số kỹ thuật'} /></div>)}
                       <div className="ed-line lab"><i>{lang === 'en' ? 'Composition' : 'Cấu tạo'}</i><Ed e={e} k="composition" area ph={lang === 'en' ? 'Composition' : 'Cấu tạo (vật liệu thành phần)'} /></div>
-                      {pair('perf', lang).map(k => <div key={String(k)} className="ed-line lab">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} area ph={String(k).endsWith('_en') ? 'Space requirements (check only – not exported)' : 'Yêu cầu theo không gian (chỉ để kiểm tra – không xuất file)'} /></div>)}
-                      <div className="ed-line lab"><Ed e={e} k="standards" ph={lang === 'en' ? 'Reference standards (check only – not exported)' : 'Tiêu chuẩn tham chiếu (chỉ để kiểm tra – không xuất file)'} /></div></td>
+                      </td>
                     <td className="c-brand"><Ed e={e} k="brand" ph="Hãng / thương hiệu" miss={M('brand')} /><Ed e={e} k="product_name" ph="Tên sản phẩm" /><Ed e={e} k="origin" ph="Xuất xứ" miss={M('origin')} /></td>
                     <td className="c-mat"><MatImage d={d} e={e} />
                       <Ed e={e} k="product_image_url" ph="Link ảnh mẫu" /></td>

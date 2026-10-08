@@ -259,3 +259,7 @@ input[readonly], textarea[readonly] { cursor: default }
 .sg-tag { font-size: 11px; border-radius: 99px; padding: 1px 8px; white-space: nowrap } .sg-row.req .sg-tag { background: #fde0e0; color: #b3261e } .sg-row.com .sg-tag { background: #fdf0c8; color: #8a6d00 } .sg-name { flex: 1 }
 .mat-nav .nav-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 0; border-top: 1px solid #f0e6d6 } .mat-nav .nav-row:first-of-type { border-top: 0 }
 .mat-nav .chip { margin: 0 } .nav-band { width: 110px; font-size: 11px; font-weight: 700; color: var(--brown); text-transform: uppercase; letter-spacing: .03em }
+.modal-bg.center { align-items: center; padding: 2vh 12px } .dup-modal { width: min(1250px, 96vw); max-height: 94vh; overflow: auto }
+.dc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px } @media (max-width: 900px) { .dc-grid { grid-template-columns: 1fr } }
+.dc-side { border: 1px solid #eadfce; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: #fffdf9 }
+.dc-shots { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start } .dc-row { font-size: 13px } .dc-row > span:first-child { display: inline-block; min-width: 70px; color: #8a7a68; margin-right: 6px }

@@ -23,11 +23,12 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     chRef.current = ch
     ch.on('presence', { event: 'sync' }, () => {
       const st = ch.presenceState() as Record<string, Online[]>
-      setOnline(Object.values(st).map(arr => arr[arr.length - 1]).filter(Boolean))
+      // tài khoản quản trị không lộ cho thành viên khác (ẩn khỏi danh sách online của họ)
+      setOnline(Object.values(st).map(arr => arr[arr.length - 1]).filter(Boolean).filter(o => role === 'admin' || o.role !== 'admin' || o.id === session.user.id))
     }).subscribe(async s => { if (s === 'SUBSCRIBED') await ch.track({ id: session.user.id, name, email: session.user.email ?? '', role: role ?? '', ...where(), since: sinceRef.current }) })
     return () => { supabase.removeChannel(ch); chRef.current = null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.user.id])
+  }, [session.user.id, role])
   useEffect(() => { chRef.current?.track({ id: session.user.id, name, email: session.user.email ?? '', role: role ?? '', ...where(), since: sinceRef.current }) }, [loc.pathname, loc.search, name, role]) // eslint-disable-line
   return <Ctx.Provider value={online}>{children}</Ctx.Provider>
 }
