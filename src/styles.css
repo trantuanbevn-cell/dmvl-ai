@@ -272,3 +272,8 @@ input[readonly], textarea[readonly] { cursor: default }
 
 .ed-obj { pointer-events: auto !important; cursor: move; background: rgba(225,29,29,.08) } .ed-h.obj { background: #e11d1d }
 .shot-wrap[draggable=true] { cursor: grab } tr.drop-ok > td { outline: 2px dashed var(--orange); outline-offset: -2px; background: rgba(239,108,0,.08) }
+
+.link-in { width: 100%; font-size: 12px }
+.link-cell { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 4px }
+.link-a { font-size: 12px; color: #1f4e9a; text-decoration: underline; word-break: break-all } .link-a.bad { color: #b3261e }
+.link-b { border: 1px solid #ddd; background: #fff; border-radius: 6px; font-size: 11px; line-height: 1; padding: 3px 6px; cursor: pointer }

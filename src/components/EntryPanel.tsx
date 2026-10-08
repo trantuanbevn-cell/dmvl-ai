@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import ProductReadDialog from './ProductReadDialog'
 import { saveEntry, linkedWith, linkEntries, unlinkEntry, SYNC_LABEL } from '../lib/entryLink'
 import { GROUPS, CATEGORIES } from '../lib/codes'
 import { writeSpecs, applyProduct } from '../lib/pipeline'
@@ -33,6 +34,7 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
   const { canEdit } = useAuth()
   const [busy, setBusy] = useState('')
   const [lang, setLang] = useState<'vn' | 'en'>('vn')
+  const [readLink, setReadLink] = useState(false)
   const saved = () => d.reload()
   const set = async (patch: Partial<Entry>) => { await saveEntry(entry, patch); d.reload() }
   const occ = d.occ.filter(o => o.entry_id === entry.id)
@@ -134,7 +136,8 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
       </div>
       <Field e={entry} k="product_url" label="Link hãng" onSaved={saved} />
       <Field e={entry} k="product_image_url" label="Link ảnh map (ảnh mẫu hãng)" onSaved={saved} />
-      {entry.product_url && <a className="small" href={entry.product_url} target="_blank" rel="noreferrer">Mở trang hãng ↗</a>}
+      {entry.product_url && <div className="row gap sm-gap"><a className="small" href={entry.product_url} target="_blank" rel="noreferrer">Mở trang hãng ↗</a>{canEdit && <button className="btn sm" onClick={() => setReadLink(true)}>↻ Đọc thông số từ link</button>}</div>}
+      {readLink && <ProductReadDialog d={d} entry={entry} onClose={() => setReadLink(false)} />}
       <div className="row gap sm-gap">
         <button className="btn sm" onClick={save} disabled={!entry.brand || !entry.product_code}>💾 Lưu mã này vào thư viện</button>
       </div>
