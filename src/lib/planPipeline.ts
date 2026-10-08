@@ -28,7 +28,7 @@ export type CameraData = {
   src?: { x: number; y: number } // vị trí camera trên ảnh slide (0..1)
 }
 /** Slide có nhiều ô phối cảnh: rects = các ô ảnh; cams = các camera trên mặt bằng; pair[i] = chỉ số camera của ô ảnh i (-1 = chưa rõ) */
-export type PageViews = { rects: Rect[]; cams: CameraData[]; pair: number[]; pairing: 'ai' | 'assumed'; conf: number }
+export type PageViews = { rects: Rect[]; cams: CameraData[]; pair: number[]; pairing: 'ai' | 'assumed'; conf: number; rect_rooms?: string[] }
 
 async function must<T>(p: PromiseLike<{ data: T; error: any }>): Promise<T> {
   const { data, error } = await p

@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useAuth } from '../../lib/auth'
 import { useNavigate } from 'react-router-dom'
-import { roomStats, projectStats, heroUrl, RoomStat } from '../../lib/progress'
+import { syncSharedPages } from '../../lib/roomSplit'
+import { roomStats, projectStats, heroStyle, RoomStat } from '../../lib/progress'
 import { roomTypeLabel } from '../../lib/codes'
 import { loadSettings, Settings } from '../../lib/settings'
 import { checkRoom } from '../../lib/check'
@@ -17,6 +19,14 @@ export default function Overview({ d }: { d: ProjectData }) {
   const [flt, setFlt] = useState<'all' | 'none' | 'todo' | 'done'>('all')
   const [st, setSt] = useState<Settings | null>(null)
   useEffect(() => { loadSettings().then(setSt).catch(() => {}) }, [])
+  const { canEdit } = useAuth()
+  const synced = useRef(false)
+  // Slide đã tách phòng từ trước: tự gán ô ảnh cho đúng phòng để ảnh đại diện khớp (một lần mỗi lần mở)
+  useEffect(() => {
+    if (!canEdit || synced.current || !d.pages.length || !d.occ.length) return
+    synced.current = true
+    syncSharedPages(d).then(n => { if (n) d.reload() }).catch(() => {})
+  }, [canEdit, d.pages.length, d.occ.length]) // eslint-disable-line
   const stats = useMemo(() => roomStats(d), [d])
   const ps = projectStats(d)
   const list = [...stats.values()]
@@ -84,14 +94,14 @@ export default function Overview({ d }: { d: ProjectData }) {
       {!list.length && <div className="card muted">Chưa có phòng – hãy tải file concept ở bước “Hồ sơ & phòng”.</div>}
       <div className="room-cards">
         {shown.map(s => {
-          const url = heroUrl(d, s.hero)
+          const url = heroStyle(d, s.hero, s.room.id)
           const area = s.room.concept_counts?.find(c => /diện tích/i.test(c.label))
           const miss = missing(s)
           const seen = new Set<string>()
           const thumbs = d.occ.filter(o => o.room_id === s.room.id && o.bbox && o.page_id && !seen.has(o.entry_id) && seen.add(o.entry_id)).slice(0, 6)
           return (
             <div key={s.room.id} className={'room-card st-' + s.state} onClick={() => goRoom(s.room.id)}>
-              <div className="rc-img" style={url ? { backgroundImage: `url("${url}")` } : undefined}>
+              <div className="rc-img" style={heroStyle(d, s.hero, s.room.id)}>
                 <span className="rc-code">{s.room.code}</span>
                 <span className={'rc-state ' + s.state}>{STATE_LABEL[s.state]}</span>
                 {s.room.work_status && s.room.work_status !== 'todo' && <span className={'ws-tag ' + s.room.work_status} style={{ right: 6, bottom: 6, left: 'auto', top: 'auto' }}>{s.room.work_status === 'done' ? '✓ Xong' : '● Đang làm'}{s.room.work_by ? ` · ${s.room.work_by}` : ''}</span>}

@@ -1,3 +1,4 @@
+import { roomPages, roomRect, rectBg } from './roomPages'
 import type { ProjectData } from './useProject'
 import type { Room, Page } from './types'
 
@@ -7,6 +8,11 @@ export type RoomStat = {
   state: RoomState; analyzed: boolean; entryIds: string[]
 }
 
+export function heroStyle(d: ProjectData, p: Page | undefined, roomId: string): React.CSSProperties | undefined {
+  const url = heroUrl(d, p); if (!url || !p) return undefined
+  const r = roomRect(p, roomId)
+  return r ? rectBg(url, p, r) : { backgroundImage: `url("${url}")` }
+}
 export function heroUrl(d: ProjectData, p?: Page): string | undefined { return p ? d.urls[p.thumb_path ?? p.image_path] : undefined }
 
 /** Tiến độ từng phòng: số mã, đã xác nhận, chờ duyệt… (mã bị loại không tính) */
@@ -14,7 +20,7 @@ export function roomStats(d: ProjectData): Map<string, RoomStat> {
   const entryById = new Map(d.entries.map(e => [e.id, e]))
   const out = new Map<string, RoomStat>()
   for (const room of d.rooms) {
-    const pages = d.pages.filter(p => p.room_id === room.id)
+    const pages = roomPages(d.pages, room.id)
     const renders = pages.filter(p => p.kind === 'render')
     const hero = renders[0] ?? pages.find(p => p.kind === 'plan') ?? pages[0]
     const ids = [...new Set(d.occ.filter(o => o.room_id === room.id).map(o => o.entry_id))]

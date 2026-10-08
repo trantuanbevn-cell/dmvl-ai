@@ -297,7 +297,7 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
   try {
     // trang của phòng này + trang slide dùng chung (một ảnh/camera trong slide thuộc phòng này dù trang gán cho phòng khác)
     const every = await must(supabase.from('pages').select('*').eq('project_id', project.id).order('page_no')) as Page[]
-    const all = every.filter(p => p.room_id === room.id || (p.views as PageViews | null)?.cams?.some(c => c.room_id === room.id))
+    const all = every.filter(p => p.room_id === room.id || (p.views as PageViews | null)?.rect_rooms?.includes(room.id) || (p.views as PageViews | null)?.cams?.some(c => c.room_id === room.id))
     let pages = all.filter(p => p.kind === 'render')
     if (!pages.length) pages = all.filter(p => p.kind === 'plan')
     if (!pages.length) throw new Error('Phòng chưa có trang phối cảnh nào')

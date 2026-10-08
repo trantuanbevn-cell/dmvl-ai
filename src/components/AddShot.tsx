@@ -1,3 +1,4 @@
+import { roomPages } from '../lib/roomPages'
 import { useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { uploadImage } from '../lib/imageUpload'
@@ -15,7 +16,7 @@ export default function AddShot({ d, entry, roomId, onClose }: { d: ProjectData;
   const [busy, setBusy] = useState(false)
   const drag = useRef<{ x: number; y: number } | null>(null)
   const wrap = useRef<HTMLDivElement>(null)
-  const pages = useMemo(() => d.pages.filter(p => p.room_id === rid && (p.kind === 'render' || p.kind === 'plan')), [d.pages, rid])
+  const pages = useMemo(() => roomPages(d.pages, rid).filter(p => p.kind === 'render' || p.kind === 'plan'), [d.pages, rid])
   const page = d.pages.find(p => p.id === pageId)
   const rel = (e: React.PointerEvent) => { const r = wrap.current!.getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))] }
   const down = (e: React.PointerEvent) => { e.preventDefault(); (e.target as Element).setPointerCapture?.(e.pointerId); const [x, y] = rel(e); drag.current = { x, y }; setBox([x, y, 0, 0]) }

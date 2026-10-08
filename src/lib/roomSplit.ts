@@ -73,7 +73,10 @@ export async function splitRoom(d: ProjectData, room: Room, parts: Part[], choic
     roomOfRect.set(p.id, rid)
     const patch: Record<string, unknown> = { room_id: rid(0) }
     const v = p.views as PageViews | null
-    if (v?.rects?.length && v.cams?.length) patch.views = { ...v, cams: v.cams.map((c, ci) => { const vi = v.pair.indexOf(ci); return vi >= 0 ? { ...c, room_id: rid(vi) } : c }) }
+    const rs = pageRects(p, found)
+    // ghi lại ô ảnh nào thuộc phòng nào để các màn hình khác (Tổng quan, Theo phòng) hiển thị đúng ảnh của từng phòng
+    if (rs.length >= 2) patch.views = { ...(v ?? { cams: [], pair: [], pairing: 'assumed', conf: 0 }), rects: rs, rect_rooms: rs.map((_, i) => rid(i)) }
+    if (v?.rects?.length && v.cams?.length) patch.views = { ...(patch.views as object ?? v), rects: rs.length >= 2 ? rs : v.rects, cams: v.cams.map((c, ci) => { const vi = v.pair.indexOf(ci); return vi >= 0 ? { ...c, room_id: rid(vi) } : c }) }
     await must(supabase.from('pages').update(patch).eq('id', p.id))
   }
   // 3) vật liệu đã nhận diện: chia theo ô ảnh chứa tâm khung; không thuộc trang nào thì ở lại phòng đầu
@@ -92,3 +95,28 @@ export async function splitRoom(d: ProjectData, room: Room, parts: Part[], choic
   return { rooms: ids.length, moved }
 }
 async function must<T>(p: PromiseLike<{ data: T; error: any }>): Promise<T> { const { data, error } = await p; if (error) throw new Error(error.message ?? String(error)); return data }
+
+/** Sửa các slide đã tách phòng từ trước: dò ô ảnh trong PDF rồi gán mỗi ô cho phòng có nhiều vật liệu nằm trong ô đó nhất. Không đụng vật liệu. */
+export async function syncSharedPages(d: ProjectData): Promise<number> {
+  const project = d.project; if (!project?.pdf_path) return 0
+  const cand = d.pages.filter(p => p.kind === 'render' && !((p.views as PageViews | null)?.rect_rooms?.length) && new Set(d.occ.filter(o => o.page_id === p.id).map(o => o.room_id)).size >= 2)
+  if (!cand.length) return 0
+  const { BUCKET } = await import('./supabase')
+  const { renderRects } = await import('./renders')
+  const blob = (await supabase.storage.from(BUCKET).download(project.pdf_path)).data; if (!blob) return 0
+  const found = await renderRects(await blob.arrayBuffer(), cand.map(p => p.page_no))
+  let n = 0
+  for (const p of cand) {
+    const rs = found.get(p.page_no) ?? []; if (rs.length < 2) continue
+    const occ = d.occ.filter(o => o.page_id === p.id && o.bbox)
+    const rooms = rs.map(r => {
+      const cnt = new Map<string, number>()
+      for (const o of occ) { const cx = o.bbox![0] + o.bbox![2] / 2, cy = o.bbox![1] + o.bbox![3] / 2; if (cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h) cnt.set(o.room_id!, (cnt.get(o.room_id!) ?? 0) + 1) }
+      return [...cnt.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? p.room_id!
+    })
+    if (new Set(rooms).size < 2) continue
+    const v = p.views as PageViews | null
+    await supabase.from('pages').update({ views: { ...(v ?? { cams: [], pair: [], pairing: 'assumed', conf: 0 }), rects: rs, rect_rooms: rooms } }).eq('id', p.id); n++
+  }
+  return n
+}

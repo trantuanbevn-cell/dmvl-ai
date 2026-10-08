@@ -15,6 +15,7 @@ import RoomSections from '../../components/RoomSections'
 import RoomSuggest from '../../components/RoomSuggest'
 import AddMaterial, { type AddPreset } from '../../components/AddMaterial'
 import type { Lang } from '../../lib/sections'
+import { roomPages } from '../../lib/roomPages'
 import { roomStats, heroUrl } from '../../lib/progress'
 import { useAuth } from '../../lib/auth'
 import { useOnline, colorOf } from '../../lib/presence'
@@ -37,7 +38,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
   const [dlg, setDlg] = useState<AddPreset | null>(null)
   const imgRef = useRef<HTMLDivElement>(null)
 
-  const pages = d.pages.filter(p => p.room_id === roomId && (p.kind === 'render' || p.kind === 'plan'))
+  const pages = roomPages(d.pages, roomId).filter(p => p.kind === 'render' || p.kind === 'plan')
   const page = pages[Math.min(pageIdx, pages.length - 1)]
   const occ = d.occ.filter(o => o.room_id === roomId)
   const entryById = useMemo(() => new Map(d.entries.map(e => [e.id, e])), [d.entries])
