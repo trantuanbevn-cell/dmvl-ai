@@ -249,3 +249,7 @@ input[readonly], textarea[readonly] { cursor: default }
 .sec-table .ed-line.lab { margin-top: 2px } .sec-table .ed-line.lab input, .sec-table .ed-line.lab textarea { font-size: 11px; color: #6b5a4c }
 
 .proj-pick { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: #faf7f3; max-height: 180px; overflow: auto; margin-top: 4px }
+.zone-lab { position: absolute; transform: translate(-50%, -50%); font-size: 10px; line-height: 1.15; text-align: center; font-weight: 600; color: #222; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff; pointer-events: none; max-width: 90px }
+.zone-tools, .zone-sug { margin: 8px 0; padding: 8px; border: 1px solid #e3d6c5; border-radius: 8px; background: #fbf7f1 }
+.zone-tools .chip { display: inline-block; margin: 2px 4px 2px 0; padding: 1px 7px; border-radius: 10px; background: #efe3d3 }
+.zone-tools .chip a { cursor: pointer; color: #b3261e; margin-left: 4px }

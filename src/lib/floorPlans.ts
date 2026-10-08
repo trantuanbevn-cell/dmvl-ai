@@ -1,7 +1,8 @@
 // Mặt bằng GỐC theo tầng (PDF vector xuất từ AutoCAD): tải lên, đọc nét vẽ, tìm phòng kín.
 import { supabase, BUCKET } from './supabase'
 import { loadCv } from './cv'
-import { readVectorPage, guessWallClasses } from './vector'
+import { readVectorPage, guessWallClasses, detectDoors } from './vector'
+import { applyMerges } from './cadZones'
 import { rasterWalls, findRooms, mPerPt } from './cad'
 import { renderPdfPage } from './pdf'
 import type { Project, FloorPlan, FloorGeom } from './types'
@@ -26,7 +27,6 @@ export async function addFloorPlan(project: Project, file: File, label: string, 
 /** Đọc lại bản vẽ và tìm phòng. Có thể đổi nhóm nét tường, bề rộng cửa, tỉ lệ. */
 export async function computeFloor(fp: FloorPlan, opts: { wallKeys?: string[]; doorW?: number; scaleDen?: number }, log: Log, buf?: ArrayBuffer) {
   const scaleDen = opts.scaleDen ?? fp.scale_den
-  const doorW = opts.doorW ?? fp.geometry?.door_w ?? 1.0
   log('Đang nạp bộ xử lý ảnh...')
   const cv = await loadCv()
   if (!buf) buf = await (await must(supabase.storage.from(BUCKET).download(fp.pdf_path)) as Blob).arrayBuffer()
@@ -35,19 +35,23 @@ export async function computeFloor(fp: FloorPlan, opts: { wallKeys?: string[]; d
   const keys = opts.wallKeys ?? fp.geometry?.wall_keys
   const sel = keys ? new Set(v.classes.map((c, i) => (keys.includes(c.key) ? i : -1)).filter(i => i >= 0)) : guessWallClasses(v)
   if (!sel.size) throw new Error('Không chọn được nhóm nét nào làm tường')
+  const doors = detectDoors(v, mPerPt(scaleDen))
+  const doorW = opts.doorW ?? fp.geometry?.door_w ?? (doors.length >= 3 ? 0.3 : 1.0)
+  log(`Nhận diện được ${doors.length} cửa đi (cung quay + cánh)${doors.length < 3 ? ' – ít, dùng cách đóng ô cửa theo bề rộng' : ' – tường được đóng đúng tại cửa'}.`)
   const ppp = Math.min(4, 4000 / Math.max(v.w, v.h))
   log(`Đang tìm tường và phòng kín (${sel.size} nhóm nét tường)...`)
   await new Promise(r => setTimeout(r, 20))
-  const { mask, W, H } = rasterWalls(v, sel, ppp)
+  const { mask, W, H } = rasterWalls(v, sel, ppp, doors)
   const res = findRooms(cv, v, mask, W, H, ppp, scaleDen, doorW)
   const geom: FloorGeom = {
     w: v.w, h: v.h, m_per_pt: mPerPt(scaleDen), door_w: doorW, leaked: res.leaked,
     wall_keys: [...sel].map(i => v.classes[i].key),
     classes: v.classes.map(c => ({ ...c })).sort((a, b) => b.len - a.len).slice(0, 60),
-    rooms: res.rooms,
+    doors: doors.length, rooms: res.rooms, raw_rooms: res.rooms, merges: fp.geometry?.merges ?? [],
   }
+  geom.rooms = applyMerges(res.rooms, geom.merges!)
   await must(supabase.from('floor_plans').update({ scale_den: scaleDen, geometry: geom, status: 'ready' }).eq('id', fp.id))
-  log(`Xong: tìm được ${res.rooms.length} phòng kín${res.leaked ? ' – ít quá, có thể tường chưa kín: thử chọn thêm nhóm nét tường hoặc tăng bề rộng cửa' : ''}.`)
+  log(`Xong: tìm được ${res.rooms.length} phòng kín${geom.merges?.length ? `, áp lại ${geom.merges.length} phép gộp/đặt tên` : ''}${res.leaked ? ' – ít quá, có thể tường chưa kín: thử chọn thêm nhóm nét tường hoặc tăng bề rộng cửa' : ''}.`)
 }
 
 export async function deleteFloorPlan(fp: FloorPlan) {

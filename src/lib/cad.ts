@@ -11,7 +11,7 @@ export type CadResult = { rooms: CadRoom[]; m_per_pt: number; px_per_pt: number;
 export const mPerPt = (scaleDen: number) => (25.4 / 72 / 1000) * scaleDen
 
 /** Vẽ các nhóm nét được chọn thành mặt nạ tường (canvas → Uint8Array 0/255) */
-export function rasterWalls(v: VecPage, selected: Set<number>, pxPerPt: number): { mask: Uint8Array; W: number; H: number } {
+export function rasterWalls(v: VecPage, selected: Set<number>, pxPerPt: number, doors: number[][] = []): { mask: Uint8Array; W: number; H: number } {
   const W = Math.ceil(v.w * pxPerPt), H = Math.ceil(v.h * pxPerPt)
   const c = document.createElement('canvas'); c.width = W; c.height = H
   const g = c.getContext('2d', { willReadFrequently: true })!
@@ -34,6 +34,8 @@ export function rasterWalls(v: VecPage, selected: Set<number>, pxPerPt: number):
     for (let i = 2; i < f.pts.length; i += 2) g.lineTo(f.pts[i] * pxPerPt, f.pts[i + 1] * pxPerPt)
     g.closePath(); g.fill()
   }
+  // ô cửa đi: nối bản lề → mép đối diện để phòng khép kín đúng tại cửa
+  if (doors.length) { g.lineWidth = Math.max(2, 0.6 * pxPerPt); g.beginPath(); for (const d of doors) { g.moveTo(d[0] * pxPerPt, d[1] * pxPerPt); g.lineTo(d[2] * pxPerPt, d[3] * pxPerPt) } g.stroke() }
   const d = g.getImageData(0, 0, W, H).data, mask = new Uint8Array(W * H)
   for (let i = 0; i < W * H; i++) mask[i] = d[i * 4] > 100 ? 255 : 0
   return { mask, W, H }

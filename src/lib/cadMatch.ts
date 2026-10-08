@@ -4,6 +4,7 @@ import type { FloorGeom } from './types'
 import type { Transform, Pt } from './plan'
 import { applyT } from './plan'
 import { norm } from './classify'
+import { roomPolys } from './cadZones'
 
 export type ConceptLabel = { label: string; area: number; x: number; y: number }
 export type CadMatch = { T: Transform; lambda: number; inliers: number; pairs: { li: number; roomId: number }[]; names: number }
@@ -20,7 +21,7 @@ export function inPoly(poly: number[][], x: number, y: number) {
 /** kPxPerM2: ước lượng px²/m² của mặt bằng concept (từ bước tách vùng) – dùng để loại các giả thuyết sai tỉ lệ */
 export function matchConceptToCad(labels: ConceptLabel[], g: FloorGeom, kPxPerM2: number): CadMatch | null {
   if (labels.length < 2 || g.rooms.length < 2) return null
-  const R = g.rooms.map(r => ({ ...r, X: r.cx * g.w, Y: r.cy * g.h, poly: r.poly.map(p => [p[0] * g.w, p[1] * g.h]) }))
+  const R = g.rooms.map(r => ({ ...r, X: r.cx * g.w, Y: r.cy * g.h, polys: roomPolys(r).map(pl => pl.map(p => [p[0] * g.w, p[1] * g.h])) }))
   const expLam = kPxPerM2 > 0 ? 1 / Math.sqrt(kPxPerM2) / g.m_per_pt : 0 // pt trên mỗi px
   type Pr = { i: number; j: number; w: number }
   const prs: Pr[] = []
@@ -47,7 +48,7 @@ export function matchConceptToCad(labels: ConceptLabel[], g: FloorGeom, kPxPerM2
     const used = new Set<number>(), pairs: { li: number; roomId: number }[] = []; let names = 0
     labels.forEach((l, i) => {
       const c = applyT(T, l)
-      const r = R.find(rr => !used.has(rr.id) && inPoly(rr.poly, c.x, c.y)); if (!r) return
+      const r = R.find(rr => !used.has(rr.id) && rr.polys.some(pl => inPoly(pl, c.x, c.y))); if (!r) return
       const ratio = l.area / r.area_m2; if (ratio < 0.45 || ratio > 2.2) return
       used.add(r.id); pairs.push({ li: i, roomId: r.id }); if (nameScore(l.label, r.names) >= 0.6) names++
     })

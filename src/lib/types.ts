@@ -23,9 +23,15 @@ export const STATUS_VN: Record<string, string> = { pending: 'Chờ duyệt', app
 export const STATUS_EN: Record<string, string> = { pending: 'Pending', approved: 'Approved', rejected: 'Rejected', review: 'Designer to review' }
 export const SOURCE_VN: Record<string, string> = { image: 'Ảnh', inferred: 'Suy luận', manual: 'Thêm tay' }
 export const SOURCE_EN: Record<string, string> = { image: 'Image', inferred: 'Inferred', manual: 'Manual' }
+export type FloorRoom = { id: number; area_m2: number; poly: number[][]; cx: number; cy: number; names: string[]; label_area?: number; polys?: number[][][]; user?: boolean; merged?: number[] }
+/** Gộp/đặt tên không gian do người dùng (hoặc gợi ý từ concept): members = tâm (0..1) của các phòng kín gốc – giữ nguyên khi tính lại bản vẽ */
+export type ZoneMerge = { name: string; name_en?: string; members: [number, number][]; src?: 'user' | 'concept' }
+export type ZoneSuggest = { name: string; members: [number, number][]; area: number; label_area: number; page_no: number }
+export type ZoneCompare = { label: string; label_area: number; page_no: number; cad_ids: number[]; cad_area: number; page_id?: string }
 export type FloorGeom = {
-  w: number; h: number; m_per_pt: number; door_w: number; leaked: boolean
+  w: number; h: number; m_per_pt: number; door_w: number; leaked: boolean; doors?: number
   wall_keys: string[]; classes: { key: string; layer: string; lw: number; fill: boolean; len: number; n: number }[]
-  rooms: { id: number; area_m2: number; poly: number[][]; cx: number; cy: number; names: string[]; label_area?: number }[]
+  rooms: FloorRoom[]
+  raw_rooms?: FloorRoom[]; merges?: ZoneMerge[]; suggest?: ZoneSuggest[]; compare?: ZoneCompare[]
 }
 export type FloorPlan = { id: string; project_id: string; floor_label: string; pdf_path: string; page_no: number; scale_den: number; width: number | null; height: number | null; preview_path: string | null; geometry: FloorGeom | null; status: string }

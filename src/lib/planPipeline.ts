@@ -5,8 +5,9 @@ import { extractWords } from './pdf'
 import { norm as normT } from './classify'
 import { detectCameras, type Camera, orbFeatures, freeFeat, matchSimilarity, applyT, roomLabels, segmentRooms, dirWords, type Feat, type RoomRegion } from './plan'
 import { renderRects, type Rect } from './renders'
+import { roomPolys, inRoom, centroidOf } from './cadZones'
 import { matchConceptToCad, inPoly } from './cadMatch'
-import type { Project, Room, Page, Entry, Occurrence, FloorPlan } from './types'
+import type { Project, Room, Page, Entry, Occurrence, FloorPlan, ZoneSuggest, ZoneCompare } from './types'
 
 type Log = (msg: string) => void
 const MAXW = 2000
@@ -79,6 +80,7 @@ export async function analyzePlans(project: Project, rooms: Room[], pages: Page[
   const floors = (await must(supabase.from('floor_plans').select('*').eq('project_id', project.id))) as FloorPlan[]
   const cadOf = new Map<string, NonNullable<PlanData['cad']> & { fp: FloorPlan }>()
   await supabase.from('warnings').delete().eq('project_id', project.id).like('text', '[Mặt bằng gốc]%')
+  const zoneAcc = new Map<string, { suggest: ZoneSuggest[]; compare: ZoneCompare[] }>(floors.map(f => [f.id, { suggest: [], compare: [] }]))
   for (const pg of planPages) {
     log(`Mặt bằng trang ${pg.page_no}: đang tìm nhãn phòng...`)
     const img = await loadImage(pg.image_path); imgs.set(pg.id, img)
@@ -97,12 +99,32 @@ export async function analyzePlans(project: Project, rooms: Room[], pages: Page[
       cadOf.set(pg.id, { fp: best.fp, floor_id: best.fp.id, floor_label: best.fp.floor_label, lambda: best.m.lambda, T: best.m.T, inliers: best.m.inliers, rooms: best.m.pairs.map(pr => { const cr = g.rooms.find(r => r.id === pr.roomId)!; return { label: seeds[pr.li].label, cad_room: cr.id, cad_area: cr.area_m2, cad_names: cr.names } }) })
     } else if (floors.some(f => f.geometry)) log('  chưa khớp được với mặt bằng gốc nào (kiểm tra tầng/tỉ lệ đã tải)')
     planInfo.set(pg.id, { k: seg.k, basis: seg.kBasis, w: img.width, h: img.height })
+    if (best) {
+      // đối chiếu từng vùng phòng của concept với các không gian của bản vẽ gốc: không gian nào nằm trong vùng đó → so diện tích, gợi ý gộp + đặt tên
+      const g = best.fp.geometry!, acc = zoneAcc.get(best.fp.id)!
+      for (const reg of seg.rooms) {
+        if (reg.poly.length < 3 || !reg.label) continue
+        const lab = seeds.find(x => x.label === reg.label)?.area ?? reg.area_m2
+        const mapped = reg.poly.map(p => { const c = applyT(best!.m.T, { x: p[0] * img.width, y: p[1] * img.height }); return [c.x / g.w, c.y / g.h] })
+        const mem = g.rooms.filter(r => inPoly(mapped, r.cx, r.cy))
+        if (!mem.length) continue
+        const area = mem.reduce((a, r) => a + r.area_m2, 0)
+        acc.compare.push({ label: reg.label, label_area: lab, page_no: pg.page_no, page_id: pg.id, cad_ids: mem.map(r => r.id), cad_area: +area.toFixed(1) })
+        const done = mem.length === 1 && mem[0].user && mem[0].names[0] === reg.label
+        if (!done && Math.abs(area - lab) / lab <= 0.3) acc.suggest.push({ name: reg.label, members: centroidOf(g, mem.map(r => r.id)), area: +area.toFixed(1), label_area: lab, page_no: pg.page_no })
+      }
+    }
     for (const reg of seg.rooms) {
       let best: Room | null = null, bs = 0
       for (const r of rooms) { const s = matchScore(reg.label, r); if (s > bs) { bs = s; best = r } }
       if (best && bs >= 0.5) found.push({ page: pg, reg, room: best, score: bs })
       else log(`  nhãn "${reg.label}" (${reg.area_m2} m²) chưa khớp phòng nào`)
     }
+  }
+  for (const fp of floors) if (fp.geometry) {
+    const acc = zoneAcc.get(fp.id)!
+    await supabase.from('floor_plans').update({ geometry: { ...fp.geometry, suggest: acc.suggest, compare: acc.compare } }).eq('id', fp.id)
+    if (acc.compare.length) log(`  Mặt bằng gốc "${fp.floor_label}": ${acc.compare.length} vùng concept đối chiếu được, ${acc.suggest.length} gợi ý gộp/đặt tên (xem ở mục Mặt bằng gốc).`)
   }
   // 2) Gom theo phòng (chọn trang mặt bằng có điểm khớp tốt nhất) và lưu
   const planOf = new Map<string, PlanData>()
@@ -192,8 +214,8 @@ export async function analyzePlans(project: Project, rooms: Room[], pages: Page[
         const cm = cadOf.get(hit.page.id)
         if (cm) {
           const g = cm.fp.geometry!, cp = applyT(cm.T, c)
-          const R = g.rooms.map(r => ({ r, poly: r.poly.map(p => [p[0] * g.w, p[1] * g.h]) }))
-          const hr = R.find(x => inPoly(x.poly, cp.x, cp.y))
+          const R = g.rooms.map(r => ({ r, polys: roomPolys(r).map(pl => pl.map(p => [p[0] * g.w, p[1] * g.h])) }))
+          const hr = R.find(x => x.polys.some(pl => inPoly(pl, cp.x, cp.y)))
           const rangePt = 12 / g.m_per_pt, cdx = cm.T.a * dx - cm.T.b * dy, cdy = cm.T.b * dx + cm.T.a * dy, cl = Math.hypot(cdx, cdy) || 1
           const vr: string[] = []
           for (const x of R) { const vx = x.r.cx * g.w - cp.x, vy = x.r.cy * g.h - cp.y, d = Math.hypot(vx, vy); if (d < 1 || d > rangePt) continue; if (Math.acos(Math.max(-1, Math.min(1, (vx * cdx + vy * cdy) / (d * cl)))) <= half) vr.push(`${x.r.names[0] ?? '#' + x.r.id} (${x.r.area_m2} m²)`) }
