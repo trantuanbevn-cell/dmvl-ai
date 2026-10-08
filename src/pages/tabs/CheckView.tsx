@@ -129,7 +129,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
             </div>
           </div>
         </div>)}
-      {selEntry && <EntryPanel d={d} entry={selEntry} onClose={() => setSel(null)} />}
+      {selEntry && <div className="drawer-bg" onMouseDown={() => setSel(null)}><div className="drawer" onMouseDown={e => e.stopPropagation()}><EntryPanel d={d} entry={selEntry} onClose={() => setSel(null)} /></div></div>}
     </div>
   )
 }
