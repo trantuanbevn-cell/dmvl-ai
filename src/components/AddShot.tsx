@@ -27,12 +27,12 @@ export default function AddShot({ d, entry, roomId, onClose }: { d: ProjectData;
     try {
       if (tab === 'page') {
         if (!page || !box || box[2] < 0.01 || box[3] < 0.01) throw new Error('Hãy chọn trang và kéo chuột khoanh vùng vật liệu')
-        const { error } = await supabase.from('occurrences').insert({ entry_id: entry.id, room_id: rid || null, page_id: page.id, category, bbox: box.map(v => +v.toFixed(4)) })
+        const { error } = await supabase.from('occurrences').insert({ entry_id: entry.id, room_id: rid || null, page_id: page.id, category, origin: 'manual', bbox: box.map(v => +v.toFixed(4)) })
         if (error) throw new Error(error.message)
       } else {
         if (!file) throw new Error('Chưa chọn ảnh')
         const img = await uploadImage(file, `${d.project!.id}/crops/new-${entry.id}-${Date.now()}.jpg`)
-        const { error } = await supabase.from('occurrences').insert({ entry_id: entry.id, room_id: rid || null, page_id: null, category, bbox: [0.32, 0.3, 0.36, 0.4], view: { img } })
+        const { error } = await supabase.from('occurrences').insert({ entry_id: entry.id, room_id: rid || null, page_id: null, category, origin: 'manual', bbox: [0.32, 0.3, 0.36, 0.4], view: { img } })
         if (error) throw new Error(error.message)
       }
       await d.reload(); onClose()

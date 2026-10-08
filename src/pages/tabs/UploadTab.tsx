@@ -14,7 +14,7 @@ import { suggestSplits } from '../../lib/roomSplit'
 const KINDS: Record<string, string> = { cover: 'Bìa', moodboard: 'Moodboard', plan: 'Mặt bằng', render: 'Phối cảnh', other: 'Khác', unknown: 'Chưa phân loại' }
 
 export default function UploadTab({ d }: { d: ProjectData }) {
-  const { canEdit } = useAuth()
+  const { canEdit, isAdmin } = useAuth()
   const p = d.project!
   const [lines, setLines] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
@@ -47,9 +47,9 @@ export default function UploadTab({ d }: { d: ProjectData }) {
         <h3>File concept (PDF)</h3>
         <details className="small muted"><summary>Cách hoạt động</summary><p>Phần mềm tách từng trang thành ảnh ngay trong trình duyệt, đọc chữ trên trang để phân loại bìa / moodboard / mặt bằng / phối cảnh, gom theo phòng và đọc số liệu – <b>không dùng AI, không tốn phí</b>. Nếu PDF là ảnh scan không có chữ, dùng “AI phân loại”.</p></details>
         <div className="row gap">
-          <label className="btn primary">{d.pages.length ? 'Tải file khác' : 'Chọn file PDF'}<input type="file" accept="application/pdf" hidden disabled={busy} onChange={e => onFile(e.target.files?.[0])} /></label>
-          {d.pages.length > 0 && <button className="btn" disabled={busy} onClick={() => run(() => classifyLocalPages(p, log))}>Phân loại lại (không AI)</button>}
-          {d.pages.length > 0 && <button className="btn ghost" disabled={busy} title="Chỉ cần cho PDF scan không có chữ – dùng hạn mức AI" onClick={() => run(() => classifyPages(p, log))}>AI phân loại (PDF scan)</button>}
+          <label className="btn primary" style={isAdmin ? undefined : { opacity: .5, pointerEvents: 'none' }} title={isAdmin ? undefined : 'Chỉ quản trị viên'}>{d.pages.length ? 'Tải file khác' : 'Chọn file PDF'}<input type="file" accept="application/pdf" hidden disabled={busy || !isAdmin} onChange={e => onFile(e.target.files?.[0])} /></label>
+          {d.pages.length > 0 && <button className="btn" disabled={busy || !isAdmin} title={isAdmin ? undefined : 'Chỉ quản trị viên'} onClick={() => run(() => classifyLocalPages(p, log))}>Phân loại lại (không AI)</button>}
+          {d.pages.length > 0 && <button className="btn ghost" disabled={busy || !isAdmin} title="Chỉ quản trị viên · chỉ cần cho PDF scan không có chữ – dùng hạn mức AI" onClick={() => run(() => classifyPages(p, log))}>AI phân loại (PDF scan)</button>}
           {d.rooms.length > 0 && <button className="btn" onClick={() => nav(`/p/${p.id}/analyze`)}>Tiếp: Phân tích →</button>}
           {busy && <span className="spinner" />}
         </div>

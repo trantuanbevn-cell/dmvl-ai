@@ -4,6 +4,7 @@
 
 import { GROUPS_PROMPT, CATEGORY_PROMPT, ROOM_TYPES_PROMPT } from './prompts.ts'
 import { callGemini } from './gemini.ts'
+import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const API = (Deno.env.get('ANTHROPIC_BASE_URL') ?? 'https://api.anthropic.com') + '/v1/messages'
 const MODEL = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-sonnet-5-5'
@@ -187,6 +188,12 @@ Deno.serve(async (req) => {
     const { task, payload } = await req.json()
     const prov = provider()
     if (task === 'info') return json({ provider: prov, model: prov === 'gemini' ? GEMINI_MODEL : MODEL })
+    // Phân tích/phân loại bằng AI chỉ dành cho quản trị viên (tránh ghi đè dữ liệu mọi người đang chỉnh)
+    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
+    const tok = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+    const { data: u } = await admin.auth.getUser(tok)
+    const { data: me } = u?.user ? await admin.from('profiles').select('role,active').eq('id', u.user.id).maybeSingle() : { data: null }
+    if (!me || !me.active || me.role !== 'admin') return json({ error: 'Chỉ quản trị viên mới được chạy phân tích bằng AI' }, 403)
     const request = build(task, payload)
 
     if (prov === 'gemini') {

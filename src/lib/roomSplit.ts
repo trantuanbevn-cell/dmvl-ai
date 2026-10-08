@@ -1,5 +1,6 @@
 // Tách một "phòng" thực ra gồm nhiều phòng (cùng một slide concept) thành các phòng riêng – không dùng AI.
 import { supabase } from './supabase'
+import { autoBackup } from './backup'
 import type { Page, Room, Occurrence } from './types'
 import type { PageViews } from './planPipeline'
 import type { ProjectData } from './useProject'
@@ -48,6 +49,7 @@ const pad = (n: number) => String(n).padStart(2, '0')
 /** choice[pageId][i] = chỉ số phòng (trong `parts`) của ô ảnh i (hoặc cả trang nếu không tách được ô ảnh). Giữ nguyên mọi vật liệu đã có, chỉ chia lại theo phòng. */
 export async function splitRoom(d: ProjectData, room: Room, parts: Part[], choice: Record<string, number[]>) {
   const project = d.project!
+  await autoBackup(project, `Tự động trước khi tách phòng ${room.code}`)
   // 1) phòng đầu giữ mã cũ, các phòng sau tạo mới và xếp liền kề
   const ids: string[] = [room.id]
   await must(supabase.from('rooms').update({ name_vn: parts[0].name_vn, name_en: parts[0].name_en || null }).eq('id', room.id))

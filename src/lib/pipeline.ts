@@ -3,6 +3,7 @@ import { renderPdf, cleanText } from './pdf'
 import { callAI } from './ai'
 import { sampleColor, normalizeAIBox } from './crop'
 import { GROUPS, CATEGORIES } from './codes'
+import { autoBackup } from './backup'
 import { classifyLocal, norm as normT } from './classify'
 import { inferForRoom } from './infer'
 import { specPatch } from './specs'
@@ -28,6 +29,7 @@ async function must<T>(p: PromiseLike<{ data: T; error: any }>): Promise<T> {
 
 // ---------------------------------------------------------------- 1. Tải PDF → ảnh trang
 export async function uploadPdf(project: Project, file: File, log: Log) {
+  await autoBackup(project, 'Tự động trước khi tải PDF mới')
   log(`Đang tải PDF lên kho (${(file.size / 1e6).toFixed(1)} MB)...`)
   const pdfPath = `${project.id}/source.pdf`
   await must(supabase.storage.from(BUCKET).upload(pdfPath, file, { upsert: true, contentType: 'application/pdf' }))
@@ -50,6 +52,7 @@ export async function uploadPdf(project: Project, file: File, log: Log) {
 // ---------------------------------------------------------------- 2a. Phân loại trang + gom phòng KHÔNG dùng AI
 const titleCase = (s: string) => s.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase())
 export async function classifyLocalPages(project: Project, log: Log) {
+  await autoBackup(project, 'Tự động trước khi phân loại lại trang')
   const pages = await must(supabase.from('pages').select('*').eq('project_id', project.id).order('page_no')) as Page[]
   const res = classifyLocal(pages.map(p => ({ page_no: p.page_no, text: p.page_text })))
   await must(supabase.from('warnings').delete().eq('project_id', project.id))
@@ -93,6 +96,7 @@ export async function classifyLocalPages(project: Project, log: Log) {
 
 // ---------------------------------------------------------------- 2b. Phân loại bằng AI (chỉ dùng cho PDF scan không có chữ)
 export async function classifyPages(project: Project, log: Log) {
+  await autoBackup(project, 'Tự động trước khi AI phân loại trang')
   const pages = await must(supabase.from('pages').select('*').eq('project_id', project.id).order('page_no')) as Page[]
   const urls = await signedUrls(pages.map(p => p.thumb_path ?? p.image_path))
   const results: any[] = []
@@ -216,7 +220,7 @@ async function applyItems(project: Project, room: Room, rawItems: AIItem[], page
     if (box && view) { const r = view.rect; box = [+(r.x + box[0] * r.w).toFixed(4), +(r.y + box[1] * r.h).toFixed(4), +(box[2] * r.w).toFixed(4), +(box[3] * r.h).toFixed(4)] }
     const ok = !!box
     await must(supabase.from('occurrences').insert({
-      entry_id: entry.id, room_id: view?.roomId ?? room.id, page_id: ok ? page.id : null, category,
+      entry_id: entry.id, room_id: view?.roomId ?? room.id, page_id: ok ? page.id : null, category, origin: 'ai',
       bbox: box, qty: it.qty ?? null, confidence: it.confidence ?? null,
     }))
     if (it.parent_ref) {
@@ -286,6 +290,8 @@ async function pairViews(room: Room, page: Page, v: PageViews, url: string, log:
   } catch (e) { log(`    Không ghép được bằng AI (${String(e).slice(0, 80)}) – dùng thứ tự trái→phải`) }
 }
 
+/** Vị trí do phân tích tạo ra (xoá được khi chạy lại): origin='ai', hoặc dòng cũ chưa đánh dấu có trang & chưa chỉnh tay */
+const AI_OCC = 'origin.eq.ai,and(origin.is.null,page_id.not.is.null,view.is.null)'
 export async function analyzeRoom(project: Project, room: Room, log: Log) {
   await must(supabase.from('rooms').update({ analysis_status: 'running' }).eq('id', room.id))
   try {
@@ -295,8 +301,9 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
     let pages = all.filter(p => p.kind === 'render')
     if (!pages.length) pages = all.filter(p => p.kind === 'plan')
     if (!pages.length) throw new Error('Phòng chưa có trang phối cảnh nào')
-    await must(supabase.from('occurrences').delete().eq('room_id', room.id))
-    await cleanupOrphans(project)
+    // Chạy lại AN TOÀN: chỉ xoá các vị trí do phân tích tạo ra. Giữ lại vị trí/hình người dùng tự thêm hoặc đã chỉnh tay, và KHÔNG xoá mã vật liệu nào
+    // (mã cũ vẫn còn nên AI nhận lại đúng mã đã sửa thông tin; mã không còn nhận ra sẽ hiện ở tab Kiểm tra “chưa gán phòng”).
+    await must(supabase.from('occurrences').delete().eq('room_id', room.id).or(AI_OCC))
 
     for (const [i, page] of pages.entries()) {
       const entries = await must(supabase.from('entries').select('*').eq('project_id', project.id)) as Entry[]
@@ -305,7 +312,7 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
       const url = await signedUrl(page.image_path)
       const views = page.views as PageViews | null
       const multi = !!(views && views.rects.length >= 2 && views.cams.length >= 2)
-      if (!multi) await must(supabase.from('occurrences').delete().eq('page_id', page.id)) // trang 1 ảnh: làm lại sạch; slide nhiều phòng chỉ xoá phần của phòng này (đã xoá ở trên)
+      if (!multi) await must(supabase.from('occurrences').delete().eq('page_id', page.id).or(AI_OCC)) // trang 1 ảnh: làm lại sạch; slide nhiều phòng chỉ xoá phần của phòng này (đã xoá ở trên)
       if (views && views.rects.length >= 2 && views.cams.length >= 2) {
         await pairViews(room, page, views, url, log)
         const roomIds = new Set((await must(supabase.from('rooms').select('id').eq('project_id', project.id)) as { id: string }[]).map(x => x.id))
@@ -395,7 +402,7 @@ export async function applyInference(project: Project, room: Room): Promise<numb
       }).select().single()) as Entry
       book.add(e); entries.push(e)
     }
-    await must(supabase.from('occurrences').insert({ entry_id: e.id, room_id: room.id, category: x.category, note: x.reason }))
+    await must(supabase.from('occurrences').insert({ entry_id: e.id, room_id: room.id, category: x.category, note: x.reason, origin: 'ai' }))
     added++
   }
   await cleanupOrphans(project)
@@ -447,7 +454,7 @@ export async function addManualEntry(project: Project, room: Room | null, group:
     }).select().single()
     if (error) { if (error.code === '23505' && attempt < 4) continue; throw new Error(error.message) }
     const e = data as Entry
-    if (room) await must(supabase.from('occurrences').insert({ entry_id: e.id, room_id: room.id, category }))
+    if (room) await must(supabase.from('occurrences').insert({ entry_id: e.id, room_id: room.id, category, origin: 'manual' }))
     return e
   }
   throw new Error('Không tạo được mã mới, hãy thử lại')

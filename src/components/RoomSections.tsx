@@ -84,14 +84,14 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     if (!o || o.entry_id === target.id) return
     const cat = d.occ.find(x => x.entry_id === target.id)?.category ?? target.category ?? o.category ?? 'decor'
     if (copy) {
-      const { error } = await supabase.from('occurrences').insert({ entry_id: target.id, room_id: o.room_id, page_id: o.page_id, bbox: o.bbox, view: o.view, qty: null, confidence: o.confidence, category: cat })
+      const { error } = await supabase.from('occurrences').insert({ entry_id: target.id, room_id: o.room_id, page_id: o.page_id, bbox: o.bbox, view: o.view, qty: null, confidence: o.confidence, category: cat, origin: 'manual' })
       if (error) { alert(error.message); return }
     } else {
-      const { error } = await supabase.from('occurrences').update({ entry_id: target.id, category: cat }).eq('id', occId)
+      const { error } = await supabase.from('occurrences').update({ entry_id: target.id, category: cat, origin: 'manual' }).eq('id', occId)
       if (error) { alert(error.message); return }
       // mã cũ không còn ảnh nào trong phòng này → vẫn giữ vị trí phòng (xoá bằng ✕ ở cột Vị trí nếu sai)
       const left = d.occ.some(x => x.id !== occId && x.entry_id === o.entry_id && x.room_id === o.room_id)
-      if (!left && o.room_id) await supabase.from('occurrences').insert({ entry_id: o.entry_id, room_id: o.room_id, category: o.category })
+      if (!left && o.room_id) await supabase.from('occurrences').insert({ entry_id: o.entry_id, room_id: o.room_id, origin: 'manual', category: o.category })
     }
     toast(copy ? 'Đã sao chép ảnh sang ' + target.code : 'Đã chuyển ảnh sang ' + target.code, 'ok')
     d.reload()
@@ -107,7 +107,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   const addLoc = async (e: Entry, roomId: string) => {
     if (!roomId) return
     const cat = d.occ.find(o => o.entry_id === e.id)?.category ?? e.category ?? 'decor'
-    const { error } = await supabase.from('occurrences').insert({ entry_id: e.id, room_id: roomId, category: cat })
+    const { error } = await supabase.from('occurrences').insert({ entry_id: e.id, room_id: roomId, category: cat, origin: 'manual' })
     if (error) alert(error.message); else d.reload()
   }
   const delLoc = async (e: Entry, r: Room) => {

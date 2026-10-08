@@ -1,4 +1,6 @@
 import { useAuth } from '../../lib/auth'
+import { autoBackup } from '../../lib/backup'
+import BackupPanel from '../../components/BackupPanel'
 import { useEffect, useState } from 'react'
 import { aiInfo } from '../../lib/ai'
 import { useNavigate } from 'react-router-dom'
@@ -14,7 +16,7 @@ import LogBox, { useLog } from '../../components/LogBox'
 const ST: Record<string, string> = { pending: 'Chưa chạy', running: 'Đang chạy…', done: 'Xong', error: 'Lỗi' }
 
 export default function AnalyzeTab({ d }: { d: ProjectData }) {
-  const { canEdit } = useAuth()
+  const { isAdmin } = useAuth()
   const p = d.project!
   const [lines, setLines] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
@@ -28,8 +30,10 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
     try { await fn() } catch (e) { log('LỖI: ' + String(e)) }
     setBusy(false); await d.reload()
   }
-  const doPlans = () => run(async () => { await analyzePlans(p, d.rooms, d.pages, log); log('Xong phần mặt bằng. Chạy lại phân tích phòng để AI dùng thông tin này.') })
+  const doPlans = () => run(async () => { await autoBackup(p, 'Tự động trước khi phân tích mặt bằng'); await analyzePlans(p, d.rooms, d.pages, log); log('Xong phần mặt bằng. Chạy lại phân tích phòng để AI dùng thông tin này.') })
   const doRooms = (ids: string[]) => run(async () => {
+    const bk = await autoBackup(p, ids.length === d.rooms.length ? 'Tự động trước khi phân tích tất cả phòng' : `Tự động trước khi chạy lại ${d.rooms.find(r => r.id === ids[0])?.code ?? 'phòng'}`)
+    if (bk) log('Đã sao lưu dữ liệu hiện tại (có thể khôi phục ở mục Sao lưu bên dưới).')
     if (d.pages.some(pg => pg.kind === 'plan') && d.rooms.every(r => !r.plan) && !d.pages.some(pg => pg.camera)) {
       try { await analyzePlans(p, d.rooms, d.pages, log); await d.reload() } catch (e) { log('Bỏ qua phân tích mặt bằng: ' + String(e)) }
     }
@@ -44,6 +48,7 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
   })
 
   const reapply = () => run(async () => {
+    await autoBackup(p, 'Tự động trước khi áp lại quy tắc')
     for (const r of d.rooms) { const n = await applyInference(p, r); log(`${r.code}: quy tắc suy luận → ${n} hạng mục`) }
     await fillColors(p)
     const n = await writeSpecs(p, { force: true })
@@ -53,7 +58,8 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
   const renders = d.pages.filter(pg => pg.kind === 'render' && pg.room_id).length
 
   return (
-    <fieldset className="plain stack" disabled={!canEdit}>
+    <fieldset className="plain stack" disabled={!isAdmin}>
+      {!isAdmin && <div className="card warn-text">Chỉ quản trị viên mới được chạy phân tích (để tránh ghi đè dữ liệu mọi người đang chỉnh). Bạn vẫn xem được trạng thái từng phòng.</div>}
       <div className="card">
         <div className="row between"><h3>Phân tích bằng AI</h3><span className="pill">{info ? `AI: ${info.provider === 'gemini' ? 'Google Gemini' : 'Anthropic Claude'} · ${info.model}` : 'AI: đang kiểm tra…'}</span></div>
         <p className="muted small"><b>AI chỉ nhìn ảnh phối cảnh</b> và liệt kê vật liệu/đồ đạc kèm khung vị trí (Gemini Flash, trong hạn mức miễn phí). Mọi thứ còn lại do phần mềm tự làm. Dự án này cần khoảng <b>{renders} lần gọi AI</b>, giãn cách vài giây giữa các lần.</p>
@@ -84,8 +90,9 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
               </tr>)
           })}</tbody>
         </table>
-        <p className="muted small">Chạy lại một phòng sẽ gọi lại AI cho các ảnh của phòng đó (mã đã xác nhận hoặc thêm tay được giữ lại). Sửa quy tắc/checklist xong chỉ cần bấm “Áp lại quy tắc” – không tốn lượt AI.</p>
+        <p className="muted small">Chạy lại một phòng chỉ làm lại phần nhận diện của phòng đó: mã vật liệu và thông tin đã sửa, vị trí/hình bạn tự thêm hoặc chỉnh tay, và các phòng khác đều được giữ nguyên (luôn có bản sao lưu tự động trước khi chạy). Sửa quy tắc/checklist xong chỉ cần bấm “Áp lại quy tắc” – không tốn lượt AI.</p>
       </div>
+      <BackupPanel d={d} />
     </fieldset>
   )
 }

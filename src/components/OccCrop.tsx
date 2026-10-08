@@ -35,7 +35,7 @@ export default function OccCrop({ d, o, height = 64, maxWidth = 90, arrow = true
     let img = r.keepImg || standalone ? o.view?.img ?? null : null
     if (r.file) img = await uploadImage(r.file, `${d.project!.id}/crops/${o.id}-${Date.now()}.jpg`)
     const view = r.view ? { ...r.view, img } : img ? { img } : null
-    const patch: Record<string, unknown> = { view }
+    const patch: Record<string, unknown> = { view, origin: 'manual' }   // đã chỉnh tay → chạy lại phân tích không xoá
     if (r.bbox) patch.bbox = r.bbox.map(v => +v.toFixed(4))
     const { error } = await supabase.from('occurrences').update(patch).eq('id', o.id)
     if (error) throw new Error(error.message)

@@ -33,7 +33,7 @@ export default function AddMaterial({ d, room: room0, preset, onClose, onDone }:
   const use = async (id: string) => {
     setBusy(true)
     try {
-      if (room && !inRoom.has(id)) { const { error } = await supabase.from('occurrences').insert({ entry_id: id, room_id: room.id, category: f.category }); if (error) throw new Error(error.message) }
+      if (room && !inRoom.has(id)) { const { error } = await supabase.from('occurrences').insert({ entry_id: id, room_id: room.id, category: f.category, origin: 'manual' }); if (error) throw new Error(error.message) }
       await d.reload(); onDone(id)
     } catch (e: any) { alert(e.message) }
     setBusy(false)
