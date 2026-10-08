@@ -5,6 +5,7 @@ import { PREFIXES, groupBySection, sectionTitle, bandTitle, exportSymbols, symbo
 import { signedUrls } from './supabase'
 import { viewCanvas, regionCanvas, swatchBase64, loadImage } from './crop'
 import { locationsOf, locationLines } from './locations'
+import { entryCells, setLines, splitBoth, wrapCount, fitWidth, hostOf, pair, type Seg, type EntryCells } from './biText'
 import type { Project, Room, Page, Entry, Occurrence } from './types'
 import { STATUS_VN, STATUS_EN, SOURCE_VN, SOURCE_EN } from './types'
 
@@ -35,11 +36,11 @@ const BANDCOL: Record<Col['band'], string> = { content: 'FFB22A2A', ref: 'FFB22A
 
 function columns(o: ExportOpts, h: Ctx['h']): Col[] {
   const c: Col[] = [
-    { key: 'stt', head: h('STT', 'No.'), w: 5, band: 'content' }, { key: 'sym', head: h('KÍ HIỆU BẢN VẼ', 'DRAWING CODE'), w: 13, band: 'content' }, { key: 'mavl', head: h('KÍ HIỆU VL', 'MATERIAL CODE'), w: 15, band: 'content' },
+    { key: 'stt', head: h('STT', 'No.'), w: 5, band: 'content' }, { key: 'sym', head: h('KÍ HIỆU BẢN VẼ', 'DRAWING CODE'), w: 16, band: 'content' }, { key: 'mavl', head: h('KÍ HIỆU VL', 'MATERIAL CODE'), w: 17, band: 'content' },
     { key: 'cat', head: h('Hạng mục', 'Item'), w: 13, band: 'content' }, { key: 'loc', head: h('Vị trí', 'Location'), w: 28, band: 'content' },
     { key: 'render', head: h('Hình ảnh phối cảnh', 'Render image'), w: 44, band: 'content' },
     { key: 'spec', head: h('Thông số kỹ thuật', 'Technical specification'), w: 46, band: 'ref' },
-    { key: 'brand', head: h('Xuất xứ/ Thương hiệu', 'Origin / Brand'), w: 22, band: 'ref' }, { key: 'sample', head: h('Hình ảnh vật liệu', 'Material image'), w: 24, band: 'ref' },
+    { key: 'brand', head: h('Xuất xứ/ Thương hiệu', 'Origin / Brand'), w: 22, band: 'ref' }, { key: 'sample', head: h('Hình ảnh vật liệu', 'Material image'), w: 26, band: 'ref' },
     { key: 'note', head: h('Ghi chú', 'Remarks'), w: 26, band: 'ref' },
   ]
   if (o.quote) c.push(
@@ -50,28 +51,39 @@ function columns(o: ExportOpts, h: Ctx['h']): Col[] {
 
 async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: string) {
   const { wb, d, o, sym, urls, pageById, h } = x, L = o.lang, vn = L !== 'en'
+  const both = L === 'both'
   const cols = columns(o, h), ci = (k: string) => cols.findIndex(c => c.key === k) + 1
+  // Dàn chữ từng mã trước để chọn bề rộng cột vừa đủ: mỗi dòng VN / EN gọn trong một dòng
+  const cells = new Map<string, EntryCells>()
+  for (const g of groups) for (const e of g.items) {
+    const o2 = d.occ.filter(z => z.entry_id === e.id)
+    cells.set(e.id, entryCells(e, L, [...new Set(o2.map(z => z.category ?? e.category).filter(Boolean) as string[])], locationsOf(e.id, d.occ, d.rooms, d.pages)))
+  }
+  const LIM: Record<string, [number, number]> = { cat: [13, 26], loc: [30, 46], spec: [48, 80], brand: [22, 40], note: [26, 44] }
+  for (const k of Object.keys(LIM)) { const c = cols.find(z => z.key === k); if (c) c.w = fitWidth([...cells.values()].map(v => (v as any)[k] as Seg[]), LIM[k][0], LIM[k][1]) }
   cols.forEach((c, i) => (ws.getColumn(i + 1).width = c.w))
   const wide = ci('note')
-  ws.mergeCells(1, 1, 1, wide); ws.getCell(1, 1).value = title
-  ws.getCell(1, 1).font = { name: 'Arial', size: 14, bold: true, color: { argb: BROWN } }
-  ws.mergeCells(2, 1, 2, wide); ws.getCell(2, 1).value = `${h('DỰ ÁN', 'PROJECT')}: ${d.project.name}`; ws.getCell(2, 1).font = { name: 'Arial', size: 10, bold: true }
-  ws.mergeCells(3, 1, 3, wide); ws.getCell(3, 1).value = `${h('ĐỊA ĐIỂM', 'LOCATION')}: ${d.project.location ?? ''}`; ws.getCell(3, 1).font = { name: 'Arial', size: 10, italic: true }
+  const T = (cell: any, lines: Seg[], size: number, color: string, bold = false) => setLines(cell, lines, size, color, both, bold)
+  ws.mergeCells(1, 1, 1, wide); T(ws.getCell(1, 1), splitBoth(title, both), 14, BROWN, true); ws.getCell(1, 1).alignment = { wrapText: true, vertical: 'middle' }
+  ws.mergeCells(2, 1, 2, wide); T(ws.getCell(2, 1), L === 'vn' ? [{ t: `DỰ ÁN: ${d.project.name}`, k: 'n' }] : L === 'en' ? [{ t: `PROJECT: ${d.project.name}`, k: 'n' }] : [{ t: `DỰ ÁN: ${d.project.name}`, k: 'vn' }, { t: `PROJECT: ${d.project.name}`, k: 'en' }], 10, 'FF000000', true)
+  ws.mergeCells(3, 1, 3, wide); T(ws.getCell(3, 1), L === 'vn' ? [{ t: `ĐỊA ĐIỂM: ${d.project.location ?? ''}`, k: 'n' }] : L === 'en' ? [{ t: `LOCATION: ${d.project.location ?? ''}`, k: 'n' }] : [{ t: `ĐỊA ĐIỂM: ${d.project.location ?? ''}`, k: 'vn' }, { t: `LOCATION: ${d.project.location ?? ''}`, k: 'en' }], 10, 'FF000000')
+  for (const n of [1, 2, 3]) { ws.getCell(n, 1).alignment = { wrapText: true, vertical: 'middle' }; ws.getRow(n).height = both ? (n === 1 ? 46 : 30) : n === 1 ? 24 : 16 }
   const bandHead: Record<Col['band'], string> = { content: h('NỘI DUNG', 'CONTENT'), ref: h('VẬT LIỆU ĐỊNH HƯỚNG', 'DESIGNER-SPECIFIED MATERIAL'), ctr: h('THÔNG SỐ HỢP ĐỒNG NHÀ THẦU ĐỀ XUẤT', 'CONTRACTOR SUBMITTAL'), rev: h('ĐÁNH GIÁ', 'REVIEW'), quote: h('BÁO GIÁ', 'PRICING'), int: h('NỘI BỘ (không in)', 'INTERNAL (do not print)') }
   for (const b of ['content', 'ref', 'ctr', 'rev', 'quote', 'int'] as const) {
     const idx = cols.map((c, i) => (c.band === b ? i + 1 : 0)).filter(Boolean); if (!idx.length) continue
     const a = idx[0], z = idx[idx.length - 1]
     if (z > a) ws.mergeCells(4, a, 4, z)
-    const c = ws.getCell(4, a); c.value = bandHead[b]
-    c.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BANDCOL[b] } }; c.alignment = { horizontal: 'center', vertical: 'middle' }; c.border = border
+    const c = ws.getCell(4, a); T(c, splitBoth(bandHead[b], both), 9, 'FFFFFFFF', true)
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BANDCOL[b] } }; c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; c.border = border
   }
+  ws.getRow(4).height = both ? 30 : 18
   const hr = ws.getRow(5)
   cols.forEach((col, i) => {
-    const c = hr.getCell(i + 1); c.value = col.head
-    c.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BANDCOL[col.band] } }
+    const c = hr.getCell(i + 1); T(c, splitBoth(col.head, both), 9, 'FFFFFFFF', true)
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BANDCOL[col.band] } }
     c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; c.border = border
   })
-  hr.height = 34
+  hr.height = both ? 56 : 34
   ws.views = [{ state: 'frozen', xSplit: 2, ySplit: 5 }]
   const catLabel = (k: string) => { const c = CATEGORIES.find(z => z.key === k); return c ? tx(c.vn, c.en, L) : k }
 
@@ -80,34 +92,26 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
     if (section.band !== lastBand) {
       lastBand = section.band
       ws.mergeCells(r, 1, r, wide)
-      const bc = ws.getCell(r, 1); bc.value = bandTitle(section.band, L)
-      bc.font = { name: 'Arial', bold: true, size: 10, color: { argb: 'FFFFFFFF' } }; bc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BROWN } }
-      ws.getRow(r).height = 20; r++
+      const bc = ws.getCell(r, 1); T(bc, pair(bandTitle(section.band, 'vn'), bandTitle(section.band, 'en'), L), 10, 'FFFFFFFF', true); bc.alignment = { vertical: 'middle', wrapText: true }; bc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BROWN } }
+      ws.getRow(r).height = both ? 34 : 20; r++
     }
     ws.mergeCells(r, 1, r, wide)
-    const gc = ws.getCell(r, 1); gc.value = sectionTitle(section, L).replace('\n', ' / ')
-    gc.font = { name: 'Arial', bold: true, size: 10 }; gc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } }
-    ws.getRow(r).height = 18; r++
+    const gc = ws.getCell(r, 1); T(gc, pair(sectionTitle(section, 'vn').replace('\n', ' / '), sectionTitle(section, 'en').replace('\n', ' / '), L), 10, 'FF000000', true); gc.alignment = { vertical: 'middle', wrapText: true }; gc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } }
+    ws.getRow(r).height = both ? 32 : 18; r++
     let stt = 0
     for (const e of items) {
       stt++
       const occ = d.occ.filter(o2 => o2.entry_id === e.id)
       const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
-      const roomNames = locs.length
-        ? locs.map(l => tx(l.room.name_vn, l.room.name_en, L).replace('\n', ' / ')).join('\n')
-        : h('(chưa gán phòng)', '(no room assigned)')
-      const cats = [...new Set(occ.map(o2 => o2.category ?? e.category).filter(Boolean) as string[])]
+      const cl = cells.get(e.id)!
       const sy = symbolOf(e, L, sym.legacy, sym.en)
-      const spec = [tx(e.name_vn, e.name_en, L), tx(e.desc_vn || e.material_vn, e.desc_en || e.material_en, L),
-        e.part_vn ? `${h('Bộ phận', 'Part')}: ${tx(e.part_vn, e.part_en, L)}` : '', e.composition ? `${h('Cấu tạo', 'Composition')}: ${e.composition}` : ''].filter(Boolean).join('\n')
-      const remarks = [tx(e.note_vn, e.note_en, L), e.status !== 'approved' ? `[${(L === 'en' ? STATUS_EN : STATUS_VN)[e.status]}]` : ''].filter(Boolean).join('\n')
-      const brand = [e.brand ? (e.product_name ? `${e.brand} – ${e.product_name}` : e.brand) : '', e.origin].filter(Boolean).join('\n')
-      const v: Record<string, any> = { stt, sym: sy, mavl: e.product_code || sy, cat: cats.map(catLabel).join(' / '), loc: roomNames, qty: e.qty != null ? `${e.qty}${e.unit ? ' ' + e.unit : ''}` : '', spec, brand, note: remarks,
+      const v: Record<string, any> = { stt, sym: sy, mavl: e.product_code || sy, qty: e.qty != null ? `${e.qty}${e.unit ? ' ' + e.unit : ''}` : '',
         q_qty: e.qty, q_unit: e.unit, i_src: (L === 'en' ? SOURCE_EN : SOURCE_VN)[e.source], i_st: (L === 'en' ? STATUS_EN : STATUS_VN)[e.status], i_flag: e.qty_flag === 'ok' ? 'OK' : '⚠' }
       const row = ws.getRow(r)
       cols.forEach((col, i) => {
-        const c = row.getCell(i + 1); c.value = (v[col.key] ?? '') as any
-        c.font = { name: 'Arial', size: 9, bold: col.key === 'sym', color: { argb: col.key === 'sym' ? BROWN : 'FF000000' } }
+        const c = row.getCell(i + 1)
+        if (col.key in cl) T(c, (cl as any)[col.key] as Seg[], 9, 'FF000000')
+        else { c.value = (v[col.key] ?? '') as any; c.font = { name: 'Arial', size: 9, bold: col.key === 'sym', color: { argb: col.key === 'sym' ? BROWN : 'FF000000' } } }
         c.alignment = { vertical: 'top', wrapText: true, horizontal: 'left' }; c.border = border
       })
       if (o.quote) {
@@ -118,9 +122,10 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
         row.getCell(p).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAF4EA' } }
         if (!firstData) firstData = r; lastData = r
       }
-      if (e.product_url) { const lc = row.getCell(ci('sample')); lc.value = { text: e.product_url, hyperlink: e.product_url }; lc.font = { name: 'Arial', size: 8, color: { argb: 'FF1F4E9A' }, underline: true }; lc.alignment = { vertical: 'bottom', horizontal: 'left', wrapText: true } }  // link sản phẩm nằm ngay dưới hình vật liệu
+      if (e.product_url) { const lc = row.getCell(ci('sample')); lc.value = { text: '🔗 ' + hostOf(e.product_url), hyperlink: e.product_url }; lc.font = { name: 'Arial', size: 8, color: { argb: 'FF1F4E9A' }, underline: true }; lc.alignment = { vertical: 'bottom', horizontal: 'left', wrapText: false, shrinkToFit: true } }  // link sản phẩm nằm ngay dưới hình vật liệu
       if (e.source === 'inferred') for (let i = 1; i <= wide; i++) row.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9E5' } }
-      row.height = Math.max(150, 13 * (locs.length + 1), 12 * Math.ceil(spec.length / 48) + 12)
+      const wOf = (k: string) => cols[ci(k) - 1].w
+      row.height = Math.max(150, ...(['cat', 'loc', 'spec', 'brand', 'note'] as const).map(k => wrapCount(cl[k], wOf(k)) * 12.5 + 8))
       const best = occ.filter(o2 => o2.bbox && (o2.page_id || o2.view?.img)).sort((a2, b2) => (b2.confidence ?? 0) - (a2.confidence ?? 0))[0]
       const rc = ci('render'), sc = ci('sample')
       if (best) {
@@ -145,7 +150,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
       if (!mapB64 && e.color_hex) mapB64 = swatchBase64(e.color_hex)
       if (mapB64) {
         const id = wb.addImage({ base64: mapB64, extension: 'png' })
-        ws.addImage(id, { tl: { col: sc - 1 + 0.08, row: r - 1 + 0.08 }, ext: { width: 92, height: 72 } })
+        ws.addImage(id, { tl: { col: sc - 1 + 0.08, row: r - 1 + 0.08 }, ext: { width: 120, height: 92 } })
         if (!e.product_image_url && e.color_hex && !e.product_url) { row.getCell(sc).value = `\n\n\n\n\n${e.color_hex}`; row.getCell(sc).font = { name: 'Arial', size: 7, color: { argb: 'FF666666' } } }
       }
       r++
