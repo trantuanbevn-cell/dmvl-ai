@@ -2,12 +2,13 @@
 import type { FloorGeom, FloorRoom, SheetLayout } from './types'
 import { roomPolys } from './cadZones'
 
-export const PW = 1920, PH = 1080
+// Trang theo tỉ lệ giấy A (1 : √2): in A3 là chuẩn, tối đa A2
+export const PW = 1920, PH = 1358
 export type Rect = { x: number; y: number; w: number; h: number }
 export type Side = 'l' | 'r' | 't' | 'b'
 export type Callout = { key: string; roomId: number; en: string; vn: string; area: number; lines: { t: string; bold: boolean; size: number }[]; w: number; h: number; x: number; y: number; ax: number; ay: number; auto: boolean }
 
-export const CW = 214, GAP = 26, TOP = 158, BOT = 1036, LEFT = 40, RIGHT = 1880
+export const CW = 214, GAP = 26, TOP = 158, BOT = PH - 44, LEFT = 40, RIGHT = 1880
 export const roomKey = (r: FloorRoom) => `${Math.round(r.cx * 1000)},${Math.round(r.cy * 1000)}`
 
 let ctx: CanvasRenderingContext2D | null = null

@@ -7,6 +7,7 @@ import { toast } from '../lib/toast'
 import { buildPlanPaint, type PlanPaint } from '../lib/planPaint'
 import { PW, PH, roomKey, pole, layoutSheet, leader, freeSpot, snapAlign, measureFont, fontOf, type Spec, type Rect } from '../lib/sheetLayout'
 import { jpegPdf } from '../lib/miniPdf'
+import { PAPER, type PaperSize } from '../lib/deck'
 
 const PALETTE = ['#d4a9b8', '#8d8d8d', '#a9b8bf', '#7f8d96', '#a9c4a0', '#c5d6c0', '#8d8d6e', '#c9b8a8', '#b0a088', '#c98d78', '#b5707a', '#8fa583', '#b9a6c9', '#9fc3c8', '#d9c07a']
 const NEUTRAL = '#e3ded8'
@@ -14,7 +15,7 @@ const TAUPE = '#9d948d', OLIVE = '#5e5e4a'
 const lumOf = (h: string) => { const n = parseInt(h.slice(1), 16); return (0.3 * ((n >> 16) & 255) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255)) / 255 }
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
-export default function ConceptSheet({ d }: { d: ProjectData }) {
+export default function ConceptSheet({ d, size = 'A3' }: { d: ProjectData; size?: PaperSize }) {
   const { canEdit } = useAuth()
   const floors = d.floors
   const [fid, setFid] = useState(floors[0]?.id ?? '')
@@ -143,9 +144,9 @@ export default function ConceptSheet({ d }: { d: ProjectData }) {
   const fname = `${(d.project?.name ?? 'concept').replace(/[^\p{L}\d]+/gu, '_')}_${fl.replace(/[^\p{L}\d]+/gu, '_')}`
   const dl = async (kind: 'png' | 'pdf') => {
     try {
-      const c = await rasterize(2)
+      const c = await rasterize(PAPER[size].scale)
       if (kind === 'png') c.toBlob(b => b && save(b, fname + '.png'), 'image/png')
-      else c.toBlob(async b => { if (!b) return; save(jpegPdf([{ jpeg: new Uint8Array(await b.arrayBuffer()), w: c.width, h: c.height }]), fname + '.pdf') }, 'image/jpeg', 0.93)
+      else c.toBlob(async b => { if (!b) return; save(jpegPdf([{ jpeg: new Uint8Array(await b.arrayBuffer()), w: c.width, h: c.height, pt: PAPER[size].pt }]), fname + '.pdf') }, 'image/jpeg', 0.93)
     } catch (e) { toast(String(e)) }
   }
 
@@ -178,7 +179,7 @@ export default function ConceptSheet({ d }: { d: ProjectData }) {
           <text x={left} y={78} fontSize={64} fontFamily='Georgia, "Times New Roman", serif' letterSpacing={2} fill={OLIVE}>{title}</text>
           <rect x={1818} y={34} width={64} height={44} fill={TAUPE} />
           <text x={left} y={124} fontSize={34} fontWeight="bold" fontFamily='Georgia, "Times New Roman", serif' letterSpacing={1} fill={OLIVE}>{subtitle}</text>
-          {sheet.page != null && <g><rect x={1866} y={1038} width={26} height={22} fill="#7d7d7d" /><text x={1879} y={1054} fontSize={14} fill="#fff" textAnchor="middle" fontFamily="Arial">{sheet.page}</text></g>}
+          {sheet.page != null && <g><rect x={1866} y={PH - 42} width={26} height={22} fill="#7d7d7d" /><text x={1879} y={PH - 26} fontSize={14} fill="#fff" textAnchor="middle" fontFamily="Arial">{sheet.page}</text></g>}
           {layout && planUrl && <image href={planUrl} x={layout.plan.x} y={layout.plan.y} width={layout.plan.w} height={layout.plan.h} />}
           {layout && live.map(c => <path key={'l' + c.key} d={leader(c, layout.plan.x + c.ax * layout.plan.w, layout.plan.y + c.ay * layout.plan.h)} fill="none" stroke="#d62828" strokeWidth={2} strokeDasharray="7 5" />)}
           {layout && live.map(c => <circle key={'a' + c.key} cx={layout.plan.x + c.ax * layout.plan.w} cy={layout.plan.y + c.ay * layout.plan.h} r={5} fill="#d62828" />)}

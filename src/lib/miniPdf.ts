@@ -1,6 +1,6 @@
 // Ghi PDF nhiều trang, mỗi trang là một ảnh JPEG (đủ cho trang dàn concept). Không cần thư viện ngoài.
 const enc = (s: string) => new TextEncoder().encode(s)
-export type PdfPageImg = { jpeg: Uint8Array; w: number; h: number }
+export type PdfPageImg = { jpeg: Uint8Array; w: number; h: number; pt?: [number, number] }
 export function jpegPdf(pages: PdfPageImg[]): Blob {
   const parts: Uint8Array[] = [], offs: number[] = []
   let len = 0
@@ -13,7 +13,7 @@ export function jpegPdf(pages: PdfPageImg[]): Blob {
   pages.forEach((p, i) => {
     const pg = 3 + i * 3, ct = pg + 1, im = pg + 2
     // 1 px = 0.5 pt → trang 1920 px ≈ 960 pt (13.3 in), đủ nét khi in/chiếu
-    const W = +(p.w * 0.5).toFixed(1), H = +(p.h * 0.5).toFixed(1)
+    const W = +(p.pt?.[0] ?? p.w * 0.5).toFixed(1), H = +(p.pt?.[1] ?? p.h * 0.5).toFixed(1)
     obj(pg); push(`${pg} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 ${im} 0 R >> >> /Contents ${ct} 0 R >>\nendobj\n`)
     const cs = `q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`
     obj(ct); push(`${ct} 0 obj\n<< /Length ${cs.length} >>\nstream\n${cs}\nendstream\nendobj\n`)
