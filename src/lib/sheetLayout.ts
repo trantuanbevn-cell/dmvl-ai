@@ -3,7 +3,7 @@ import type { FloorGeom, FloorRoom, SheetLayout } from './types'
 import { roomPolys } from './cadZones'
 
 // Trang theo tỉ lệ giấy A (1 : √2): in A3 là chuẩn, tối đa A2
-export const PW = 1920, PH = 1358
+export const PW = 1920, PH = 1080
 export type Rect = { x: number; y: number; w: number; h: number }
 export type Side = 'l' | 'r' | 't' | 'b'
 export type Callout = { key: string; roomId: number; en: string; vn: string; area: number; lines: { t: string; bold: boolean; size: number }[]; w: number; h: number; x: number; y: number; ax: number; ay: number; auto: boolean }

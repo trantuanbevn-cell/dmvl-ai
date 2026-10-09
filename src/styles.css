@@ -339,12 +339,13 @@ input[readonly], textarea[readonly] { cursor: default }
 .pfx-cat { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--brown, #7a4b2a); padding: 6px 6px 2px; position: sticky; top: 0; background: #fffdf9 }
 .pfx-row { display: flex; gap: 10px; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 13px } .pfx-row b { min-width: 46px } .pfx-row:hover { background: #f6e9d8 } .pfx-row.on { background: #efe3d3 } .pfx-row.add { color: var(--brown, #7a4b2a); border-top: 1px dashed #e3d6c2; margin-top: 4px }
 .chip-wrap { display: inline-flex; align-items: center; gap: 2px } .chip-mv { display: inline-flex; gap: 2px } .chip-mv button { border: 1px solid #d9a441; background: #fff6e6; color: #8a5a00; border-radius: 6px; font-size: 11px; padding: 2px 6px; cursor: pointer } .chip-mv button:disabled { opacity: .35; cursor: default }
-.deck-strip { display: flex; gap: 10px; overflow-x: auto; padding: 10px 0 }
-.deck-th { flex: 0 0 150px; cursor: pointer; border: 2px solid transparent; border-radius: 6px; padding: 2px; text-align: center }
-.deck-th.on { border-color: #1565c0 }
-.deck-th svg { width: 100%; display: block; box-shadow: 0 1px 4px rgba(0,0,0,.25) }
-.deck-add { flex: 0 0 150px; display: flex; flex-direction: column; gap: 4px }
-.deck-main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start }
+.deck-scroll { max-height: 82vh; overflow-y: auto; padding: 6px 8px; background: #e9e9ec; border-radius: 8px }
+.deck-pg { border: 2px solid transparent; border-radius: 6px; background: #fff; padding: 4px 6px 6px }
+.deck-pg.on { border-color: #1565c0 }
+.deck-pg-h { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #555; min-height: 26px }
+.deck-page { width: 100%; display: block; box-shadow: 0 1px 6px rgba(0,0,0,.3); background: #fff }
+.deck-addbar { text-align: center; padding: 6px 0 }
+.deck-form { position: sticky; top: 8px }
 .deck-form textarea, .deck-form input { width: 100% }
 @media (max-width: 900px) { .deck-main { grid-template-columns: 1fr } }
 .style-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px }

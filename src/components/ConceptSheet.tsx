@@ -5,13 +5,12 @@ import { supabase, BUCKET } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { toast } from '../lib/toast'
 import { buildPlanPaint, type PlanPaint } from '../lib/planPaint'
-import { PW, PH, roomKey, pole, layoutSheet, leader, freeSpot, snapAlign, measureFont, fontOf, type Spec, type Rect } from '../lib/sheetLayout'
+import { PW, PH, roomKey, pole, layoutSheet, leader, freeSpot, snapAlign, fontOf, type Spec, type Rect } from '../lib/sheetLayout'
 import { jpegPdf } from '../lib/miniPdf'
 import { PAPER, type PaperSize } from '../lib/deck'
 
 const PALETTE = ['#d4a9b8', '#8d8d8d', '#a9b8bf', '#7f8d96', '#a9c4a0', '#c5d6c0', '#8d8d6e', '#c9b8a8', '#b0a088', '#c98d78', '#b5707a', '#8fa583', '#b9a6c9', '#9fc3c8', '#d9c07a']
 const NEUTRAL = '#e3ded8'
-const TAUPE = '#9d948d', OLIVE = '#5e5e4a'
 const lumOf = (h: string) => { const n = parseInt(h.slice(1), 16); return (0.3 * ((n >> 16) & 255) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255)) / 255 }
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
@@ -123,9 +122,6 @@ export default function ConceptSheet({ d, size = 'A3' }: { d: ProjectData; size?
   const title = sheet.title ?? d.project?.name?.toUpperCase() ?? ''
   const fl = fp?.floor_label ?? ''
   const subtitle = sheet.subtitle ?? (/^mặt bằng/i.test(fl) ? fl : 'Mặt bằng ' + fl).toUpperCase()
-  const F_T = '64px Georgia, "Times New Roman", serif', F_S = 'bold 34px Georgia, "Times New Roman", serif'
-  const wT = measureFont(F_T, title) + title.length * 2, wS = measureFont(F_S, subtitle) + subtitle.length * 1
-  const left = Math.max(520, Math.min(1810 - wT, 1880 - wS))
 
   const live = layout?.callouts.map(c => (drag?.kind === 'box' && drag.key === c.key ? { ...c, x: drag.x, y: drag.y } : drag?.kind === 'anchor' && drag.key === c.key ? { ...c, ax: drag.x, ay: drag.y } : c)) ?? []
 
@@ -174,11 +170,11 @@ export default function ConceptSheet({ d, size = 'A3' }: { d: ProjectData; size?
           <button className="btn sm primary" onClick={() => dl('pdf')}>⬇ PDF</button>
         </div>
         <svg ref={svgRef} className="sheet-svg" viewBox={`0 0 ${PW} ${PH}`} onPointerDown={() => setSel(null)}>
-          <rect width={PW} height={PH} fill="#f4f3f0" />
-          <rect x={0} y={92} width={left - 22} height={42} fill={TAUPE} />
-          <text x={left} y={78} fontSize={64} fontFamily='Georgia, "Times New Roman", serif' letterSpacing={2} fill={OLIVE}>{title}</text>
-          <rect x={1818} y={34} width={64} height={44} fill={TAUPE} />
-          <text x={left} y={124} fontSize={34} fontWeight="bold" fontFamily='Georgia, "Times New Roman", serif' letterSpacing={1} fill={OLIVE}>{subtitle}</text>
+          <rect width={PW} height={PH} fill="#f4f3f2" />
+          <rect x={0} y={70.5} width={1236.8} height={48.7} fill="#9c918c" />
+          <rect x={1771.5} y={16.2} width={148.5} height={48.7} fill="#9c918c" />
+          <text x={1503.9} y={60} textAnchor="middle" fontSize={53.3} letterSpacing={1} fontFamily='Georgia, "Times New Roman", serif' fill="#60614d">{title.toUpperCase()}</text>
+          <text x={1863.8} y={108} textAnchor="end" fontSize={33.3} fontWeight="bold" letterSpacing={0.7} fontFamily='"Helvetica Neue", Arial, sans-serif' fill="#60614d">{subtitle.toUpperCase()}</text>
           {sheet.page != null && <g><rect x={1866} y={PH - 42} width={26} height={22} fill="#7d7d7d" /><text x={1879} y={PH - 26} fontSize={14} fill="#fff" textAnchor="middle" fontFamily="Arial">{sheet.page}</text></g>}
           {layout && planUrl && <image href={planUrl} x={layout.plan.x} y={layout.plan.y} width={layout.plan.w} height={layout.plan.h} />}
           {layout && live.map(c => <path key={'l' + c.key} d={leader(c, layout.plan.x + c.ax * layout.plan.w, layout.plan.y + c.ay * layout.plan.h)} fill="none" stroke="#d62828" strokeWidth={2} strokeDasharray="7 5" />)}
