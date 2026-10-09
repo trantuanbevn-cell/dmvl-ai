@@ -14,6 +14,7 @@ import RoomView from './tabs/RoomView'
 import MaterialView from './tabs/MaterialView'
 import CheckView from './tabs/CheckView'
 import ExportTab from './tabs/ExportTab'
+import ConceptSheet from '../components/ConceptSheet'
 
 export default function ProjectPage() {
   const { id = '', tab = 'overview' } = useParams()
@@ -33,6 +34,7 @@ export default function ProjectPage() {
   const TABS: [string, string, string, string?][] = [
     ['overview', '🏠', 'Tổng quan'],
     ['upload', '📄', 'Hồ sơ & phòng', `${data.rooms.length} phòng`],
+    ['concept', '🖼', 'Dàn trang concept'],
     ['analyze', '✨', 'Phân tích', `${analyzed}/${data.rooms.length}`],
     ['rooms', '🛋', 'Theo phòng', ps.pending + ps.review ? `${ps.pending + ps.review} chờ` : undefined],
     ['materials', '🧱', 'Theo vật liệu', `${ps.total} mã`],
@@ -54,6 +56,7 @@ export default function ProjectPage() {
       {!canEdit && <div className="note ro-note">👁 Bạn chỉ có quyền <b>xem</b> – không sửa được dữ liệu. Vẫn xuất file được ở bước “Xuất file”.</div>}
       {tab === 'overview' && <Overview d={data} />}
       {tab === 'upload' && <UploadTab d={data} />}
+      {tab === 'concept' && <ConceptSheet d={data} />}
       {tab === 'analyze' && <AnalyzeTab d={data} />}
       {tab === 'rooms' && <RoomView d={data} />}
       {tab === 'materials' && <MaterialView d={data} />}

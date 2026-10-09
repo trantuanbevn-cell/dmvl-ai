@@ -38,4 +38,8 @@ export type FloorGeom = {
   rooms: FloorRoom[]
   raw_rooms?: FloorRoom[]; merges?: ZoneMerge[]; suggest?: ZoneSuggest[]; compare?: ZoneCompare[]
 }
-export type FloorPlan = { id: string; project_id: string; floor_label: string; pdf_path: string; page_no: number; scale_den: number; width: number | null; height: number | null; preview_path: string | null; geometry: FloorGeom | null; status: string }
+/** Trang dàn mặt bằng tổng (concept): vị trí ô tên (toạ độ trang 1920×1080), màu, diện tích sửa tay… Khoá phòng = tâm "x,y" làm tròn 1/1000 */
+/** ax, ay: điểm đầu nét đứt trong phòng, toạ độ 0..1 theo khung cắt của mặt bằng */
+export type SheetItem = { x?: number; y?: number; ax?: number; ay?: number; color?: string; area?: number; hide?: boolean; side?: 'l' | 'r' | 't' | 'b' }
+export type SheetLayout = { plan?: { x: number; y: number; w: number; h: number }; title?: string; subtitle?: string; showVn?: boolean; page?: number; items: Record<string, SheetItem> }
+export type FloorPlan = { sheet?: SheetLayout | null; id: string; project_id: string; floor_label: string; pdf_path: string; page_no: number; scale_den: number; width: number | null; height: number | null; preview_path: string | null; geometry: FloorGeom | null; status: string }
