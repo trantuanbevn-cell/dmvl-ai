@@ -9,6 +9,7 @@ import { roomPolys, addMerge, removeMerge, centroidOf, addCut, removeCut } from 
 import { computeFloor } from '../lib/floorPlans'
 import { roomKey, pole } from '../lib/sheetLayout'
 import { PALETTE, NEUTRAL } from '../lib/palette'
+const hsl2hex = (h: number, s: number, l: number) => { const a = s * Math.min(l, 1 - l), f = (n: number) => { const k = (n + h / 30) % 12, c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); return Math.round(255 * c).toString(16).padStart(2, '0') }; return `#${f(0)}${f(8)}${f(4)}` }
 
 type VB = { x: number; y: number; w: number; h: number }
 
@@ -32,7 +33,8 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
 
   const rooms = g?.rooms ?? []
   const named = useMemo(() => rooms.filter(r => r.user && r.names[0]), [g]) // eslint-disable-line
-  const colorOf = (r: FloorRoom) => sheet.items[roomKey(r)]?.color ?? PALETTE[Math.max(0, named.findIndex(x => x.id === r.id)) % PALETTE.length]
+  const autoColor = (r: FloorRoom) => { const i = Math.max(0, rooms.findIndex(x => x.id === r.id)); return hsl2hex((i * 137.508) % 360, 0.42 + (i % 3) * 0.08, 0.68 + (i % 2) * 0.07) }
+  const colorOf = (r: FloorRoom) => sheet.items[roomKey(r)]?.color ?? autoColor(r)
   const nextColor = () => PALETTE.find(c => !named.some(r => colorOf(r) === c)) ?? PALETTE[named.length % PALETTE.length]
 
   // ---- ảnh sàn đã tô màu
@@ -40,7 +42,7 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
     const m = new Map<number, string>()
     if (!g) return m
     for (const r of g.raw_rooms ?? g.rooms) m.set(r.id, NEUTRAL)
-    for (const r of named) { const c = sheet.items[roomKey(r)]?.hide ? NEUTRAL : colorOf(r); for (const id of r.merged ?? [r.id]) m.set(id, c) }
+    for (const r of rooms) { const c = sheet.items[roomKey(r)]?.hide ? NEUTRAL : colorOf(r); for (const id of r.merged ?? [r.id]) m.set(id, c) }
     return m
   }, [g, sheet]) // eslint-disable-line
   const colorSig = useMemo(() => [...colorMap].map(([k, v]) => k + v).join(','), [colorMap])
@@ -187,7 +189,7 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
           <div className="small"><b>Danh sách phòng</b> <span className="muted">({named.length} đã đặt tên · tổng {named.reduce((s, r) => s + r.area_m2, 0).toFixed(1)} m²)</span></div>
           <div className="floor-rooms">{rooms.slice().sort((a, b) => (+!!b.user - +!!a.user) || b.area_m2 - a.area_m2).filter(r => r.area_m2 >= 1.5).map(r => (
             <div key={r.id} className={'fr' + (sel.includes(r.id) ? ' on' : '')} onClick={() => { setSel(s => (s.includes(r.id) ? s.filter(x => x !== r.id) : [...s, r.id])); focus(r) }}>
-              <span className="dotc" style={{ background: r.user && r.names[0] ? colorOf(r) : NEUTRAL, border: '1px solid #bbb' }} />
+              <span className="dotc" style={{ background: sheet.items[roomKey(r)]?.hide ? NEUTRAL : colorOf(r), border: '1px solid #bbb' }} />
               {r.user && r.names[0] ? <b>{r.names[0]}</b> : <span className="muted">{r.names[0] ?? '(chưa đặt tên)'}</span>}{r.merged && r.merged.length > 1 ? <span className="muted small"> · gộp {r.merged.length}</span> : null}<b>{r.area_m2} m²</b></div>))}</div>
         </div>
       </div>

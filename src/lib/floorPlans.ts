@@ -31,7 +31,6 @@ export async function computeFloor(fp: FloorPlan, opts: { wallKeys?: string[]; d
   const cv = await loadCv()
   if (!buf) buf = await (await must(supabase.storage.from(BUCKET).download(fp.pdf_path)) as Blob).arrayBuffer()
   const v = await readVectorPage(buf, fp.page_no, log)
-  ;(window as any).__vec = v; (window as any).__cv = cv   // để kiểm thử thuật toán nhận phòng ngay trên bản vẽ thật
   if (v.nSeg < 20) throw new Error('File này gần như không có nét vector (có thể là PDF ảnh/scan). Hãy xuất PDF từ AutoCAD ở dạng vector.')
   const keys = opts.wallKeys ?? fp.geometry?.wall_keys
   const sel = keys ? new Set(v.classes.map((c, i) => (keys.includes(c.key) ? i : -1)).filter(i => i >= 0)) : guessWallClasses(v)
@@ -42,7 +41,8 @@ export async function computeFloor(fp: FloorPlan, opts: { wallKeys?: string[]; d
   const ppp = Math.min(4, 4000 / Math.max(v.w, v.h))
   log(`Đang tìm tường và phòng kín (${sel.size} nhóm nét tường)...`)
   await new Promise(r => setTimeout(r, 20))
-  const { mask, W, H } = rasterWalls(v, sel, ppp, doors)
+  const withDoors = new Set(sel); v.classes.forEach((c, i) => { if (/DOOR|CUA DI|CUA SO|WINDOW/i.test(c.layer) && !c.fill) withDoors.add(i) })
+  const { mask, W, H } = rasterWalls(v, withDoors, ppp, doors, true, mPerPt(scaleDen))
   const res = findRooms(cv, v, mask, W, H, ppp, scaleDen, doorW)
   const geom: FloorGeom = {
     w: v.w, h: v.h, m_per_pt: mPerPt(scaleDen), door_w: doorW, leaked: res.leaked,
