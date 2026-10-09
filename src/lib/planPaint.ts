@@ -11,6 +11,7 @@ import { regularize } from './shape'
 import { makeWallSnap } from './wallsnap'
 import { islandHulls } from './furniture'
 import { wallSegments } from './cad'
+import { straightenZones, dilate, fillDoorSwings } from './zoneSnap'
 
 export type PlanPaint = {
   W: number; H: number; crop: { x: number; y: number; w: number; h: number }
@@ -84,6 +85,25 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
     }
     roomOf.set(out)
   }
+  const pxPerM = (W / g.w) / g.m_per_pt
+  // tường vector thật (kể cả ô cửa, vách) để bắt cạnh viền vào đúng mép tường; hình bao đồ rời/cột đứng lẻ để tô trắng
+  let sel = new Set<number>(), wsegs: number[] = [], nearWall: Uint8Array | null = null
+  if (vv?.draw?.length) {
+    try {
+      const sx0 = W / vv.w, wkeys = new Set(g.wall_keys); vv.classes.forEach((c, i) => { if (wkeys.has(c.key)) sel.add(i) })
+      const withDoors = new Set(sel); vv.classes.forEach((c, i) => { if (/DOOR|CUA DI|CUA SO|WINDOW/i.test(c.layer) && !c.fill) withDoors.add(i) })
+      wsegs = wallSegments(vv, withDoors, detectDoors(vv, g.m_per_pt), g.m_per_pt).map(v => v * sx0)
+      // "bắt điểm": ranh giới ảo giữa hai không gian thông nhau → đoạn thẳng nối hai điểm tường
+      const wall = new Uint8Array(N)
+      for (let s2 = 0; s2 < wsegs.length; s2 += 4) {
+        const ax = wsegs[s2], ay = wsegs[s2 + 1], bx = wsegs[s2 + 2], by = wsegs[s2 + 3], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay)))
+        for (let t = 0; t <= n; t++) { const x = Math.round(ax + ((bx - ax) * t) / n), y = Math.round(ay + ((by - ay) * t) / n); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < W && yy < H) wall[yy * W + xx] = 1 } }
+      }
+      nearWall = dilate(wall, W, H, 4)
+      straightenZones(roomOf, W, H, wall, wsegs, pxPerM)
+      fillDoorSwings(roomOf, W, H, detectDoors(vv, g.m_per_pt).map(d => d.map(v => v * sx0)))
+    } catch (e) { console.warn('bắt điểm ranh giới lỗi', e) }
+  }
   // thành phần liên thông của vùng "không nét" trong từng phòng
   const comp = new Int32Array(N), sizes: number[] = [0], compRoom: number[] = [0], stack = new Int32Array(N)
   for (let s = 0; s < N; s++) {
@@ -98,7 +118,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
     }
     sizes.push(sz); compRoom.push(r)
   }
-  const pxPerM = (W / g.w) / g.m_per_pt, minPx = 0.4 * pxPerM * pxPerM
+  const minPx = 0.4 * pxPerM * pxPerM
   const maxOf = new Map<number, number>(); sizes.forEach((s, i) => i && maxOf.set(compRoom[i], Math.max(maxOf.get(compRoom[i]) ?? 0, s)))
   const keepC = sizes.map((s, i) => !!i && s >= Math.max(0.3 * (maxOf.get(compRoom[i]) ?? 0), minPx))
   let keep = new Uint16Array(N)
@@ -138,12 +158,13 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
     const cv = await loadCv()
     if (vv?.draw?.length) {
       const sx = W / vv.w
-      // tường vector thật (kể cả ô cửa, vách) để bắt cạnh viền vào đúng mép tường; hình bao đồ rời/cột đứng lẻ để tô trắng
-      const wkeys = new Set(g.wall_keys), sel = new Set<number>(); vv.classes.forEach((c, i) => { if (wkeys.has(c.key)) sel.add(i) })
-      const withDoors = new Set(sel); vv.classes.forEach((c, i) => { if (/DOOR|CUA DI|CUA SO|WINDOW/i.test(c.layer) && !c.fill) withDoors.add(i) })
-      const wsegs = wallSegments(vv, withDoors, detectDoors(vv, g.m_per_pt), g.m_per_pt).map(v => v * sx)
       const snap = makeWallSnap(wsegs, 1.4 * sx)
-      const hulls = islandHulls(vv, g.m_per_pt, sel)
+      // vùng quét của cánh cửa (cung + cánh) không phải đồ rời → không tô trắng
+      const doors = detectDoors(vv, g.m_per_pt)
+      const hulls = islandHulls(vv, g.m_per_pt, sel).filter(h => {
+        let cx = 0, cy = 0; const n = h.length / 2; for (let i = 0; i < h.length; i += 2) { cx += h[i]; cy += h[i + 1] } cx /= n; cy /= n
+        return !doors.some(d => { const r = Math.hypot(d[2] - d[0], d[3] - d[1]); return Math.hypot(cx - d[0], cy - d[1]) < 0.95 * r })
+      })
       const hullD = hulls.map(h => { let d = ''; for (let i = 0; i < h.length; i += 2) d += (i ? 'L' : 'M') + +h[i].toFixed(2) + ' ' + +h[i + 1].toFixed(2); return d + 'Z' }).join('')
       const floorD: string[] = raw.map(() => '')
       const ids = new Map<number, [number, number, number, number]>()
@@ -157,7 +178,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
           const cc = cs.get(c), isHole = hi.data32S[c * 4 + 3] >= 0, area = cv.contourArea(cc)
           if (area < (isHole ? 0.25 : 0.3) * pxPerM * pxPerM) { cc.delete(); continue }   // lỗ nhỏ (<0,25 m²) coi như sàn liền
           const pts: [number, number][] = []; for (let q = 0; q < cc.rows; q++) pts.push([cc.data32S[q * 2] + bx0 - 3 + 0.5, cc.data32S[q * 2 + 1] + by0 - 3 + 0.5])
-          d += regularize(pts, pxPerM, snap); cc.delete()
+          d += regularize(pts, pxPerM, snap, nearWall ? (q => { let h = 0; for (const p of q) { const x = Math.round(p[0]), y = Math.round(p[1]); if (x >= 0 && y >= 0 && x < W && y < H && nearWall![y * W + x]) h++ } return h >= 0.6 * q.length }) : undefined); cc.delete()
         }
         cs.delete(); hi.delete(); sub.delete(); floorD[k - 1] = d
       }

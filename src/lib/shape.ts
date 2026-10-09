@@ -49,7 +49,7 @@ const f = (x: number) => +x.toFixed(2)
  * @param P điểm dày của đường viền (px, khép kín, không lặp điểm đầu)
  * @param u số px trên 1 m thật
  */
-export function regularize(P: Pt[], u: number, snap?: (m: Pt, d: Pt, len: number) => { m: Pt; d: Pt } | null): string {
+export function regularize(P: Pt[], u: number, snap?: (m: Pt, d: Pt, len: number) => { m: Pt; d: Pt } | null, arcOk?: (pts: Pt[]) => boolean): string {
   const n = P.length; if (n < 4) return ''
   const eps = Math.max(1.4, 0.05 * u)
   const V = rdpClosed(P, eps), m = V.length; if (m < 3) return ''
@@ -76,12 +76,13 @@ export function regularize(P: Pt[], u: number, snap?: (m: Pt, d: Pt, len: number
       cnt++; k = e + 1
       const count = e - s + 1
       const full = allCurved && count >= m
-      if (count < 1 && !full) continue
+      if (count < 2 && !full) continue   // 1 đỉnh lẻ (bậc thang nhỏ) không phải cung
       // điểm dày từ đỉnh s-1 đến đỉnh e+1
       const a = V[(((s - 1) % m) + m) % m], b = V[(e + 1) % m], ids: number[] = []
       if (full) for (let i = 0; i < n; i++) ids.push(i)
       else { let i = a; for (let guard = 0; guard <= n; guard++) { ids.push(i); if (i === b) break; i = (i + 1) % n } }
       const fit = fitCircle(P, ids); if (!fit) continue
+      if (arcOk && !full && !arcOk(ids.map(i => P[i]))) continue   // cung chỉ giữ nếu bám nét vẽ thật (tường cong, cung mở cửa)
       let sag = 0; if (!full) { const A = P[ids[0]], B = P[ids[ids.length - 1]], ch = sub(B, A), cl = len(ch) || 1e-9; for (const i of ids) sag = Math.max(sag, Math.abs(cross(ch, sub(P[i], A))) / cl); if (sag / cl < 0.07) continue }
       const tot = turn.slice(0).reduce((q, _, i) => (i >= s && i <= e ? q + Math.abs(turn[i % m]) : q), 0)
       if (fit.r < 0.2 * u || fit.r > 40 * u || fit.rms > Math.max(1.3, 0.035 * fit.r) || (!full && tot < 0.45)) continue
