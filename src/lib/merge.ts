@@ -1,6 +1,7 @@
 // Gộp mã trùng: cùng một vật liệu thật nhưng bị tạo thành nhiều mã (do nhiều góc camera). Phần mềm tự so, không dùng AI.
 import { supabase } from './supabase'
-import { findSimilar } from './similar'
+import { findSimilar, FIN } from './similar'
+import { sectionOf } from './sections'
 import type { Entry } from './types'
 
 async function must<T>(p: PromiseLike<{ data: T; error: any }>): Promise<T> {
@@ -34,7 +35,7 @@ export function findDuplicates(entries: Entry[], strict = false): DupPair[] {
   const live = entries.filter(e => e.status !== 'rejected' && e.source !== 'inferred' && e.group_code !== 'AW')
   const seen = new Set<string>(), out: DupPair[] = []
   for (const e of live) {
-    for (const s of findSimilar(live.filter(x => x.id !== e.id && x.group_code === e.group_code && x.parent_id === e.parent_id), { group: e.group_code, name: e.name_vn, material: e.material_vn ?? '', color: e.color_hex, brand: e.brand ?? undefined, product_code: e.product_code ?? undefined }, 3)) {
+    for (const s of findSimilar(live.filter(x => x.id !== e.id && sectionOf(x).key === sectionOf(e).key && (x.parent_id === e.parent_id || (FIN.has(x.group_code) && FIN.has(e.group_code)))), { group: sectionOf(e).key, gc: e.group_code, name: e.name_vn, material: e.material_vn ?? '', color: e.color_hex, brand: e.brand ?? undefined, product_code: e.product_code ?? undefined, desc: e.desc_vn ?? undefined, part: e.part_vn ?? undefined }, 3, x => sectionOf(x).key)) {
       const key = [e.id, s.entry.id].sort().join('|'); if (seen.has(key)) continue
       if (strict ? !(s.score >= 0.9 && (s.dE == null || s.dE < 8) && !(e.product_code && s.entry.product_code && e.product_code !== s.entry.product_code)) : s.score < 0.7) continue
       if (e.status === 'approved' && s.entry.status === 'approved' && strict) continue
