@@ -10,7 +10,11 @@ export async function makeBackup(projectId: string, label: string, kind: 'manual
   return data as string
 }
 /** Sao lưu tự động trước thao tác có thể ghi đè dữ liệu. Nếu không sao lưu được thì DỪNG thao tác (an toàn hơn là mất dữ liệu). */
-export async function autoBackup(project: Pick<Project, 'id'>, label: string) {
+export async function autoBackup(project: Pick<Project, 'id'>, label: string, opts: { minGapMs?: number } = {}) {
+  if (opts.minGapMs) {   // vừa có bản sao lưu rất gần đây (vd. chạy hàng loạt nhiều phòng) → không tạo thêm
+    const { data: last } = await supabase.from('backups').select('created_at').eq('project_id', project.id).order('created_at', { ascending: false }).limit(1)
+    if (last?.[0] && Date.now() - new Date(last[0].created_at).getTime() < opts.minGapMs) return null
+  }
   const { count } = await supabase.from('entries').select('id', { count: 'exact', head: true }).eq('project_id', project.id)
   if (!count) return null    // dự án chưa có dữ liệu → không cần
   try { return await makeBackup(project.id, label, 'auto') } catch (e) { throw new Error('Không sao lưu được nên đã dừng để bảo vệ dữ liệu: ' + String((e as Error).message ?? e)) }

@@ -301,6 +301,7 @@ async function assertAdmin() {
 
 export async function analyzeRoom(project: Project, room: Room, log: Log) {
   await assertAdmin()
+  await autoBackup(project, `Tự động trước khi phân tích ${room.code}`, { minGapMs: 2 * 60_000 })
   await must(supabase.from('rooms').update({ analysis_status: 'running' }).eq('id', room.id))
   let prior: Occurrence[] = [], applied = false
   try {
@@ -423,7 +424,10 @@ export async function cleanupOrphans(project: Project) {
   const occ = await must(supabase.from('occurrences').select('entry_id').in('entry_id', entries.map(e => e.id))) as Occurrence[]
   const used = new Set(occ.map(o => o.entry_id))
   const orphan = entries.filter(e => !used.has(e.id) && e.source !== 'manual' && e.status === 'pending').map(e => e.id)
-  if (orphan.length) await must(supabase.from('entries').delete().in('id', orphan))
+  if (orphan.length) {
+    await autoBackup(project, 'Tự động trước khi dọn mã vật liệu không còn vị trí', { minGapMs: 2 * 60_000 })
+    await must(supabase.from('entries').delete().in('id', orphan))
+  }
 }
 
 /** Chọn một sản phẩm từ thư viện cho mã */
