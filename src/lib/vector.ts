@@ -7,13 +7,16 @@ import { isAnnoLayer } from './dims'
 const OPS = pdfjs.OPS as Record<string, number>
 
 export type VecClass = { key: string; layer: string; lw: number; fill: boolean; len: number; n: number }
-export type VecText = { t: string; x: number; y: number; h: number } // pt, gốc trên-trái
+export type VecText = { t: string; x: number; y: number; h: number; rot?: number } // pt, gốc trên-trái; rot: độ (theo chiều kim đồng hồ)
+/** một đoạn vẽ liên tiếp cùng kiểu (giữ nguyên thứ tự vẽ của PDF) – để dựng lại mặt bằng dạng vector */
+export type DrawRun = { cls: number; sc?: string; fc?: string; lw: number; d: string }
 export type VecPage = {
   w: number; h: number // pt
   segs: Float32Array; cls: Uint16Array // x0,y0,x1,y1 (pt, y hướng xuống) + chỉ số lớp
   fills: { cls: number; pts: Float32Array }[]
   classes: VecClass[]; texts: VecText[]; nSeg: number
   arcs: { a: [number, number]; b: [number, number]; m: [number, number]; r: number }[] // các cung ~90° (nghi là cánh cửa quay)
+  draw?: DrawRun[]
 }
 
 type M = [number, number, number, number, number, number]
@@ -78,7 +81,7 @@ export function detectDoors(v: VecPage, mPerPt: number): number[][] {
   return doors
 }
 
-export async function readVectorPage(data: ArrayBuffer, pageNo = 1, onLog?: (s: string) => void): Promise<VecPage> {
+export async function readVectorPage(data: ArrayBuffer, pageNo = 1, onLog?: (s: string) => void, opt: { draw?: boolean } = {}): Promise<VecPage> {
   const doc = await pdfjs.getDocument({ data: data.slice(0) }).promise
   const page = await doc.getPage(Math.min(pageNo, doc.numPages))
   const vp = page.getViewport({ scale: 1 })
@@ -102,6 +105,19 @@ export async function readVectorPage(data: ArrayBuffer, pageNo = 1, onLog?: (s: 
   const segs: number[] = [], segCls: number[] = [], fills: { cls: number; pts: Float32Array }[] = []
   let ctm: M = base; const stack: M[] = []
   const layerStack: string[] = []; let lw = 1
+  // màu nét/tô hiện hành (để dựng lại bản vẽ vector đúng thứ tự, đúng màu – kể cả nét trắng dùng để che)
+  let strokeC = '#000000', fillC = '#000000'; const colStack: [string, string][] = []
+  const hex2 = (a: any) => '#' + [0, 1, 2].map(i => Math.max(0, Math.min(255, Math.round(+a[i]))).toString(16).padStart(2, '0')).join('')
+  const runs: DrawRun[] = []
+  const f2 = (n: number) => (Math.round(n * 100) / 100).toString()
+  const emit = (ci: number, sc: string | undefined, fc: string | undefined, w: number, sub: number[][], closeIt: boolean) => {
+    let d = ''
+    for (const s of sub) { if (s.length < 4) continue; d += 'M' + f2(s[0]) + ' ' + f2(s[1]); for (let i = 2; i < s.length; i += 2) d += 'L' + f2(s[i]) + ' ' + f2(s[i + 1]); if (closeIt) d += 'Z' }
+    if (!d) return
+    const last = runs[runs.length - 1]
+    if (last && last.cls === ci && last.sc === sc && last.fc === fc && last.lw === w && last.d.length < 150000) last.d += d
+    else runs.push({ cls: ci, sc, fc, lw: w, d })
+  }
   let cur: number[][] = [] // các đường con (toạ độ đã đổi sang pt trang)
   let sub: number[] = [], cx = 0, cy = 0, sx = 0, sy = 0
   const flush = () => { if (sub.length >= 4) cur.push(sub); sub = [] }
@@ -124,6 +140,7 @@ export async function readVectorPage(data: ArrayBuffer, pageNo = 1, onLog?: (s: 
       for (const s of cur) {
         const arc = asArc(s); if (arc && arcs.length < 20000) arcs.push(arc)
       }
+      if (opt.draw) emit(ci, strokeC, fill ? fillC : undefined, Math.max(0, lw * scale()), cur, fill)
       for (const s of cur) for (let i = 0; i + 3 < s.length; i += 2) {
         const dx = s[i + 2] - s[i], dy = s[i + 3] - s[i + 1], L = Math.hypot(dx, dy); if (L < 0.05) continue
         segs.push(s[i], s[i + 1], s[i + 2], s[i + 3]); segCls.push(ci); c.len += L; c.n++
@@ -131,6 +148,7 @@ export async function readVectorPage(data: ArrayBuffer, pageNo = 1, onLog?: (s: 
     }
     if (fill) {
       const ci = cls(layer, 0, true)
+      if (opt.draw && !stroke) emit(ci, undefined, fillC, 0, cur, true)
       for (const s of cur) if (s.length >= 6) { fills.push({ cls: ci, pts: new Float32Array(s) }); classes[ci].n++; classes[ci].len += s.length / 2 }
     }
     cur = []; sub = []
@@ -138,11 +156,13 @@ export async function readVectorPage(data: ArrayBuffer, pageNo = 1, onLog?: (s: 
   for (let i = 0; i < ol.fnArray.length; i++) {
     const f = ol.fnArray[i], a: any = ol.argsArray[i]
     switch (f) {
-      case OPS.save: stack.push(ctm); layerStack.push(layerStack[layerStack.length - 1] ?? ''); break
-      case OPS.restore: ctm = stack.pop() ?? ctm; layerStack.pop(); break
+      case OPS.save: stack.push(ctm); colStack.push([strokeC, fillC]); layerStack.push(layerStack[layerStack.length - 1] ?? ''); break
+      case OPS.restore: ctm = stack.pop() ?? ctm; { const c = colStack.pop(); if (c) { strokeC = c[0]; fillC = c[1] } } layerStack.pop(); break
+      case OPS.setStrokeRGBColor: strokeC = hex2(a); break
+      case OPS.setFillRGBColor: fillC = hex2(a); break
       case OPS.transform: ctm = mul(ctm, a as M); break
-      case OPS.paintFormXObjectBegin: stack.push(ctm); layerStack.push(layerStack[layerStack.length - 1] ?? ''); if (a?.[0]) ctm = mul(ctm, a[0] as M); break
-      case OPS.paintFormXObjectEnd: ctm = stack.pop() ?? ctm; layerStack.pop(); break
+      case OPS.paintFormXObjectBegin: stack.push(ctm); colStack.push([strokeC, fillC]); layerStack.push(layerStack[layerStack.length - 1] ?? ''); if (a?.[0]) ctm = mul(ctm, a[0] as M); break
+      case OPS.paintFormXObjectEnd: ctm = stack.pop() ?? ctm; { const c = colStack.pop(); if (c) { strokeC = c[0]; fillC = c[1] } } layerStack.pop(); break
       case OPS.setLineWidth: lw = a[0]; break
       case OPS.beginMarkedContentProps: {
         const id = a?.[1]?.id ?? (typeof a?.[1] === 'string' ? a[1] : '')
@@ -179,11 +199,11 @@ export async function readVectorPage(data: ArrayBuffer, pageNo = 1, onLog?: (s: 
     for (const it of tc.items as any[]) {
       const t = cleanText(String(it.str ?? '')).trim(); if (!t) continue
       const m = pdfjs.Util.transform(base, it.transform)
-      texts.push({ t, x: m[4], y: m[5], h: Math.hypot(m[2], m[3]) })
+      texts.push({ t, x: m[4], y: m[5], h: Math.hypot(m[2], m[3]), rot: Math.round((Math.atan2(m[1], m[0]) * 180) / Math.PI * 10) / 10 })
     }
   } catch { /* */ }
   onLog?.(`  ${segs.length / 4} đoạn nét, ${fills.length} vùng tô, ${classes.length} nhóm nét/layer, ${texts.length} chữ`)
-  const out: VecPage = { arcs, w: vp.width, h: vp.height, segs: new Float32Array(segs), cls: new Uint16Array(segCls), fills, classes, texts, nSeg: segs.length / 4 }
+  const out: VecPage = { ...(opt.draw ? { draw: runs } : {}), arcs, w: vp.width, h: vp.height, segs: new Float32Array(segs), cls: new Uint16Array(segCls), fills, classes, texts, nSeg: segs.length / 4 }
   page.cleanup()
   return out
 }

@@ -4,12 +4,16 @@ import * as pdfjs from 'pdfjs-dist'
 import './pdf'
 import { roomPolys } from './cadZones'
 import { isAnnoLayer } from './dims'
+import { readVectorPage } from './vector'
+import { loadCv } from './cv'
 import type { FloorGeom } from './types'
 
 export type PlanPaint = {
   W: number; H: number; crop: { x: number; y: number; w: number; h: number }
   /** vẽ ảnh đã cắt khung; colorOfRaw: màu (#rrggbb) theo id phòng kín gốc */
   paint: (colorOfRaw: (rawId: number) => string) => HTMLCanvasElement
+  /** mặt bằng dạng VECTOR (SVG, toạ độ theo khung cắt `crop`): sàn tô màu liền khít + nét bản vẽ gốc. null nếu không dựng được */
+  svg: ((colorOfRaw: (rawId: number) => string) => string) | null
 }
 const hex = (s: string): [number, number, number] => { const n = parseInt(s.replace('#', '').padEnd(6, '0'), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255] }
 
@@ -34,13 +38,35 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
   const inkD = ink.slice()   // giãn nét 1 px để bít khe hở nhỏ của nét đồ nội thất
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (!ink[i]) continue; if (x > 0) inkD[i - 1] = 1; if (x < W - 1) inkD[i + 1] = 1; if (y > 0) inkD[i - W] = 1; if (y < H - 1) inkD[i + W] = 1 }
 
-  // bản đồ id phòng kín gốc
+  // bản đồ id phòng kín gốc – tô đa giác bằng thuật toán quét dòng (không khử răng cưa → không sinh pixel lẫn màu)
   const raw = g.raw_rooms ?? g.rooms
-  const ic = document.createElement('canvas'); ic.width = W; ic.height = H
-  const ig = ic.getContext('2d', { willReadFrequently: true })!
-  raw.forEach((r, k) => { ig.fillStyle = `rgb(${(k + 1) & 255},${(k + 1) >> 8},0)`; for (const poly of roomPolys(r)) { ig.beginPath(); poly.forEach((p, j) => (j ? ig.lineTo(p[0] * W, p[1] * H) : ig.moveTo(p[0] * W, p[1] * H))); ig.closePath(); ig.fill() } })
-  const idd = ig.getImageData(0, 0, W, H).data, roomOf = new Uint16Array(N)
-  for (let i = 0; i < N; i++) if (idd[i * 4 + 3] === 255) roomOf[i] = idd[i * 4] + (idd[i * 4 + 1] << 8)
+  const roomOf = new Uint16Array(N)
+  raw.forEach((r, k) => {
+    for (const poly of roomPolys(r)) {
+      const P = poly.map(p => [p[0] * W, p[1] * H]), n = P.length; if (n < 3) continue
+      let ymin = 1e9, ymax = -1e9; for (const p of P) { ymin = Math.min(ymin, p[1]); ymax = Math.max(ymax, p[1]) }
+      for (let y = Math.max(0, Math.ceil(ymin - 0.5)); y <= Math.min(H - 1, Math.floor(ymax - 0.5)); y++) {
+        const yc = y + 0.5, xs: number[] = []
+        for (let i = 0, j = n - 1; i < n; j = i++) { const a = P[i], b = P[j]; if ((a[1] > yc) !== (b[1] > yc)) xs.push(a[0] + ((yc - a[1]) / (b[1] - a[1])) * (b[0] - a[0])) }
+        xs.sort((p, q) => p - q)
+        for (let t = 0; t + 1 < xs.length; t += 2) for (let x = Math.max(0, Math.ceil(xs[t] - 0.5)); x <= Math.min(W - 1, Math.floor(xs[t + 1] - 0.5)); x++) roomOf[y * W + x] = k + 1
+      }
+    }
+  })
+  // lấp khe hở giữa 2 vùng giáp nhau (đa giác được đơn giản hoá riêng nên có thể hở 1–3 px) → không còn vệt trắng
+  {
+    const R = 3, fillTo = new Map<number, number>()
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x; if (roomOf[i]) continue
+      let l = 0, r = 0, u = 0, d2 = 0, dl = 0, dr = 0, du = 0, dd = 0
+      for (let k = 1; k <= R; k++) { if (!l && x - k >= 0 && roomOf[i - k]) { l = roomOf[i - k]; dl = k } if (!r && x + k < W && roomOf[i + k]) { r = roomOf[i + k]; dr = k } if (!u && y - k >= 0 && roomOf[i - k * W]) { u = roomOf[i - k * W]; du = k } if (!d2 && y + k < H && roomOf[i + k * W]) { d2 = roomOf[i + k * W]; dd = k } }
+      let best = 0, bd = 99
+      if (l && r) { if (dl <= dr) { best = l; bd = dl } else { best = r; bd = dr } }
+      if (u && d2) { const [v, dist] = du <= dd ? [u, du] : [d2, dd]; if (dist < bd) { best = v; bd = dist } }
+      if (best) fillTo.set(i, best)
+    }
+    for (const [i, v] of fillTo) roomOf[i] = v
+  }
 
   // thành phần liên thông của vùng "không nét" trong từng phòng
   const comp = new Int32Array(N), sizes: number[] = [0], compRoom: number[] = [0], stack = new Int32Array(N)
@@ -90,5 +116,46 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
     oc.getContext('2d')!.putImageData(out, 0, 0)
     return oc
   }
-  return { W, H, crop, paint }
+
+  // ---- bản vector: viền các vùng sàn (có lỗ cho đồ nội thất) + nét bản vẽ gốc đúng thứ tự vẽ
+  let svg: PlanPaint['svg'] = null
+  try {
+    const cv = await loadCv()
+    const vv = await readVectorPage(buf, pageNo, undefined, { draw: true })
+    if (vv.draw?.length) {
+      const sx = W / vv.w
+      const floorD: string[] = raw.map(() => '')
+      const ids = new Map<number, [number, number, number, number]>()
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const k = keep[y * W + x]; if (!k) continue; const b = ids.get(k); if (!b) ids.set(k, [x, y, x, y]); else { if (x < b[0]) b[0] = x; if (x > b[2]) b[2] = x; if (y < b[1]) b[1] = y; if (y > b[3]) b[3] = y } }
+      for (const [k, [bx0, by0, bx1, by1]] of ids) {
+        const bw = bx1 - bx0 + 3, bh = by1 - by0 + 3, sub = new cv.Mat(bh, bw, cv.CV_8UC1, new cv.Scalar(0))
+        for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) if (keep[y * W + x] === k) sub.data[(y - by0 + 1) * bw + (x - bx0 + 1)] = 255
+        const cs = new cv.MatVector(), hi = new cv.Mat(); cv.findContours(sub, cs, hi, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE)
+        let d = ''
+        for (let c = 0; c < cs.size(); c++) {
+          const cc = cs.get(c); if (cv.contourArea(cc) < 3) { cc.delete(); continue }
+          const ap = new cv.Mat(); cv.approxPolyDP(cc, ap, 0.6, true)
+          if (ap.rows >= 3) { for (let q = 0; q < ap.rows; q++) d += (q ? 'L' : 'M') + (ap.data32S[q * 2] + bx0 - 1 + 0.5) + ' ' + (ap.data32S[q * 2 + 1] + by0 - 1 + 0.5); d += 'Z' }
+          ap.delete(); cc.delete()
+        }
+        cs.delete(); hi.delete(); sub.delete(); floorD[k - 1] = d
+      }
+      const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      let lines = ''
+      for (const r of vv.draw) {
+        if (isAnnoLayer(vv.classes[r.cls]?.layer ?? '')) continue
+        const w = Math.max(r.lw, 0.18)
+        lines += `<path d="${r.d}" fill="${r.fc ?? 'none'}" stroke="${r.sc ?? 'none'}"${r.sc ? ` stroke-width="${+w.toFixed(3)}"` : ''}/>`
+      }
+      let txt = ''
+      for (const t of vv.texts) { if (t.t.length < 2 || /^[\d.,\s]+$/.test(t.t)) continue; txt += `<text transform="translate(${+t.x.toFixed(2)} ${+t.y.toFixed(2)})${t.rot ? ` rotate(${t.rot})` : ''}" font-size="${+t.h.toFixed(2)}" font-family="Arial,sans-serif" fill="#000" stroke="none">${esc(t.t)}</text>` }
+      const lineLayer = `<g style="mix-blend-mode:multiply;isolation:isolate" transform="translate(${-crop.x} ${-crop.y}) scale(${sx})" stroke-linejoin="round" stroke-linecap="round"><rect x="0" y="0" width="${vv.w}" height="${vv.h}" fill="#fff" stroke="none"/>${lines}${txt}</g>`
+      svg = (colorOfRaw: (rawId: number) => string) => {
+        let f = ''
+        raw.forEach((r, k) => { if (floorD[k]) { const c = colorOfRaw(r.id); f += `<path d="${floorD[k]}" fill="${c}" stroke="${c}" stroke-width="1.4"/>` } })
+        return `<g transform="translate(${-crop.x} ${-crop.y})" fill-rule="evenodd" stroke-linejoin="round">${f}</g>${lineLayer}`
+      }
+    }
+  } catch (e) { console.warn('Không dựng được bản vector, dùng ảnh', e) }
+  return { W, H, crop, paint, svg }
 }

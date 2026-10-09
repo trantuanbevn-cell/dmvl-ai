@@ -9,7 +9,7 @@ const cache = new Map<string, PlanPaint>()
 /** Mặt bằng PDF đã dựng + bản đồ vùng sàn từng phòng (dùng chung giữa bước tô màu và bước dàn trang) */
 export function usePlanPaint(fp?: FloorPlan) {
   const g = fp?.geometry ?? null
-  const sig = fp && g ? `${fp.id}:${(g.raw_rooms ?? g.rooms).length}:${g.w}:${fp.scale_den}` : ''
+  const sig = fp && g ? `${fp.id}:${fp.pdf_path}:${g.algo ?? 0}:${(g.raw_rooms ?? g.rooms).length}:${g.w}:${fp.scale_den}` : ''
   const [pp, setPp] = useState<PlanPaint | null>(null), [busy, setBusy] = useState(false)
   useEffect(() => {
     setPp(null)
@@ -43,4 +43,10 @@ export function useSheet(fp: FloorPlan | undefined, d: ProjectData) {
   }
   useEffect(() => () => { clearTimeout(timer.current); if (dirty.current) d.reload() }, []) // eslint-disable-line
   return { sheet, commit }
+}
+
+/** Chế độ hiển thị mặt bằng: vector (nét sắc ở mọi mức phóng, xuất file nét) hoặc ảnh (nhẹ hơn) */
+export function useVecMode(): [boolean, (b: boolean) => void] {
+  const [v, setV] = useState(() => { try { return sessionStorage.getItem('plan-vec') !== '0' } catch { return true } })
+  return [v, (b: boolean) => { setV(b); try { sessionStorage.setItem('plan-vec', b ? '1' : '0') } catch { /* */ } }]
 }

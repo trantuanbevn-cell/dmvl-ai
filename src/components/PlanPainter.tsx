@@ -9,6 +9,7 @@ import { roomPolys, addMerge, removeMerge, centroidOf, addCut, removeCut, inRoom
 import { furnInRoom } from '../lib/furniture'
 import { computeFloor } from '../lib/floorPlans'
 import { roomKey, pole } from '../lib/sheetLayout'
+import { useVecMode } from '../lib/planSheet'
 import { PALETTE, NEUTRAL, autoRoomColor } from '../lib/palette'
 
 type VB = { x: number; y: number; w: number; h: number }
@@ -25,6 +26,7 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
   const [real, setReal] = useState('')
   const [work, setWork] = useState('')
   const [planUrl, setPlanUrl] = useState('')
+  const [vec, setVec] = useVecMode()
   const [vb, setVb] = useState<VB>({ x: 0, y: 0, w: 1, h: 1 })
   const svgRef = useRef<SVGSVGElement>(null), pan = useRef<{ sx: number; sy: number; vb: VB; moved: boolean } | null>(null)
   const crop = pp?.crop
@@ -46,11 +48,12 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
     return m
   }, [g, sheet]) // eslint-disable-line
   const colorSig = useMemo(() => [...colorMap].map(([k, v]) => k + v).join(','), [colorMap])
+  const svgMarkup = useMemo(() => (vec && pp?.svg ? pp.svg(id => colorMap.get(id) ?? NEUTRAL) : ''), [pp, colorSig, vec]) // eslint-disable-line
   useEffect(() => {
-    if (!pp) return
+    if (!pp || svgMarkup) return
     const t = window.setTimeout(() => setPlanUrl(pp.paint(id => colorMap.get(id) ?? NEUTRAL).toDataURL('image/jpeg', 0.9)), 100)
     return () => clearTimeout(t)
-  }, [pp, colorSig]) // eslint-disable-line
+  }, [pp, colorSig, svgMarkup]) // eslint-disable-line
 
   // ---- chọn → điền sẵn ô tên / màu
   const selRooms = sel.map(id => rooms.find(r => r.id === id)).filter((r): r is FloorRoom => !!r)
@@ -158,6 +161,7 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
         {canEdit && <button className={'btn sm' + (mode === 'cut' ? ' primary' : '')} onClick={() => { setMode(mode === 'cut' ? 'pick' : 'cut'); setCutPts([]); setCursor(null) }}>{mode === 'cut' ? '✓ Đang chia phòng – bấm 2 điểm' : '✂ Chia 1 phòng thành 2'}</button>}
         {canEdit && unnamedBig > 0 && <button className="btn sm" disabled={!!work} onClick={autoName} title="Phòng nào có chữ tên ghi trong bản vẽ thì tự đặt tên + tô màu">⚡ Tự nhận tên từ chữ trong bản vẽ ({unnamedBig})</button>}
         <span style={{ flex: 1 }} />
+        {pp?.svg && <button className="btn sm" onClick={() => setVec(!vec)} title="Vector: nét sắc ở mọi mức phóng to. Ảnh: kéo/thu phóng mượt hơn trên máy yếu">{vec ? 'Nét: vector' : 'Nét: ảnh'}</button>}
         <button className="btn sm" onClick={() => zoom(1 / 1.3)}>＋</button><button className="btn sm" onClick={() => zoom(1.3)}>－</button><button className="btn sm" onClick={fit}>⤢ Vừa khung</button>
       </div>
       {mode === 'cut' && <div className="note">Chia phòng: bấm <b>2 điểm</b> trong cùng một phòng – đường thẳng đi qua 2 điểm sẽ cắt phòng đó thành 2 phòng. {cutPts.length === 1 ? 'Bấm điểm thứ hai.' : 'Bấm điểm thứ nhất.'}</div>}
@@ -165,7 +169,7 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
         <svg ref={svgRef} className="painter-svg" viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={() => setHover(null)}
           style={{ cursor: mode === 'cut' ? 'crosshair' : pan.current?.moved ? 'grabbing' : hover != null ? 'pointer' : 'grab' }}>
           <rect x={0} y={0} width={crop.w} height={crop.h} fill="#fff" />
-          {planUrl && <image href={planUrl} x={0} y={0} width={crop.w} height={crop.h} />}
+          {svgMarkup ? <g dangerouslySetInnerHTML={{ __html: svgMarkup }} /> : planUrl && <image href={planUrl} x={0} y={0} width={crop.w} height={crop.h} />}
           {rooms.map(r => { const on = sel.includes(r.id), hv = hover === r.id
             return roomPolys(r).map((pl, k) => <polygon key={r.id + '_' + k} data-rid={r.id} points={pl.map(q => toPx(q).join(',')).join(' ')} fill={on ? 'rgba(21,101,192,.38)' : hv ? 'rgba(21,101,192,.18)' : 'transparent'} stroke={on ? '#1565c0' : 'none'} strokeWidth={vb.w / 700} />) })}
           {rooms.filter(r => r.area_m2 >= 1.5).map(r => { const [px, py] = toPx(pole(r)); const nmd = r.user && r.names[0]
