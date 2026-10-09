@@ -5,7 +5,8 @@ import type { PlanPaint } from '../lib/planPaint'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { toast } from '../lib/toast'
-import { roomPolys, addMerge, removeMerge, centroidOf, addCut, removeCut } from '../lib/cadZones'
+import { roomPolys, addMerge, removeMerge, centroidOf, addCut, removeCut, inRoom } from '../lib/cadZones'
+import { furnInRoom } from '../lib/furniture'
 import { computeFloor } from '../lib/floorPlans'
 import { roomKey, pole } from '../lib/sheetLayout'
 import { PALETTE, NEUTRAL, autoRoomColor } from '../lib/palette'
@@ -63,7 +64,7 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
 
   const recomputed = useRef(false)
   useEffect(() => {
-    if (!g || g.algo === 3 || !canEdit || recomputed.current || busy) return
+    if (!g || g.algo === 4 || !canEdit || recomputed.current || busy) return
     recomputed.current = true; setWork('Đang áp thuật toán nhận diện không gian mới (khoảng 10–20 giây)…')
     computeFloor(fp, {}, () => {}).then(() => d.reload()).catch(e => toast(String(e))).finally(() => setWork(''))
   }, [g, canEdit, busy]) // eslint-disable-line
@@ -190,6 +191,25 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
               {selRooms.some(r => r.user) && <button className="btn sm" disabled={!!work} onClick={unname} title="Bỏ tên, trả các không gian đã gộp về các vùng gốc">↺ Tách lại / bỏ tên</button>}</div>
             {selRooms.length === 1 && <div className="row gap wrap small"><span>Diện tích thật:</span><input style={{ width: 70 }} placeholder="m²" value={real} onChange={e => setReal(e.target.value)} /><button className="btn sm" disabled={!real || !!work} onClick={calibrate} title="Nhập diện tích thật của phòng này để chỉnh tỉ lệ bản vẽ cho cả tầng">Chỉnh tỉ lệ bản vẽ</button></div>}
           </>}
+          {selRooms.length > 0 && g.furn && (() => {
+            const inside = (x: number, y: number) => selRooms.some(r => inRoom(r, x, y))
+            const list = furnInRoom(g.furn!, inside), tx = new Map<string, number>()
+            for (const [t, x, y] of g.labels ?? []) if (inside(x, y)) tx.set(t, (tx.get(t) ?? 0) + 1)
+            const texts = [...tx].sort((a, b) => b[1] - a[1])
+            const total = list.reduce((s, o) => s + o.n, 0)
+            return <details className="small" open>
+              <summary><b>Đồ rời trong không gian</b> · {total} vật · {list.length} loại</summary>
+              {list.length === 0 && <div className="muted">Không có đồ rời nào trong vùng chọn.</div>}
+              {list.slice(0, 40).map(o => <div key={o.group.id} className="row gap" style={{ alignItems: 'center', margin: '2px 0' }}>
+                <b style={{ minWidth: 34 }}>×{o.n}</b>
+                {canEdit ? <input style={{ flex: 1 }} defaultValue={g.furn!.names[o.group.id] ?? ''} placeholder={`${o.group.layer.split('$').pop()} · ${o.group.w}×${o.group.d} m`} data-lang="none"
+                  onBlur={e => { const v = e.target.value.trim(); if (v !== (g.furn!.names[o.group.id] ?? '')) save({ ...g, furn: { ...g.furn!, names: { ...g.furn!.names, [o.group.id]: v } } }) }} />
+                  : <span>{g.furn!.names[o.group.id] ?? `${o.group.layer.split('$').pop()} · ${o.group.w}×${o.group.d} m`}</span>}
+                <span className="muted">{o.group.w}×{o.group.d} m</span></div>)}
+              {texts.length > 0 && <div style={{ marginTop: 4 }}><b>Chữ ghi trong bản vẽ:</b> {texts.slice(0, 20).map(([t, n]) => <span key={t} className="chip">{t}{n > 1 ? ` ×${n}` : ''}</span>)}</div>}
+              <div className="muted">Các vật giống hệt nhau (kể cả xoay/lật) được gom một loại; đặt tên 1 lần là áp cho cả loại, ở mọi không gian.</div>
+            </details>
+          })()}
           {cutsN > 0 && <div className="small muted">Đường cắt: {g.cuts!.map((_, i) => <span key={i} className="chip">#{i + 1} <a onClick={() => { setSel([]); save(removeCut(g, i)) }} title="Bỏ đường cắt này">✕</a></span>)}</div>}
           <div className="small"><b>Danh sách phòng</b> <span className="muted">({named.length} đã đặt tên · tổng {named.reduce((s, r) => s + r.area_m2, 0).toFixed(1)} m²)</span></div>
           <div className="floor-rooms">{rooms.slice().sort((a, b) => (+!!b.user - +!!a.user) || b.area_m2 - a.area_m2).filter(r => r.area_m2 >= 1.5).map(r => (

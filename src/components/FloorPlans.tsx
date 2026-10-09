@@ -4,7 +4,8 @@ import type { FloorPlan, FloorGeom } from '../lib/types'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { roomPolys, addMerge, removeMerge, centroidOf } from '../lib/cadZones'
-import { addFloorPlan, computeFloor, deleteFloorPlan } from '../lib/floorPlans'
+import { addFloorPlan, computeFloor, deleteFloorPlan, updateFloorPdf, restoreFloorVersion } from '../lib/floorPlans'
+import { toast } from '../lib/toast'
 import LogBox, { useLog } from './LogBox'
 
 const COLS = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#008080', '#9a6324', '#800000', '#808000', '#000075']
@@ -38,6 +39,14 @@ export function FloorCard({ d, fp, run, busy, compact }: { d: ProjectData; fp: F
         <button className="btn ghost sm danger" disabled={busy} onClick={() => confirm(`Xoá mặt bằng ${fp.floor_label}?`) && run(async () => { await deleteFloorPlan(fp) })}>Xoá</button></div>
       {g?.leaked && <div className="note">⚠ Tìm được rất ít phòng kín – tường có thể chưa liền nét. Thử chọn thêm nhóm nét tường bên dưới hoặc tăng bề rộng cửa.</div>}
       {compact && g && <div className="small muted">Đã đọc <b>{g.raw_rooms?.length ?? g.rooms.length}</b> vùng kín · nhận diện <b>{g.doors ?? 0}</b> cửa đi. Sang bước ② để tô màu – gộp – tách – đặt tên phòng.</div>}
+      {canEdit && g && <div className="small" style={{ margin: '8px 0' }}>
+        <div className="row gap wrap">
+          <label className="btn sm" title="Tải PDF mặt bằng mới (có dim/lưới trục) – tự đọc lại không gian, diện tích, đồ rời; dữ liệu vật liệu không bị động tới">⬆ Cập nhật bằng PDF mặt bằng mới
+            <input type="file" accept="application/pdf" hidden disabled={busy} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f && confirm(`Cập nhật mặt bằng "${fp.floor_label}" bằng file ${f.name}?\n\n• Hệ thống tự sao lưu dự án trước.\n• File và kết quả cũ vẫn được giữ, có nút "Quay lại bản trước".\n• Dữ liệu vật liệu hoàn thiện (phòng, mã, vị trí…) KHÔNG bị thay đổi.`)) run(async () => { toast(await updateFloorPdf(fp, f, log)) }) }} /></label>
+          {!!g.history?.length && <button className="btn sm" disabled={busy} onClick={() => confirm('Quay lại bản mặt bằng trước đó? (bản hiện tại vẫn được giữ lại để đổi qua lại)') && run(async () => { await restoreFloorVersion(fp); toast('Đã quay lại bản mặt bằng trước.') })}>↩ Quay lại bản trước ({new Date(g.history[0].at).toLocaleString('vi-VN')})</button>}
+        </div>
+        <div className="muted">Cập nhật chỉ thay phần mặt bằng của tầng này: tên phòng/phép gộp được chuyển sang tự động nếu hình dáng toàn nhà khớp; dữ liệu vật liệu của dự án không bị đụng tới.</div>
+      </div>}
       {!compact && <div className="floor-grid">
         <div className="img-wrap">
           {url && <img src={url} alt="" draggable={false} />}
