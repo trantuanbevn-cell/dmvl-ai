@@ -18,8 +18,12 @@ export type PlanPaint = {
 const hex = (s: string): [number, number, number] => { const n = parseInt(s.replace('#', '').padEnd(6, '0'), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255] }
 
 export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorGeom, longEdge = 3400): Promise<PlanPaint> {
+  const TT = performance.now(), plog = (m: string) => console.info('[planPaint*]', m, Math.round(performance.now() - TT), 'ms')
+  plog('start ' + buf.byteLength)
   const doc = await pdfjs.getDocument({ data: buf.slice(0) }).promise
+  plog('doc')
   const page = await doc.getPage(Math.min(pageNo, doc.numPages))
+  plog('page')
   const v1 = page.getViewport({ scale: 1 }), vp = page.getViewport({ scale: longEdge / Math.max(v1.width, v1.height) })
   const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height)
   const cx = c.getContext('2d', { willReadFrequently: true })!; cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height)
@@ -30,7 +34,9 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
     for (const [id, gp] of Object.entries((cfg.getGroups?.() ?? {}) as Record<string, { name?: string }>)) if (isAnnoLayer(String(gp?.name ?? ''))) cfg.setVisibility(id, false)
     ocp = Promise.resolve(cfg)
   } catch { /* PDF không có layer */ }
+  plog('oc ' + !!ocp)
   await page.render({ canvasContext: cx, viewport: vp, ...(ocp ? { optionalContentConfigPromise: ocp } : {}) } as any).promise
+  plog('rendered')
   const W = c.width, H = c.height, N = W * H
   const base = cx.getImageData(0, 0, W, H), d = base.data
   const lum = new Uint8Array(N), ink = new Uint8Array(N)
