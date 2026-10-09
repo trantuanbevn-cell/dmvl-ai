@@ -351,3 +351,5 @@ input[readonly], textarea[readonly] { cursor: default }
 .style-card { border: 2px solid var(--line, #ddd); border-radius: 12px; padding: 8px; cursor: pointer; background: #fff }
 .style-card.on { border-color: #1565c0; box-shadow: 0 0 0 3px rgba(21,101,192,.18) }
 .style-card svg { width: 100%; display: block; box-shadow: 0 1px 4px rgba(0,0,0,.2) }
+.shot-cap { font-size: 10px; line-height: 1.2; color: #777; max-width: 96px; cursor: pointer; word-break: break-word }
+.shot-wrap:has(.shot-cap) { display: inline-block; vertical-align: top; margin: 0 2px 4px }

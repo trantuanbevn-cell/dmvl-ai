@@ -37,9 +37,9 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
     for (const e of items) {
       stt++
       const occ = d.occ.filter(o => o.entry_id === e.id)
-      const best = occ.filter(o => o.bbox && (o.page_id || o.view?.img)).sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0]
+      const best = occ.filter(o => o.bbox && (o.page_id || o.view?.img)).sort((a, b) => (b.note ? 1 : 0) - (a.note ? 1 : 0) || (b.confidence ?? 0) - (a.confidence ?? 0))[0]
       let img = ''
-      if (best) { const p = best.page_id ? pageById.get(best.page_id) : undefined; if (p || best.view?.img) { try { img = `<img src="${(await viewCanvas(p ? urls[p.image_path] : undefined, best.bbox!, best.view, best.view?.img ? urls[best.view.img] : undefined, 900, true)).toDataURL('image/jpeg', 0.92)}">` } catch { /* */ } } }
+      if (best) { const p = best.page_id ? pageById.get(best.page_id) : undefined; if (p || best.view?.img) { try { img = `<img src="${(await viewCanvas(p ? urls[p.image_path] : undefined, best.bbox!, best.view, best.view?.img ? urls[best.view.img] : undefined, 900, true)).toDataURL('image/jpeg', 0.92)}">` + (best.note ? `<small style="color:#c00;display:block">${esc(best.note)}</small>` : '') } catch { /* */ } } }
       let matUrl = ''
       try { matUrl = (await matMontage(e, urls)) ?? '' } catch { /* */ }
       const mvSrc = e.mat_view?.img ? urls[e.mat_view.img] : e.product_image_url

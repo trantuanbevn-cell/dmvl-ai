@@ -127,7 +127,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
       if (e.source === 'inferred') for (let i = 1; i <= wide; i++) row.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9E5' } }
       const wOf = (k: string) => cols[ci(k) - 1].w
       row.height = Math.max(150, ...(['cat', 'loc', 'spec', 'brand', 'note'] as const).map(k => wrapCount(cl[k], wOf(k)) * 12.5 + 8))
-      const best = occ.filter(o2 => o2.bbox && (o2.page_id || o2.view?.img)).sort((a2, b2) => (b2.confidence ?? 0) - (a2.confidence ?? 0))[0]
+      const best = occ.filter(o2 => o2.bbox && (o2.page_id || o2.view?.img)).sort((a2, b2) => (b2.note ? 1 : 0) - (a2.note ? 1 : 0) || (b2.confidence ?? 0) - (a2.confidence ?? 0))[0]
       const rc = ci('render'), sc = ci('sample')
       if (best) {
         const pg = best.page_id ? pageById.get(best.page_id) : undefined
@@ -138,6 +138,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
             const id = wb.addImage({ base64: c.toDataURL('image/jpeg', 0.93).split(',')[1], extension: 'jpeg' })
             const scale = Math.min(300 / c.width, 190 / c.height)
             ws.addImage(id, { tl: { col: rc - 1 + 0.05, row: r - 1 + 0.05 }, ext: { width: c.width * scale, height: c.height * scale } })
+            if (best.note) { const nc = row.getCell(rc); nc.value = best.note; nc.font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FFC00000' } }; nc.alignment = { vertical: 'bottom', horizontal: 'left', wrapText: true } }
           } catch { /* bỏ qua ảnh lỗi */ }
         }
       } else {

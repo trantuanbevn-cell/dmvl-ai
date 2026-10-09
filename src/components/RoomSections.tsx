@@ -12,6 +12,7 @@ import type { ProjectData } from '../lib/useProject'
 import type { Entry, Occurrence, Room } from '../lib/types'
 import OccCrop from './OccCrop'
 import AddShot from './AddShot'
+import { analyzeRoom } from '../lib/pipeline'
 import MatImage from './MatImage'
 import { StatusDot } from '../pages/tabs/MaterialView'
 import { useAuth } from '../lib/auth'
@@ -98,6 +99,10 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     toast(copy ? 'Đã sao chép ảnh sang ' + target.code : 'Đã chuyển ảnh sang ' + target.code, 'ok')
     d.reload()
   }
+  const [shotRoom, setShotRoom] = useState<string | null>(null)
+  const [noteTxt, setNoteTxt] = useState('')
+  const [scanning, setScanning] = useState<string | null>(null)
+  const [shotNote, setShotNote] = useState<Occurrence | null>(null)
   const delShot = async (o: Occurrence) => {
     if (!confirm('Xoá hình phối cảnh này khỏi vật liệu?')) return
     const sameRoom = d.occ.filter(x => x.entry_id === o.entry_id && x.room_id === o.room_id)
@@ -110,6 +115,27 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     if (!roomId) return
     const cat = d.occ.find(o => o.entry_id === e.id)?.category ?? e.category ?? 'decor'
     const { error } = await supabase.from('occurrences').insert({ entry_id: e.id, room_id: roomId, category: cat, origin: 'manual' })
+    if (error) { alert(error.message); return }
+    await d.reload()
+    const room = d.rooms.find(r => r.id === roomId)
+    if (!room || !d.project) return
+    const hasPages = d.pages.some(p => p.room_id === roomId && (p.kind === 'render' || p.kind === 'plan'))
+    if (!hasPages) { toast(`Đã thêm ${room.code}. Phòng này chưa có trang phối cảnh nên chưa có ảnh – bấm “＋ ảnh” khi có.`); return }
+    if (!confirm(`Đã thêm vị trí ${room.code} ${room.name_vn}.\n\nĐể AI rà lại phòng này, tìm vật liệu và tự khoanh mũi tên? (dùng lượt AI, mất vài chục giây; mã và thông tin đã sửa tay được giữ nguyên, có thể xuất hiện thêm mã mới ở trạng thái “Chờ duyệt”)\n\nBấm Huỷ = chỉ thêm vị trí, tự khoanh ảnh sau.`)) { setShotFor(e); return }
+    setScanning(room.code)
+    try {
+      await analyzeRoom(d.project, room, () => {})
+      // bỏ dòng vị trí thủ công (chưa có ảnh) nếu AI đã tìm được vật liệu này trong phòng
+      const { data: oc } = await supabase.from('occurrences').select('*').eq('entry_id', e.id).eq('room_id', roomId)
+      const rows = (oc ?? []) as Occurrence[]
+      if (rows.some(o => o.bbox)) { const dead = rows.filter(o => !o.bbox && !o.page_id).map(o => o.id); if (dead.length) await supabase.from('occurrences').delete().in('id', dead); toast(`AI đã tìm thấy vật liệu trong ${room.code} và khoanh mũi tên.`, 'ok') }
+      else { toast(`AI không thấy vật liệu này trong ${room.code}. Hãy khoanh tay bằng “＋ ảnh”.`); setShotRoom(roomId); setShotFor(e) }
+    } catch (er) { toast('Rà phòng lỗi: ' + String(er)); setShotRoom(roomId); setShotFor(e) }
+    setScanning(null); d.reload()
+  }
+  /** Ghi chú cho hình: vd “Phối cảnh gốc: thảm – đã đổi sang sàn vinyl” (hình giữ nguyên, người xem hiểu ngữ cảnh) */
+  const setNote = async (o: Occurrence, text: string | null) => {
+    const { error } = await supabase.from('occurrences').update({ note: text || null, origin: 'manual' }).eq('id', o.id)
     if (error) alert(error.message); else d.reload()
   }
   const delLoc = async (e: Entry, r: Room) => {
@@ -148,8 +174,13 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
               <thead><tr>{HEAD[lang].map((t, i) => <th key={i} style={{ width: HW[i] }}>{t}</th>)}<th style={{ width: 112 }} /></tr></thead>
               <tbody>{items.map(e => {
                 const os = occ.filter(o => o.entry_id === e.id)
-                const shots = os.filter(o => o.bbox && (o.page_id || o.view?.img)).slice(0, 4)
                 const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
+                // Mỗi phòng trong “Vị trí” = 1 ảnh tương ứng (ảnh tốt nhất); ảnh có ghi chú (vd vật liệu cũ đã thay) luôn được giữ thêm
+                const withImg = os.filter(o => o.bbox && (o.page_id || o.view?.img))
+                const best1 = new Map<string, Occurrence>()
+                for (const o of withImg) { const k = o.room_id ?? o.id; const c = best1.get(k); if (!c || (!!o.note && !c.note) || (!!o.note === !!c.note && (o.confidence ?? 0) > (c.confidence ?? 0))) best1.set(k, o) }
+                const shots: Occurrence[] = [...locs.map(l => best1.get(l.room.id)).filter(Boolean) as Occurrence[], ...withImg.filter(o => !o.room_id)]
+                for (const o of withImg) if (o.note && !shots.includes(o)) shots.push(o)
                 const cat = os[0]?.category ?? e.category ?? 'decor'
                 const ms = missingOf(e, lang), mk = new Set<string>(ms.map(m => String(m.key)))
                 const M = (k: K) => mk.has(String(k))
@@ -163,9 +194,9 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                       {pair('part', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} ph="Bộ phận áp dụng" /></div>)}</td>
                     <td className="c-loc">{locs.map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room?.id ? ' here' : '')}>{roomName(l.room, lang)}{canEdit && <a className="loc-x" title="Bỏ vị trí này" onClick={ev => { ev.stopPropagation(); delLoc(e, l.room) }}>✕</a>}</span>)}
                       {canEdit && <select className="loc-add" value="" onClick={x => x.stopPropagation()} onChange={x => addLoc(e, x.target.value)}><option value="">＋ thêm phòng…</option>{d.rooms.filter(r => !locs.some(l => l.room.id === r.id)).map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}</select>}</td>
-                    <td className="c-img">{shots.length ? shots.map(o => <span key={o.id} className="shot-wrap" draggable={canEdit} title={canEdit ? 'Kéo thả sang vật liệu khác để chuyển ảnh (giữ Ctrl để sao chép)' : undefined} onDragStart={ev => { ev.dataTransfer.setData('text/dmvl-occ', o.id); ev.dataTransfer.effectAllowed = 'copyMove' }} onDragEnd={() => setDropId(null)}><OccCrop d={d} o={o} height={64} maxWidth={90} />{canEdit && <a className="shot-x" title="Xoá hình này" onClick={ev => { ev.stopPropagation(); delShot(o) }}>✕</a>}</span>)
+                    <td className="c-img">{shots.length ? shots.map(o => <span key={o.id} className="shot-wrap" draggable={canEdit} title={canEdit ? 'Kéo thả sang vật liệu khác để chuyển ảnh (giữ Ctrl để sao chép)' : undefined} onDragStart={ev => { ev.dataTransfer.setData('text/dmvl-occ', o.id); ev.dataTransfer.effectAllowed = 'copyMove' }} onDragEnd={() => setDropId(null)}><OccCrop d={d} o={o} height={64} maxWidth={90} /><div className="shot-cap" title={o.note ?? ''} onClick={ev => { ev.stopPropagation(); if (canEdit) { setNoteTxt(o.note ?? ''); setShotNote(o) } }}>{o.room_id ? d.rooms.find(r => r.id === o.room_id)?.code : ''}{o.note ? ' · ' + o.note : canEdit ? ' ✎' : ''}</div>{canEdit && <a className="shot-x" title="Xoá hình này" onClick={ev => { ev.stopPropagation(); delShot(o) }}>✕</a>}</span>)
                       : <div className="ic-none tiny"><span>{e.source === 'inferred' ? 'Suy luận' : 'Chưa có ảnh'}</span></div>}
-                      {canEdit && <button className="btn ghost sm" title="Thêm hình phối cảnh" onClick={ev => { ev.stopPropagation(); setShotFor(e) }}>＋ ảnh</button>}</td>
+                      {canEdit && <button className="btn ghost sm" title="Thêm hình phối cảnh" onClick={ev => { ev.stopPropagation(); setShotRoom(null); setShotFor(e) }}>＋ ảnh</button>}</td>
                     <td>{[...pair('name', lang), ...pair('material', lang), ...pair('desc', lang)].map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} miss={M(k)} area={!String(k).startsWith('name')} ph={String(k).startsWith('name') ? 'Tên hạng mục' : String(k).startsWith('material') ? 'Vật liệu / màu / bề mặt' : 'Thông số kỹ thuật'} /></div>)}
                       <div className="ed-line lab"><i>{lang === 'en' ? 'Composition' : 'Cấu tạo'}</i><Ed e={e} k="composition" area ph={lang === 'en' ? 'Composition' : 'Cấu tạo (vật liệu thành phần)'} /></div>
                       </td>
@@ -183,7 +214,18 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
             </table>
           </div>)
       })}
-    {shotFor && <AddShot d={d} entry={shotFor} roomId={room?.id} onClose={() => setShotFor(null)} />}
+    {shotFor && <AddShot d={d} entry={shotFor} roomId={shotRoom ?? room?.id} onClose={() => { setShotFor(null); setShotRoom(null) }} />}
+    {scanning && <div className="modal-bg center"><div className="modal"><span className="spinner" /> AI đang rà phòng {scanning} để tìm vật liệu và khoanh mũi tên…</div></div>}
+    {shotNote && <div className="modal-bg center" onMouseDown={() => setShotNote(null)}><div className="modal" style={{ maxWidth: 520 }} onMouseDown={ev => ev.stopPropagation()}>
+      <h3 style={{ margin: 0 }}>Ghi chú cho hình phối cảnh</h3>
+      <p className="small muted">Dùng khi hình gốc đang khoanh vật liệu khác (vd thảm) nhưng danh mục đã đổi sang vật liệu mới (vd sàn vinyl): hình vẫn giữ để người xem biết vị trí, chú thích sẽ hiện dưới hình và trong file xuất.</p>
+      <div className="row gap" style={{ flexWrap: 'wrap' }}>
+        <button className="btn sm" onClick={() => setNoteTxt('Vị trí vật liệu cũ trên phối cảnh – đã đổi sang vật liệu này')}>Vật liệu cũ, đã đổi sang vật liệu này</button>
+        <button className="btn sm" onClick={() => setNoteTxt('Hình minh hoạ vị trí – vật liệu thực tế theo thông số bên cạnh')}>Hình minh hoạ vị trí</button>
+      </div>
+      <input style={{ width: '100%' }} autoFocus value={noteTxt} placeholder="vd: Phối cảnh gốc dùng thảm – đã đổi sang sàn vinyl" onChange={ev => setNoteTxt(ev.target.value)} />
+      <div className="row gap" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={() => setNote(shotNote, null).then(() => setShotNote(null))}>Xoá ghi chú</button><button className="btn primary" onClick={() => setNote(shotNote, noteTxt.trim()).then(() => setShotNote(null))}>Lưu</button></div>
+    </div></div>}
     </div>
   )
 }

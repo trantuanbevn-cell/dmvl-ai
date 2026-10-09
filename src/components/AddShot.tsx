@@ -14,6 +14,7 @@ export default function AddShot({ d, entry, roomId, onClose }: { d: ProjectData;
   const [box, setBox] = useState<number[] | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
   const drag = useRef<{ x: number; y: number } | null>(null)
   const wrap = useRef<HTMLDivElement>(null)
   const pages = useMemo(() => roomPages(d.pages, rid).filter(p => p.kind === 'render' || p.kind === 'plan'), [d.pages, rid])
@@ -28,12 +29,12 @@ export default function AddShot({ d, entry, roomId, onClose }: { d: ProjectData;
     try {
       if (tab === 'page') {
         if (!page || !box || box[2] < 0.01 || box[3] < 0.01) throw new Error('Hãy chọn trang và kéo chuột khoanh vùng vật liệu')
-        const { error } = await supabase.from('occurrences').insert({ entry_id: entry.id, room_id: rid || null, page_id: page.id, category, origin: 'manual', bbox: box.map(v => +v.toFixed(4)) })
+        const { error } = await supabase.from('occurrences').insert({ entry_id: entry.id, room_id: rid || null, page_id: page.id, category, origin: 'manual', note: note.trim() || null, bbox: box.map(v => +v.toFixed(4)) })
         if (error) throw new Error(error.message)
       } else {
         if (!file) throw new Error('Chưa chọn ảnh')
         const img = await uploadImage(file, `${d.project!.id}/crops/new-${entry.id}-${Date.now()}.jpg`)
-        const { error } = await supabase.from('occurrences').insert({ entry_id: entry.id, room_id: rid || null, page_id: null, category, origin: 'manual', bbox: [0.32, 0.3, 0.36, 0.4], view: { img } })
+        const { error } = await supabase.from('occurrences').insert({ entry_id: entry.id, room_id: rid || null, page_id: null, category, origin: 'manual', note: note.trim() || null, bbox: [0.32, 0.3, 0.36, 0.4], view: { img } })
         if (error) throw new Error(error.message)
       }
       await d.reload(); onClose()
@@ -57,6 +58,7 @@ export default function AddShot({ d, entry, roomId, onClose }: { d: ProjectData;
             {box && <div style={{ position: 'absolute', left: box[0] * 100 + '%', top: box[1] * 100 + '%', width: box[2] * 100 + '%', height: box[3] * 100 + '%', border: '2px solid #e5322d', background: 'rgba(229,50,45,.12)', pointerEvents: 'none' }} />}
           </div>}
         </> : <label className="fld">Ảnh phối cảnh / ảnh minh hoạ<input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)} /></label>}
+        <label className="small">Ghi chú hình (tuỳ chọn) – vd khi hình đang khoanh vật liệu cũ đã đổi: <input style={{ width: '100%' }} value={note} placeholder="Phối cảnh gốc dùng thảm – đã đổi sang sàn vinyl" onChange={e => setNote(e.target.value)} /></label>
         <div className="row gap" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Huỷ</button><button className="btn primary" disabled={busy} onClick={save}>Lưu hình</button></div>
       </div>
     </div>
