@@ -46,6 +46,7 @@ export default function MaterialView({ d }: { d: ProjectData }) {
   const [bands, setBands] = useState(false)
   const [dragKey, setDragKey] = useState<string | null>(null)
   const [over, setOver] = useState<string | null>(null)   // 'band:X' hoặc 'sec:key'
+  const shift = (band: string, row: { sec: { key: string } }[], key: string, dir: -1 | 1) => { const i = row.findIndex(x => x.sec.key === key), j = i + dir; if (i < 0 || j < 0 || j >= row.length) return; saveLayout(d, dir < 0 ? moveSection(key, band, row[j].sec.key) : j + 1 < row.length ? moveSection(key, band, row[j + 1].sec.key) : moveSection(key, band)) }
   const drop = (band: string, before?: string) => { const k = dragKey; setDragKey(null); setOver(null); if (k && k !== before) saveLayout(d, moveSection(k, band, before)) }
   const [sel, setSel] = useState<string | null>(null)
   const [dlg, setDlg] = useState<AddPreset | null>(null)
@@ -78,9 +79,12 @@ export default function MaterialView({ d }: { d: ProjectData }) {
               <span className="nav-band">{bandTitle(b, 'vn').split(' – ')[0].replace(/^[A-Z]\d?\. /, '')}</span>
               {!row.length && <span className="small muted">Nhóm trống – kéo thả ô vật liệu vào đây</span>}
               {row.map(({ sec, list }) => { const n = list.filter(inRoom).length, m = nMiss(list); return (
-                <button key={sec.key} draggable={canEdit} onDragStart={e => { setDragKey(sec.key); e.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => { setDragKey(null); setOver(null) }}
+                <span key={sec.key} className="chip-wrap">
+                <button draggable={canEdit} onDragStart={e => { setDragKey(sec.key); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", sec.key) }} onDragEnd={() => { setDragKey(null); setOver(null) }}
                   onDragOver={e => { if (dragKey && dragKey !== sec.key) { e.preventDefault(); e.stopPropagation(); setOver('sec:' + sec.key) } }} onDrop={e => { e.preventDefault(); e.stopPropagation(); drop(b, sec.key) }}
-                  className={'chip' + (only === sec.key ? ' on' : n > 0 && m === 0 ? ' done' : '') + (over === 'sec:' + sec.key ? ' drop-before' : '') + (dragKey === sec.key ? ' dragging' : '')} onClick={() => { setOnly(sec.key); setSel(null) }} title={sec.en}>{sectionTitle(sec, 'vn')} <span className="cnt">{n}</span>{n > 0 && m === 0 && <span className="cnt ok" title="đã đủ thông tin">✓</span>}{m > 0 && <span className="cnt warn" title="dòng còn thiếu thông tin">⚠{m}</span>}</button>) })}
+                  className={'chip' + (only === sec.key ? ' on' : n > 0 && m === 0 ? ' done' : '') + (over === 'sec:' + sec.key ? ' drop-before' : '') + (dragKey === sec.key ? ' dragging' : '')} onClick={() => { setOnly(sec.key); setSel(null) }} title={sec.en}>{sectionTitle(sec, 'vn')} <span className="cnt">{n}</span>{n > 0 && m === 0 && <span className="cnt ok" title="đã đủ thông tin">✓</span>}{m > 0 && <span className="cnt warn" title="dòng còn thiếu thông tin">⚠{m}</span>}</button>
+                {canEdit && only === sec.key && row.length > 1 && <span className="chip-mv"><button title="Dời lên trước (xuất file cũng đổi theo)" disabled={row[0].sec.key === sec.key} onClick={() => shift(b, row, sec.key, -1)}>◀</button><button title="Dời ra sau (xuất file cũng đổi theo)" disabled={row[row.length - 1].sec.key === sec.key} onClick={() => shift(b, row, sec.key, 1)}>▶</button></span>}
+                </span>) })}
             </div>
           })}
         </div>
