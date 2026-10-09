@@ -67,7 +67,7 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
 
   const recomputed = useRef(false)
   useEffect(() => {
-    if (!g || g.algo === 4 || !canEdit || recomputed.current || busy) return
+    if (!g || g.algo === 5 || !canEdit || recomputed.current || busy) return
     recomputed.current = true; setWork('Đang áp thuật toán nhận diện không gian mới (khoảng 10–20 giây)…')
     computeFloor(fp, {}, () => {}).then(() => d.reload()).catch(e => toast(String(e))).finally(() => setWork(''))
   }, [g, canEdit, busy]) // eslint-disable-line
@@ -169,7 +169,7 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
         <svg ref={svgRef} className="painter-svg" viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={() => setHover(null)}
           style={{ cursor: mode === 'cut' ? 'crosshair' : pan.current?.moved ? 'grabbing' : hover != null ? 'pointer' : 'grab' }}>
           <rect x={0} y={0} width={crop.w} height={crop.h} fill="#fff" />
-          {svgMarkup ? <g dangerouslySetInnerHTML={{ __html: svgMarkup }} /> : planUrl && <image href={planUrl} x={0} y={0} width={crop.w} height={crop.h} />}
+          {svgMarkup ? <svg x={0} y={0} width={crop.w} height={crop.h} viewBox={`0 0 ${crop.w} ${crop.h}`} overflow="hidden" dangerouslySetInnerHTML={{ __html: svgMarkup }} /> : planUrl && <image href={planUrl} x={0} y={0} width={crop.w} height={crop.h} />}
           {rooms.map(r => { const on = sel.includes(r.id), hv = hover === r.id
             return roomPolys(r).map((pl, k) => <polygon key={r.id + '_' + k} data-rid={r.id} points={pl.map(q => toPx(q).join(',')).join(' ')} fill={on ? 'rgba(21,101,192,.38)' : hv ? 'rgba(21,101,192,.18)' : 'transparent'} stroke={on ? '#1565c0' : 'none'} strokeWidth={vb.w / 700} />) })}
           {rooms.filter(r => r.area_m2 >= 1.5).map(r => { const [px, py] = toPx(pole(r)); const nmd = r.user && r.names[0]

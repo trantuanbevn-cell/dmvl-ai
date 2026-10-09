@@ -68,7 +68,7 @@ export async function analyzeFloor(fp: FloorPlan, opts: AnalyzeOpts, log: Log, b
     w: v.w, h: v.h, m_per_pt: mpp, door_w: doorW, leaked: res.leaked,
     wall_keys: [...sel].map(i => v.classes[i].key),
     classes: v.classes.map(c => ({ ...c })).sort((a, b) => b.len - a.len).slice(0, 60),
-    algo: 4, scale_src: scaleSrc, scale_note: scaleNote, doors: doors.length, rooms: res.rooms, raw_rooms: res.rooms, uncut_rooms: res.rooms, cuts, merges,
+    algo: 5, scale_src: scaleSrc, scale_note: scaleNote, doors: doors.length, rooms: res.rooms, raw_rooms: res.rooms, uncut_rooms: res.rooms, cuts, merges,
     furn: { ...furn, names: fp.geometry?.furn?.names ?? {} }, labels, history: fp.geometry?.history,
   }
   if (geom.cuts?.length) geom.raw_rooms = applyCuts(res.rooms, geom.cuts)

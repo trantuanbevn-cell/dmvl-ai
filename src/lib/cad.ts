@@ -131,6 +131,19 @@ export function findRooms(cv: any, v: VecPage, mask: Uint8Array, W: number, H: n
     rooms.push({ id: rooms.length + 1, area_m2: +area.toFixed(2), poly, cx: ce.data64F[i * 2] / W, cy: ce.data64F[i * 2 + 1] / H, names: [] })
   }
   wall.delete(); closed.delete(); free.delete()
+  // bỏ các ô rời xa công trình (ô trong khung tên/bảng chú thích, ký hiệu...): giữ cụm phòng lớn nhất, các cụm nhỏ (<8% diện tích) cách xa > 6 m bị loại
+  if (rooms.length > 3) {
+    const bb = rooms.map(r => { let x0 = 1, y0 = 1, x1 = 0, y1 = 0; for (const p of r.poly) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]) } return { x0: x0 * v.w, x1: x1 * v.w, y0: y0 * v.h, y1: y1 * v.h } })
+    const gapPt = 6 / mpp, par = rooms.map((_, i) => i), find = (i: number): number => (par[i] === i ? i : (par[i] = find(par[i])))
+    for (let i = 0; i < rooms.length; i++) for (let j = i + 1; j < rooms.length; j++) {
+      const a = bb[i], b = bb[j]
+      if (Math.max(0, Math.max(a.x0, b.x0) - Math.min(a.x1, b.x1)) < gapPt && Math.max(0, Math.max(a.y0, b.y0) - Math.min(a.y1, b.y1)) < gapPt) par[find(i)] = find(j)
+    }
+    const area = new Map<number, number>(); rooms.forEach((r, i) => area.set(find(i), (area.get(find(i)) ?? 0) + r.area_m2))
+    const top = Math.max(...area.values())
+    const keep = rooms.filter((_, i) => (area.get(find(i)) ?? 0) >= top * 0.08)
+    if (keep.length < rooms.length) { rooms.length = 0; keep.forEach((r, k) => rooms.push({ ...r, id: k + 1 })) }
+  }
   // gán chữ trong bản vẽ cho phòng chứa nó
   const inside = (r: CadRoom, x: number, y: number) => { let c = false; const p = r.poly; for (let i = 0, j = p.length - 1; i < p.length; j = i++) if ((p[i][1] > y) !== (p[j][1] > y) && x < ((p[j][0] - p[i][0]) * (y - p[i][1])) / (p[j][1] - p[i][1]) + p[i][0]) c = !c; return c }
   for (const t of v.texts) {
