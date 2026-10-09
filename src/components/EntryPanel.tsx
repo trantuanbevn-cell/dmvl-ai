@@ -91,7 +91,7 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
           const pg = o.page_id ? pageById.get(o.page_id) : undefined
           return (
             <div key={o.id} className="occ">
-              {o.bbox ? <OccCrop d={d} o={o} height={120} maxWidth={210} /> : o.room_id ? <RoomShotFallback d={d} roomId={o.room_id} height={120} width={210} /> : <OccCrop d={d} o={o} height={120} maxWidth={210} />}
+              {o.bbox ? <OccCrop d={d} o={o} height={84} maxWidth={118} /> : o.room_id ? <RoomShotFallback d={d} roomId={o.room_id} height={84} width={118} /> : <OccCrop d={d} o={o} height={84} maxWidth={118} />}
               <div className="small muted">{o.room_id ? roomById.get(o.room_id)?.code : ''}{pg ? ` · tr.${pg.page_no}` : ''}{o.note ? ` · ${o.note}` : ''}</div>
             </div>)
         })}
