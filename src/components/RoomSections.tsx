@@ -105,6 +105,19 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   }
   const [shotFor, setShotFor] = useState<Entry | null>(null)
   const [dropId, setDropId] = useState<string | null>(null)
+  const [entDrop, setEntDrop] = useState<{ id: string; after: boolean } | null>(null)
+  /** Đổi thứ tự vật liệu trong nhóm mã (kéo thả hoặc ▲▼): các mã CT-01, CT-02… được gán lại theo thứ tự mới, nội dung giữ nguyên */
+  const reorder = async (e: Entry, target: Entry, after: boolean) => {
+    if (e.id === target.id) return
+    if (e.group_code !== target.group_code) { toast('Chỉ đổi thứ tự được trong cùng nhóm mã (' + e.group_code + ').'); return }
+    const num = (c: string) => parseInt(c.replace(/\D/g, '') || '0', 10)
+    const list = d.entries.filter(x => x.group_code === e.group_code && x.id !== e.id).sort((a, b) => num(a.code) - num(b.code) || a.code.localeCompare(b.code))
+    const at = list.findIndex(x => x.id === target.id); if (at < 0) return
+    list.splice(at + (after ? 1 : 0), 0, e)
+    const { error } = await supabase.rpc('reorder_entries', { p_ids: list.map(x => x.id) })
+    if (error) { alert('Không đổi được thứ tự: ' + error.message); return }
+    d.reload()
+  }
   /** Kéo ảnh phối cảnh từ một vật liệu sang vật liệu khác (giữ Ctrl/Alt để sao chép thay vì chuyển) */
   const moveShot = async (occId: string, target: Entry, copy: boolean) => {
     const o = d.occ.find(x => x.id === occId)
@@ -232,8 +245,9 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                 const M = (k: K) => mk.has(String(k))
                 n++
                 return (
-                  <tr key={e.id} onDragOver={ev => { if (canEdit && ev.dataTransfer.types.includes('text/dmvl-occ')) { ev.preventDefault(); ev.dataTransfer.dropEffect = ev.ctrlKey || ev.altKey ? 'copy' : 'move'; if (dropId !== e.id) setDropId(e.id) } }} onDragLeave={ev => { if (!ev.currentTarget.contains(ev.relatedTarget as Node)) setDropId(x => (x === e.id ? null : x)) }} onDrop={ev => { const id = ev.dataTransfer.getData('text/dmvl-occ'); setDropId(null); if (id) { ev.preventDefault(); moveShot(id, e, ev.ctrlKey || ev.altKey) } }} className={(dropId === e.id ? 'drop-ok ' : '') + (ms.length ? 'has-miss ' : '') + 'st-' + e.status + (e.id === sel ? ' sel' : '') + ' src-row-' + e.source} onClick={() => os[0] && onPick(os[0])}>
-                    <td className="c-stt">{n}</td>
+                  <tr key={e.id} onDragOver={ev => { if (canEdit && ev.dataTransfer.types.includes('text/dmvl-ent')) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(), after = ev.clientY > r.top + r.height / 2; if (entDrop?.id !== e.id || entDrop.after !== after) setEntDrop({ id: e.id, after }); return } if (canEdit && ev.dataTransfer.types.includes('text/dmvl-occ')) { ev.preventDefault(); ev.dataTransfer.dropEffect = ev.ctrlKey || ev.altKey ? 'copy' : 'move'; if (dropId !== e.id) setDropId(e.id) } }} onDragLeave={ev => { if (!ev.currentTarget.contains(ev.relatedTarget as Node)) { setDropId(x => (x === e.id ? null : x)); setEntDrop(x => (x?.id === e.id ? null : x)) } }} onDrop={ev => { const eid = ev.dataTransfer.getData('text/dmvl-ent'); if (eid) { ev.preventDefault(); const dr = entDrop; setEntDrop(null); const src = d.entries.find(x => x.id === eid); if (src) reorder(src, e, !!dr?.after); return } const id = ev.dataTransfer.getData('text/dmvl-occ'); setDropId(null); if (id) { ev.preventDefault(); moveShot(id, e, ev.ctrlKey || ev.altKey) } }} className={(dropId === e.id ? 'drop-ok ' : '') + (entDrop?.id === e.id ? (entDrop.after ? 'ent-after ' : 'ent-before ') : '') + (ms.length ? 'has-miss ' : '') + 'st-' + e.status + (e.id === sel ? ' sel' : '') + ' src-row-' + e.source} onClick={() => os[0] && onPick(os[0])}>
+                    <td className="c-stt">{n}{canEdit && <div className="ent-mv"><span className="ent-grip" draggable title="Kéo lên/xuống để đổi thứ tự (ký hiệu CT-01, CT-02… tự đánh lại)" onClick={ev => ev.stopPropagation()} onDragStart={ev => { ev.dataTransfer.setData('text/dmvl-ent', e.id); ev.dataTransfer.effectAllowed = 'move'; const tr = ev.currentTarget.closest('tr'); if (tr) ev.dataTransfer.setDragImage(tr, 20, 20) }} onDragEnd={() => setEntDrop(null)}>⠿</span>
+                      <a title="Lên một vị trí" onClick={ev => { ev.stopPropagation(); const p = items.slice(0, items.indexOf(e)).reverse().find(x => x.group_code === e.group_code); if (p) reorder(e, p, false) }}>▲</a><a title="Xuống một vị trí" onClick={ev => { ev.stopPropagation(); const q = items.slice(items.indexOf(e) + 1).find(x => x.group_code === e.group_code); if (q) reorder(e, q, true) }}>▼</a></div>}</td>
                     <td className="c-code"><b>{symbolOf(e, lang, legacy, symMap)}</b>{ms.length > 0 && <div><span className="miss-badge" title={'Còn thiếu: ' + missText(ms)}>⚠ thiếu {new Set(ms.map(m => m.label)).size}</span></div>}{e.link_id && <div><span className="link-badge" title={'Liên kết đồng bộ với: ' + (linkedWith(e, d.entries).map(x => x.code).join(', ') || '—')}>🔗 {linkedWith(e, d.entries).map(x => x.code).join(', ')}</span></div>}<div><span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></div></td>
                     <td className="c-vl"><CodeList e={e} miss={M('product_code')} /></td>
                     <td><select value={sectionOf(e).key} disabled={!canEdit} onClick={x => x.stopPropagation()} onChange={x => setSection(e, os, x.target.value)}>{bandKeys().map(b => <optgroup key={b} label={bandTitle(b, lang)}>{allSections().filter(x => x.band === b).map(x => <option key={x.key} value={x.key}>{sectionTitle(x, lang)}</option>)}</optgroup>)}</select>

@@ -379,3 +379,7 @@ input[readonly], textarea[readonly] { cursor: default }
 .mp-tab:disabled { opacity: .4; cursor: default }
 .painter-side .chip { display: inline-block; margin: 2px 4px 2px 0; padding: 1px 8px; border-radius: 10px; background: #efe3d3 }
 .painter-side .chip a { cursor: pointer; color: #b3261e; margin-left: 4px }
+.ent-mv { display: flex; flex-direction: column; align-items: center; gap: 1px; margin-top: 4px; font-size: 11px; color: var(--muted, #888); line-height: 1.1 }
+.ent-mv a { cursor: pointer; padding: 0 3px; border-radius: 3px } .ent-mv a:hover { background: rgba(0,0,0,.1); color: #000 }
+.ent-grip { cursor: grab; font-size: 16px; user-select: none; padding: 0 3px } .ent-grip:active { cursor: grabbing }
+tr.ent-before > td { box-shadow: inset 0 3px 0 0 var(--orange, #ef6c00) } tr.ent-after > td { box-shadow: inset 0 -3px 0 0 var(--orange, #ef6c00) }
