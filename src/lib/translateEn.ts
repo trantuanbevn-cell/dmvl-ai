@@ -6,28 +6,41 @@ import { autoBackup } from './backup'
 import { fixText, loadEnglish } from './spell'
 import { translateViText } from './viEn'
 import type { ProjectData } from './useProject'
+import type { EnSrc } from './types'
 
-export type TrItem = { key: string; kind: 'entry' | 'room'; id: string; field: string; vi: string; draft: string; ok: boolean; label: string }
+export type TrItem = { key: string; kind: 'entry' | 'room'; id: string; field: string; vi: string; draft: string; ok: boolean; label: string; prevEn?: string; src?: EnSrc | null }
+const norm = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim()
 const EF: [string, string, string][] = [['name_vn', 'name_en', 'tên'], ['part_vn', 'part_en', 'bộ phận'], ['material_vn', 'material_en', 'vật liệu'], ['desc_vn', 'desc_en', 'thông số'], ['perf_vn', 'perf_en', 'tính chất'], ['note_vn', 'note_en', 'ghi chú']]
 const blank = (v: unknown) => v == null || String(v).trim() === ''
 
-/** Các ô tiếng Anh còn trống mà ô tiếng Việt đã có nội dung, kèm bản dịch từ điển */
+/** Các ô tiếng Anh cần dịch: (1) còn trống; (2) do phần mềm tự dịch trước đây, tiếng Việt đã đổi sau đó và tiếng Anh chưa bị ai sửa tay → dịch lại cho đồng bộ.
+ *  Ô tiếng Anh người dùng tự gõ / sửa thì không bao giờ bị đụng tới. */
 export function planFill(d: ProjectData): TrItem[] {
   const out: TrItem[] = []
-  const add = (kind: 'entry' | 'room', id: string, label: string, vf: string, ef: string, vi: unknown) => {
+  const add = (kind: 'entry' | 'room', row: any, label: string, ef: string, vi: unknown, prevEn?: string) => {
     const s = String(vi ?? '').trim(); if (!s) return
     const r = translateViText(s)
-    out.push({ key: `${id}:${ef}`, kind, id, field: ef, vi: s, draft: r.en, ok: r.ok && !!r.en, label })
+    out.push({ key: `${row.id}:${ef}:${norm(s)}`, kind, id: row.id, field: ef, vi: s, draft: r.en, ok: r.ok && !!r.en, label, prevEn, src: row.en_src ?? null })
   }
-  for (const e of d.entries) if (e.status !== 'rejected') for (const [vf, ef] of EF) if (!blank((e as any)[vf]) && blank((e as any)[ef])) add('entry', e.id, `${e.code} · ${e.name_vn}`, vf, ef, (e as any)[vf])
-  for (const r of d.rooms) if (blank(r.name_en) && !blank(r.name_vn)) add('room', r.id, r.code, 'name_vn', 'name_en', r.name_vn)
+  const check = (kind: 'entry' | 'room', row: any, label: string, vf: string, ef: string) => {
+    if (blank(row[vf])) return
+    if (blank(row[ef])) return add(kind, row, label, ef, row[vf])
+    const src = (row.en_src as EnSrc | null)?.[ef]
+    if (src && src.en === row[ef] && norm(src.vi) !== norm(row[vf])) add(kind, row, label, ef, row[vf], row[ef])
+  }
+  for (const e of d.entries) if (e.status !== 'rejected') for (const [vf, ef] of EF) check('entry', e, `${e.code} · ${e.name_vn}`, vf, ef)
+  for (const r of d.rooms) check('room', r, r.code, 'name_vn', 'name_en')
   return out
 }
 
 /** Ghi bản dịch vào ô EN – chỉ khi ô đó vẫn đang trống trong cơ sở dữ liệu */
 async function put(it: TrItem, en: string) {
   const table = it.kind === 'room' ? 'rooms' : 'entries'
-  const { error } = await supabase.from(table).update({ [it.field]: en }).eq('id', it.id).or(`${it.field}.is.null,${it.field}.eq.`)
+  const patch = { [it.field]: en, en_src: { ...(it.src ?? {}), [it.field]: { vi: it.vi, en } } }
+  let q = supabase.from(table).update(patch).eq('id', it.id)
+  // chỉ ghi khi ô tiếng Anh vẫn đúng như lúc kiểm (trống, hoặc đúng bản tự dịch cũ) – tránh đè lên bản người khác vừa sửa
+  q = it.prevEn != null ? q.eq(it.field, it.prevEn) : q.or(`${it.field}.is.null,${it.field}.eq.`)
+  const { error } = await q
   if (error) throw new Error(error.message)
 }
 const polish = (en: string, field: string) => fixText(en, 'en', { cap: field !== 'desc_en' ? true : true }).text
@@ -68,4 +81,13 @@ async function callTranslate(context: string | undefined, items: { id: string; v
   const j = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(`AI dịch lỗi: ${j.error ?? res.status}`)
   return j.items ?? []
+}
+
+/** Đồng bộ toàn bộ tiếng Anh với tiếng Việt: dịch ô trống + dịch lại ô tự dịch cũ mà tiếng Việt đã đổi. Dùng khi chuyển EN/song ngữ và trước khi xuất file. */
+export async function syncEnglish(d: ProjectData, log: (s: string) => void = () => {}): Promise<{ done: number; failed: number }> {
+  const plan = planFill(d); if (!plan.length) return { done: 0, failed: 0 }
+  const n1 = await fillByDictionary(d, plan)
+  const left = plan.filter(i => !i.ok)
+  const n2 = left.length ? await fillByAI(d, left, log) : 0
+  return { done: n1 + n2, failed: left.length - n2 }
 }

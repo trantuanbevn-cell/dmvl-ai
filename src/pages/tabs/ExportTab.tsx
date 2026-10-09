@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { syncEnglish } from '../../lib/translateEn'
+import { useAuth } from '../../lib/auth'
 import { exportExcel, filterEntries } from '../../lib/exportExcel'
 import { printSchedule } from '../../lib/exportPrint'
 import { allSections, bandTitle, PRESETS, defaultOpts, groupBySection, planSheets, type ExportOpts, type SheetTarget, type Lang } from '../../lib/sections'
@@ -17,8 +19,22 @@ export default function ExportTab({ d }: { d: ProjectData }) {
   const n = list.length
   const pend = d.entries.filter(e => e.status === 'pending' || e.status === 'review').length
   const roomsMissing = d.rooms.filter(r => !d.occ.some(x => x.room_id === r.id)).length
-  const go = async (label: string, fn: () => Promise<void>) => { setBusy(label); try { await fn() } catch (e) { alert(String(e)) } setBusy('') }
-  const data = { project: d.project!, rooms: d.rooms, pages: d.pages, entries: d.entries, occ: d.occ }
+  const { canEdit } = useAuth()
+  const dRef = useRef(d); dRef.current = d
+  const mk = (x: ProjectData) => ({ project: x.project!, rooms: x.rooms, pages: x.pages, entries: x.entries, occ: x.occ })
+  // Trước khi xuất bản EN / song ngữ: đồng bộ lại toàn bộ tiếng Anh với tiếng Việt để file luôn đúng
+  const go = async (label: string, fn: (data: ReturnType<typeof mk>) => Promise<void>) => {
+    setBusy(label)
+    try {
+      if (o.lang !== 'vn' && canEdit) {
+        const r = await syncEnglish(d)
+        if (r.done) { await d.reload(); await new Promise(res => setTimeout(res, 300)) }
+        if (r.failed > 0 && !confirm(`Còn ${r.failed} ô tiếng Anh chưa dịch được (AI lỗi hoặc hết hạn mức). Vẫn xuất file?`)) { setBusy(''); return }
+      }
+      await fn(mk(dRef.current))
+    } catch (e) { alert(String(e)) }
+    setBusy('')
+  }
   const set = (p: Partial<ExportOpts>) => setO({ ...o, ...p })
   let lastBand = ''
   return (
@@ -58,8 +74,8 @@ export default function ExportTab({ d }: { d: ProjectData }) {
 
       <div className="small">Sẽ xuất <b>{n}</b> mã{!o.includePending && pend > 0 ? ` (còn ${pend} mã chờ duyệt không được xuất)` : ''}.</div>
       <div className="row gap">
-        <button className="btn primary" disabled={!!busy || !n} onClick={() => go('xlsx', () => exportExcel(data, o))}>⬇ Xuất Excel</button>
-        <button className="btn" disabled={!!busy || !n} onClick={() => go('pdf', () => printSchedule(data, o))}>🖨 Xuất PDF</button>
+        <button className="btn primary" disabled={!!busy || !n} onClick={() => go('xlsx', data => exportExcel(data, o))}>⬇ Xuất Excel</button>
+        <button className="btn" disabled={!!busy || !n} onClick={() => go('pdf', data => printSchedule(data, o))}>🖨 Xuất PDF</button>
         {busy && <span className="spinner" />}
       </div>
       <p className="small muted">PDF: trang in mở ra trong tab mới → chọn “Lưu dưới dạng PDF”, khổ A3 ngang; mỗi sheet bắt đầu ở một trang mới.</p>
