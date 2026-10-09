@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { exportExcel, filterEntries } from '../../lib/exportExcel'
 import { printSchedule } from '../../lib/exportPrint'
-import { SECTIONS, BANDS, PRESETS, defaultOpts, groupBySection, planSheets, type ExportOpts, type SheetTarget, type Lang } from '../../lib/sections'
+import { allSections, BANDS, PRESETS, defaultOpts, groupBySection, planSheets, type ExportOpts, type SheetTarget, type Lang } from '../../lib/sections'
 import type { ProjectData } from '../../lib/useProject'
 
 const TARGETS: [SheetTarget, string][] = [['main', 'Sheet chính'], ['own', 'Sheet riêng'], ['c1', 'Sheet phụ 1'], ['c2', 'Sheet phụ 2']]
@@ -45,7 +45,7 @@ export default function ExportTab({ d }: { d: ProjectData }) {
           <label>Sheet phụ 2 <input value={o.names.c2} onChange={e => set({ names: { ...o.names, c2: e.target.value } })} style={{ width: 130 }} /></label>
         </div>
         <table className="tbl"><tbody>
-          {SECTIONS.map(s => {
+          {allSections().map(s => {
             const cnt = groups.find(g => g.section.key === s.key)?.items.length ?? 0
             const band = s.band !== lastBand ? s.band : null; lastBand = s.band
             return [band && <tr key={'b' + s.band}><td colSpan={3} className="small" style={{ background: '#f1e8de', fontWeight: 700 }}>{BANDS[s.band].vn}</td></tr>,

@@ -4,7 +4,8 @@ import { GROUPS } from './codes'
 import type { Entry } from './types'
 
 export type Lang = 'vn' | 'en' | 'both'
-export type Section = { key: string; vn: string; en: string; band: string; groups: string[] }
+export type Section = { key: string; vn: string; en: string; band: string; groups: string[]; custom?: boolean }
+export type CustomSection = { key: string; vn: string; en: string; band: string; group: string }
 export const BANDS: Record<string, { vn: string; en: string }> = {
   A: { vn: 'A. HOÀN THIỆN CHÍNH – SÀN · TƯỜNG · TRẦN', en: 'A. MAIN FINISHES – FLOOR · WALL · CEILING' },
   B: { vn: 'B. VẬT LIỆU & CẤU KIỆN KHÁC', en: 'B. OTHER MATERIALS & ARCHITECTURAL ELEMENTS' },
@@ -39,7 +40,16 @@ export const SECTIONS: Section[] = [
   { key: 'mep', vn: 'ĐẦU CHỜ MEP PHỐI HỢP', en: 'MEP INTERFACE', band: 'D', groups: ['ME'] },
 ]
 
-export function sectionOf(e: Pick<Entry, 'group_code' | 'category'>): Section {
+// Nhóm vật liệu do người dùng tạo thêm (lưu theo dự án: projects.custom_sections), xếp cuối nhóm lớn mà nó thuộc về
+let CUSTOM: Section[] = []
+export const setCustomSections = (c: CustomSection[] | null | undefined) => { CUSTOM = (c ?? []).map(x => ({ key: x.key, vn: x.vn, en: x.en, band: x.band, groups: [x.group], custom: true })) }
+export const allSections = (): Section[] => {
+  const out = [...SECTIONS]
+  for (const c of CUSTOM) { let at = -1; out.forEach((x, i) => { if (x.band === c.band) at = i }); out.splice(at + 1, 0, c) }
+  return out
+}
+export function sectionOf(e: Pick<Entry, 'group_code' | 'category'> & { section_key?: string | null }): Section {
+  if (e.section_key) { const c = CUSTOM.find(x => x.key === e.section_key); if (c) return c }
   if ((e.group_code === 'WD' || e.group_code === 'LM') && e.category === 'floor') return SECTIONS.find(s => s.key === 'floor')!
   return SECTIONS.find(s => s.groups.includes(e.group_code)) ?? SECTIONS[SECTIONS.length - 1]
 }
@@ -57,7 +67,7 @@ export const bandTitle = (b: string, lang: Lang) => pick(BANDS[b], OVR['band:' +
 
 /** Nhóm các mã theo mục chuẩn, đúng thứ tự công ty; mã sắp theo ký hiệu */
 export function groupBySection<T extends Entry>(entries: T[]): { section: Section; items: T[] }[] {
-  const out = SECTIONS.map(section => ({ section, items: [] as T[] }))
+  const out = allSections().map(section => ({ section, items: [] as T[] }))
   for (const e of entries) out.find(x => x.section.key === sectionOf(e).key)!.items.push(e)
   const gi = (c: string) => GROUPS.findIndex(g => g.code === c)
   for (const x of out) x.items.sort((a, b) => gi(a.group_code) - gi(b.group_code) || a.code.localeCompare(b.code, undefined, { numeric: true }))

@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../lib/auth'
 import { CATEGORY_GROUPS } from '../../lib/codes'
 import { supabase } from '../../lib/supabase'
-import { SECTIONS, BANDS, sectionOf, sectionTitle, bandTitle, type Lang } from '../../lib/sections'
+import { allSections, BANDS, sectionOf, sectionTitle, bandTitle, type Lang } from '../../lib/sections'
 import SectionNames from '../../components/SectionNames'
+import NewSection from '../../components/NewSection'
 import RoomSections from '../../components/RoomSections'
 import AddMaterial, { type AddPreset } from '../../components/AddMaterial'
 import type { ProjectData } from '../../lib/useProject'
@@ -33,13 +34,14 @@ export default function MaterialView({ d }: { d: ProjectData }) {
       d.reload()
     })()
   }, [d.entries, d.occ, canEdit])
-  const secs = SECTIONS.map(sec => ({ sec, list: live.filter(e => sectionOf(e).key === sec.key) })).filter(x => x.list.length)
+  const secs = allSections().map(sec => ({ sec, list: live.filter(e => sectionOf(e).key === sec.key) })).filter(x => x.list.length || x.sec.custom)
   const [onlyRaw, setOnly] = useState<string>('')          // '' = tất cả
   const only = secs.some(x => x.sec.key === onlyRaw) ? onlyRaw : ''   // tab hết vật liệu thì tự biến mất
   const [roomId, setRoomId] = useState<string>('')      // '' = mọi phòng
   const [lang, setLang] = useState<Lang>('vn')
   const [flt, setFlt] = useState<'all' | 'pending' | 'inferred' | 'missing'>('all')
   const [renaming, setRenaming] = useState(false)
+  const [newSec, setNewSec] = useState(false)
   const [sel, setSel] = useState<string | null>(null)
   const [dlg, setDlg] = useState<AddPreset | null>(null)
   const selEntry = d.entries.find(e => e.id === sel)
@@ -47,7 +49,7 @@ export default function MaterialView({ d }: { d: ProjectData }) {
   const inRoom = (e: Entry) => !room || d.occ.some(o => o.entry_id === e.id && o.room_id === room.id)
   const nMiss = (list: Entry[]) => list.filter(e => inRoom(e) && missingOf(e, lang).length).length
   if (!secs.length) return <div className="card muted">Chưa có dữ liệu – hãy chạy phân tích ở bước 2.</div>
-  const curSec = SECTIONS.find(s => s.key === only)
+  const curSec = allSections().find(s => s.key === only)
   return (
     <div className={'mat-layout' + (selEntry ? ' with-panel' : '')}>
       <div>
@@ -61,7 +63,8 @@ export default function MaterialView({ d }: { d: ProjectData }) {
             <span className="small muted" style={{ marginLeft: 8 }}>Lọc:</span>
             {([['all', 'Tất cả'], ['pending', 'Chờ duyệt'], ['inferred', 'Suy luận'], ['missing', '⚠ Thiếu thông tin']] as const).map(([k, l]) => <button key={k} className={'chip' + (flt === k ? ' on' : '')} onClick={() => setFlt(k)}>{l}</button>)}
           </div>
-          <div className="nav-row"><button className={'chip' + (!only ? ' on' : '')} onClick={() => { setOnly(''); setSel(null) }}>Tất cả vật liệu <span className="cnt">{live.filter(inRoom).length}</span></button></div>
+          <div className="nav-row"><button className={'chip' + (!only ? ' on' : '')} onClick={() => { setOnly(''); setSel(null) }}>Tất cả vật liệu <span className="cnt">{live.filter(inRoom).length}</span></button>
+            {canEdit && <button className="chip add" onClick={() => setNewSec(true)} title="Tạo thêm một nhóm vật liệu mới cho dự án">＋ Tạo nhóm vật liệu</button>}</div>
           {Object.keys(BANDS).map(b => {
             const row = secs.filter(x => x.sec.band === b); if (!row.length) return null
             return <div key={b} className="nav-row"><span className="nav-band">{bandTitle(b, 'vn').split(' – ')[0].replace(/^[A-D]\. /, '')}</span>
@@ -73,9 +76,12 @@ export default function MaterialView({ d }: { d: ProjectData }) {
         <div className="card">
           <h3 style={{ marginTop: 0 }}>{curSec ? sectionTitle(curSec, lang) : 'Tất cả vật liệu'}{room ? <span className="muted"> · {room.code} {room.name_vn}</span> : <span className="muted"> · tất cả phòng</span>}</h3>
           <p className="small muted" style={{ marginTop: 0 }}>Bảng trình bày đúng như khi xuất file; cột “Vị trí” liệt kê các phòng dùng vật liệu này.</p>
+          {curSec?.custom && !live.some(e => sectionOf(e).key === curSec.key) && <div className="muted small" style={{ padding: '10px 0' }}>Nhóm này chưa có vật liệu. Bấm “＋ Thêm vật liệu” bên dưới, hoặc vào cột “Hạng mục” của một vật liệu khác để chuyển nó sang nhóm này.
+            {canEdit && <div style={{ marginTop: 8 }}><button className="btn primary sm" onClick={() => setDlg({ section_key: curSec.key, group: curSec.groups[0], category: 'decor', name: '', hint: `Thêm vật liệu đầu tiên vào nhóm “${sectionTitle(curSec, lang)}”.` })}>＋ Thêm vật liệu</button></div>}</div>}
           <RoomSections d={d} room={room} only={only || undefined} lang={lang} filter={flt} sel={sel} onPick={o => setSel(o.entry_id)} onDetail={id => setSel(id)} onRemove={() => {}} onAdd={setDlg} />
         </div>
       </div>
+      {newSec && <NewSection d={d} onClose={() => setNewSec(false)} onDone={k => { setNewSec(false); setOnly(k); setSel(null) }} />}
       {renaming && <SectionNames d={d} onClose={() => setRenaming(false)} />}
       {dlg && <AddMaterial d={d} room={room} preset={dlg} onClose={() => setDlg(null)} onDone={id => { setDlg(null); setSel(id) }} />}
       {selEntry && <EntryPanel d={d} entry={selEntry} onClose={() => setSel(null)} />}

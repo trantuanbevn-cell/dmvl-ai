@@ -313,3 +313,5 @@ input[readonly], textarea[readonly] { cursor: default }
 .sp-diff { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap } .sp-old { color: #c62828; text-decoration: line-through } .sp-new { color: #2e7d32; font-weight: 600 } .sp-arrow { color: #999 }
 .sp-flags { display: flex; gap: 8px; flex-wrap: wrap } .sp-flag { background: #fff6dd; border: 1px solid #ecd48a; border-radius: 99px; padding: 2px 10px }
 .sp-flag a { cursor: pointer; color: var(--brown); margin-left: 6px; text-decoration: underline } .sp-flag .sp-ign { color: #2e7d32 }
+
+.chip.add { border-style: dashed; color: var(--brown); background: #fffaf3 } .chip.add:hover { background: #f6e9d8 }

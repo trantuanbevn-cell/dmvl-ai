@@ -7,7 +7,7 @@ import type { ProjectData } from '../lib/useProject'
 import { loadLibrary, searchLibrary, syncLibrary, type LibRow } from '../lib/matLibrary'
 import type { Room, Entry } from '../lib/types'
 
-export type AddPreset = { name_en?: string; copy?: string; group: string; category: string; name: string; part_vn?: string | null; parent_id?: string | null; hint?: string }
+export type AddPreset = { section_key?: string | null; name_en?: string; copy?: string; group: string; category: string; name: string; part_vn?: string | null; parent_id?: string | null; hint?: string }
 
 /** Thêm vật liệu/hạng mục mới vào phòng – tự cảnh báo nếu trong dự án đã có mã giống (kể cả do người khác vừa thêm) */
 export default function AddMaterial({ d, room: room0, preset, onClose, onDone }: { d: ProjectData; room: Room | null; preset: AddPreset; onClose: () => void; onDone: (entryId: string) => void }) {
@@ -44,7 +44,7 @@ export default function AddMaterial({ d, room: room0, preset, onClose, onDone }:
     try {
       const base = srcE ? { ...cloneExtra(srcE), parent_id: libSrc ? preset.parent_id ?? null : srcE.parent_id } : { name_en: preset.name_en ?? null, part_vn: preset.part_vn ?? null, parent_id: preset.parent_id ?? null }
       const e = await addManualEntry(d.project!, room, f.group, f.name.trim(), f.category, {
-        ...base, material_vn: f.material.trim() || undefined, color_hex: f.useColor ? f.color : null,
+        ...base, ...(preset.section_key ? { section_key: preset.section_key } : {}), material_vn: f.material.trim() || undefined, color_hex: f.useColor ? f.color : null,
       })
       syncLibrary(d.project!.id, [e])
       await d.reload(); onDone(e.id)
