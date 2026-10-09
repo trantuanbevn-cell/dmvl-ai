@@ -36,6 +36,29 @@ function Ed({ e, k, area, ph, num, w, miss }: { e: Entry; k: K; area?: boolean; 
   const common = { value: v, placeholder: ph, 'data-lang': dl, readOnly: !canEdit, className: miss ? 'miss' : undefined, title: miss ? 'Thiếu thông tin – cần điền' : undefined, onChange: (x: any) => setV(x.target.value), onBlur: save, onClick: (x: any) => x.stopPropagation(), style: w ? { width: w } : undefined }
   return area ? <textarea {...common} rows={Math.min(8, Math.max(2, Math.ceil(v.length / 38)))} /> : <input {...common} type={num ? 'number' : 'text'} />
 }
+/** Ô mã vật liệu: một vật có thể có NHIỀU mã (mỗi mã một ô). Lưu trong cột product_code, mỗi mã một dòng. */
+function CodeList({ e, miss }: { e: Entry; miss?: boolean }) {
+  const { canEdit } = useAuth()
+  const cur = (e.product_code ?? '').split('\n').map(s => s.trim())
+  const [rows, setRows] = useState<string[]>(cur.length ? cur : [''])
+  const sig = e.product_code ?? ''
+  useEffect(() => setRows((e.product_code ?? '').split('\n').map(s => s.trim()).length ? (e.product_code ?? '').split('\n').map(s => s.trim()) : ['']), [sig])
+  const save = async (list: string[]) => {
+    const val = list.map(s => s.trim()).filter(Boolean).join('\n') || null
+    if ((e.product_code ?? null) === val) return
+    const error = await saveEntry(e, { product_code: val })
+    if (error) alert(error.message)
+  }
+  return <div className="code-list" onClick={x => x.stopPropagation()}>
+    {rows.map((v, i) => <div key={i} className="row gap sm-gap" style={{ flexWrap: 'nowrap' }}>
+      <input value={v} placeholder={i === 0 ? 'Mã vật liệu' : 'Mã thêm'} data-lang="none" readOnly={!canEdit} className={miss && !v ? 'miss' : undefined} title={miss && !v ? 'Thiếu thông tin – cần điền' : undefined}
+        onChange={x => setRows(r => r.map((y, j) => (j === i ? x.target.value : y)))} onBlur={() => save(rows)} />
+      {canEdit && rows.length > 1 && <a className="loc-x" title="Bỏ mã này" onClick={() => { const n = rows.filter((_, j) => j !== i); setRows(n); save(n) }}>✕</a>}
+    </div>)}
+    {canEdit && rows[rows.length - 1].trim() !== '' && <button className="btn ghost sm" title="Thêm một mã vật liệu nữa cho hạng mục này (vd đồ rời gồm nhiều vật liệu)" onClick={() => setRows(r => [...r, ''])}>＋ mã</button>}
+    {canEdit && rows.length === 1 && rows[0].trim() === '' && <button className="btn ghost sm" title="Thêm mã" onClick={() => setRows(['', ''])}>＋</button>}
+  </div>
+}
 const pair = (k: 'name' | 'material' | 'desc' | 'note' | 'perf' | 'part', lang: Lang): K[] => (lang === 'vn' ? [`${k}_vn`] : lang === 'en' ? [`${k}_en`] : [`${k}_vn`, `${k}_en`]) as K[]
 const roomName = (r: Room, lang: Lang) => (lang === 'en' ? r.name_en || r.name_vn : lang === 'both' && r.name_en && r.name_en !== r.name_vn ? `${r.name_vn} / ${r.name_en}` : r.name_vn)
 const flag = (k: K) => (String(k).endsWith('_en') ? 'EN' : String(k).endsWith('_vn') ? 'VN' : '')
@@ -212,7 +235,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                   <tr key={e.id} onDragOver={ev => { if (canEdit && ev.dataTransfer.types.includes('text/dmvl-occ')) { ev.preventDefault(); ev.dataTransfer.dropEffect = ev.ctrlKey || ev.altKey ? 'copy' : 'move'; if (dropId !== e.id) setDropId(e.id) } }} onDragLeave={ev => { if (!ev.currentTarget.contains(ev.relatedTarget as Node)) setDropId(x => (x === e.id ? null : x)) }} onDrop={ev => { const id = ev.dataTransfer.getData('text/dmvl-occ'); setDropId(null); if (id) { ev.preventDefault(); moveShot(id, e, ev.ctrlKey || ev.altKey) } }} className={(dropId === e.id ? 'drop-ok ' : '') + (ms.length ? 'has-miss ' : '') + 'st-' + e.status + (e.id === sel ? ' sel' : '') + ' src-row-' + e.source} onClick={() => os[0] && onPick(os[0])}>
                     <td className="c-stt">{n}</td>
                     <td className="c-code"><b>{symbolOf(e, lang, legacy, symMap)}</b>{ms.length > 0 && <div><span className="miss-badge" title={'Còn thiếu: ' + missText(ms)}>⚠ thiếu {new Set(ms.map(m => m.label)).size}</span></div>}{e.link_id && <div><span className="link-badge" title={'Liên kết đồng bộ với: ' + (linkedWith(e, d.entries).map(x => x.code).join(', ') || '—')}>🔗 {linkedWith(e, d.entries).map(x => x.code).join(', ')}</span></div>}<div><span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></div></td>
-                    <td className="c-vl"><Ed e={e} k="product_code" ph="Mã vật liệu" miss={M('product_code')} /></td>
+                    <td className="c-vl"><CodeList e={e} miss={M('product_code')} /></td>
                     <td><select value={sectionOf(e).key} disabled={!canEdit} onClick={x => x.stopPropagation()} onChange={x => setSection(e, os, x.target.value)}>{bandKeys().map(b => <optgroup key={b} label={bandTitle(b, lang)}>{allSections().filter(x => x.band === b).map(x => <option key={x.key} value={x.key}>{sectionTitle(x, lang)}</option>)}</optgroup>)}</select>
                       {pair('part', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} ph="Bộ phận áp dụng" /></div>)}</td>
                     <td className="c-loc">{locs.map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room?.id ? ' here' : '')}>{roomName(l.room, lang)}{canEdit && <a className="loc-x" title="Bỏ vị trí này" onClick={ev => { ev.stopPropagation(); delLoc(e, l.room) }}>✕</a>}</span>)}

@@ -142,7 +142,7 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
       <h4>Mã thực tế</h4>
       <div className="grid2">
         <Field bad={B('brand') || ('brand'.startsWith('qty') && B('qty'))} e={entry} k="brand" label="Hãng / thương hiệu" onSaved={saved} />
-        <Field bad={B('product_code') || ('product_code'.startsWith('qty') && B('qty'))} e={entry} k="product_code" label="Mã sản phẩm" onSaved={saved} />
+        <Field bad={B('product_code') || ('product_code'.startsWith('qty') && B('qty'))} e={entry} k="product_code" area label="Mã sản phẩm (nhiều mã: mỗi mã một dòng)" onSaved={saved} />
         <Field bad={B('product_name') || ('product_name'.startsWith('qty') && B('qty'))} e={entry} k="product_name" label="Tên sản phẩm (ghi chú nội bộ, không in)" onSaved={saved} />
         <Field bad={B('origin') || ('origin'.startsWith('qty') && B('qty'))} e={entry} k="origin" label="Xuất xứ" onSaved={saved} />
       </div>

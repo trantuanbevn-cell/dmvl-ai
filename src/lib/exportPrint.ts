@@ -47,7 +47,7 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
       const map = matUrl ? `<img src="${matUrl}">` : e.product_image_url ? `<img src="${esc(e.product_image_url)}">` : ''
       const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
       const cl = entryCells(e, L, [...new Set(occ.map(o => o.category ?? e.category).filter(Boolean) as string[])], locs)
-      rows += `<tr class="${e.source === 'inferred' ? 'inf' : ''}"><td>${stt}</td><td class="code">${esc(symbolOf(e, L, sym.legacy, sym.en))}</td><td class="code">${esc(e.product_code ?? '')}</td><td>${html1(cl.cat)}</td><td>${html1(cl.loc)}</td><td class="im">${img}</td>
+      rows += `<tr class="${e.source === 'inferred' ? 'inf' : ''}"><td>${stt}</td><td class="code">${esc(symbolOf(e, L, sym.legacy, sym.en))}</td><td class="code">${esc(e.product_code ?? '').replace(/\n/g, '<br>')}</td><td>${html1(cl.cat)}</td><td>${html1(cl.loc)}</td><td class="im">${img}</td>
         <td>${html1(cl.spec)}</td>
         <td>${html1(cl.brand)}</td><td class="im">${map}${e.product_url ? `<div class="lk"><a href="${esc(e.product_url)}">🔗 ${esc(hostOf(e.product_url))}</a></div>` : ''}</td>
         <td>${html1(cl.note)}</td></tr>`

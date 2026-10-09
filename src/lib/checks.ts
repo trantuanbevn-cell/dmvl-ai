@@ -24,7 +24,7 @@ export async function fixCategory(e: Entry) {
 export function checkEntries(d: ProjectData, lang: Lang): EntryIssues[] {
   const live = d.entries.filter(e => e.status !== 'rejected')
   const byCode = new Map<string, Entry[]>()
-  for (const e of live) { const k = norm(e.product_code); if (k) byCode.set(k, [...(byCode.get(k) ?? []), e]) }
+  for (const e of live) for (const c of (e.product_code ?? '').split('\n')) { const k = norm(c); if (k) byCode.set(k, [...(byCode.get(k) ?? []), e]) }
   const out: EntryIssues[] = []
   for (const e of live) {
     const issues: Issue[] = []
@@ -38,7 +38,7 @@ export function checkEntries(d: ProjectData, lang: Lang): EntryIssues[] {
     const cat = occ.find(o => o.category)?.category ?? e.category
     const want = categoryForGroup(e.group_code)
     if (cat && want && cat !== want && CATEGORY_GROUPS[cat]) issues.push({ kind: 'err', text: `Chọn lệch: “Bề mặt / mục” đang là “${catLabel(cat)}” nhưng “Nhóm” là ${e.group_code} – ${groupOf(e.group_code)?.vn ?? ''} (đúng phải là “${catLabel(want)}”)`, keys: ['category', 'group'], fix: 'category' })
-    const same = e.product_code ? (byCode.get(norm(e.product_code)) ?? []).filter(x => x.id !== e.id) : []
+    const same = [...new Set((e.product_code ?? '').split('\n').flatMap(c => (norm(c) ? byCode.get(norm(c)) ?? [] : [])))].filter(x => x.id !== e.id)
     for (const k of ['brand'] as const) {
       const diff = same.filter(x => norm(x[k]) && norm(e[k]) && norm(x[k]) !== norm(e[k]))
       if (diff.length) issues.push({ kind: 'err', text: `Cùng mã SP ${e.product_code} nhưng ${SYNC_LABEL[k].toLowerCase()} khác ${diff.map(x => x.code).join(', ')}`, keys: [k, 'product_code'] })

@@ -52,15 +52,15 @@ const refColor = (t: string) => { const m = /m[aã]̀?u\s+tham\s+kh[aả]o\s*:?\
 
 /** Nhóm hoàn thiện: ở đây chất liệu + màu chính là danh tính vật liệu (đồ rời, đèn, thiết bị… thì tên món đồ mới quyết định) */
 export const FIN = new Set(['WD', 'LM', 'CT', 'ST', 'ES', 'LVT', 'CPT', 'PT', 'SP', 'WC', 'WP', 'GWB', 'ACT', 'BS'])
-type Feat = { core: string; gc: string; group: string; name: string; text: string; code: string; brand: string; part: string }
+type Feat = { core: string; gc: string; group: string; name: string; text: string; codes: string[]; brand: string; part: string }
 const featOf = (x: { gc?: string; group: string; name: string; material?: string | null; desc?: string | null; product_code?: string | null; brand?: string | null; part?: string | null }): Feat =>
-  ({ core: [x.name, x.material].filter(Boolean).join(' . '), gc: x.gc ?? x.group, group: x.group, name: x.name, text: [x.name, x.material, x.desc].filter(Boolean).join(' . '), code: norm(x.product_code).replace(/\s/g, ''), brand: norm(x.brand).trim(), part: norm(x.part).trim() })
+  ({ core: [x.name, x.material].filter(Boolean).join(' . '), gc: x.gc ?? x.group, group: x.group, name: x.name, text: [x.name, x.material, x.desc].filter(Boolean).join(' . '), codes: (x.product_code ?? '').split('\n').map(c => norm(c).replace(/\s/g, '')).filter(Boolean), brand: norm(x.brand).trim(), part: norm(x.part).trim() })
 
 /** So hai vật liệu theo THUỘC TÍNH, không chỉ theo tên: tông màu, loại vật liệu, mã màu/mã SP. Khác mã màu/mã SP/khác màu rõ ràng ⇒ KHÔNG nghi trùng. */
 function compare(a: Feat, b: Feat): { score: number; why: string[] } {
   const why: string[] = [], conflicts: string[] = []
-  if (a.code && b.code && a.code === b.code && (!a.brand || !b.brand || a.brand === b.brand)) return { score: 1, why: ['trùng mã sản phẩm'] }
-  if (a.code && b.code && a.code !== b.code) conflicts.push('khác mã sản phẩm')
+  if (a.codes.some(c => b.codes.includes(c)) && (!a.brand || !b.brand || a.brand === b.brand)) return { score: 1, why: ['trùng mã sản phẩm'] }
+  if (a.codes.length && b.codes.length && !a.codes.some(c => b.codes.includes(c))) conflicts.push('khác mã sản phẩm')
   const ca = codesOf(a.text), cb = codesOf(b.text)
   if (ca.size && cb.size && !overlap(ca, cb)) conflicts.push('khác mã màu / mã trong thông số')
   const ra = refColor(a.text), rb = refColor(b.text)

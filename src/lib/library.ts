@@ -34,7 +34,7 @@ export async function librarySuggestions(e: Entry, limit = 5): Promise<(LibProdu
 export async function saveToLibrary(e: Entry) {
   if (!e.brand || !e.product_code) throw new Error('Cần nhập Hãng và Mã sản phẩm trước')
   const { error } = await supabase.from('library_products').upsert({
-    group_code: e.group_code, brand: e.brand, product_code: e.product_code, product_name: e.product_name, url: e.product_url,
+    group_code: e.group_code, brand: e.brand, product_code: e.product_code.split('\n')[0].trim(), product_name: e.product_name, url: e.product_url,
     image_url: e.product_image_url, color_hex: e.color_hex, tags: [e.name_vn, e.material_vn].filter(Boolean).join(' | '), verified: true,
   }, { onConflict: 'brand,product_code' })
   if (error) throw error
