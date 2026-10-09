@@ -334,3 +334,7 @@ input[readonly], textarea[readonly] { cursor: default }
 .chip.drop-before { box-shadow: -4px 0 0 0 #d9a441 } .chip.dragging { opacity: .4 }
 .band-card { border: 1px solid #eadfce; border-radius: 10px; padding: 8px 12px; margin-top: 8px; background: #fffdf9 }
 .band-secs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px } .band-secs .chip select { font-size: 11px; padding: 0 2px }
+.pfx-pick { position: relative } .pfx-cur { width: 100%; display: flex; gap: 6px; align-items: center; text-align: left; padding: 8px 10px; border: 1px solid var(--line, #ddd); background: #fff; border-radius: 8px; font: inherit; cursor: pointer }
+.pfx-panel { margin-top: 4px; border: 1px solid #e3d6c2; border-radius: 8px; padding: 6px; background: #fffdf9 } .pfx-list { max-height: 260px; overflow: auto; margin-top: 6px }
+.pfx-cat { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--brown, #7a4b2a); padding: 6px 6px 2px; position: sticky; top: 0; background: #fffdf9 }
+.pfx-row { display: flex; gap: 10px; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 13px } .pfx-row b { min-width: 46px } .pfx-row:hover { background: #f6e9d8 } .pfx-row.on { background: #efe3d3 } .pfx-row.add { color: var(--brown, #7a4b2a); border-top: 1px dashed #e3d6c2; margin-top: 4px }
