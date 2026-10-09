@@ -31,6 +31,7 @@ export async function computeFloor(fp: FloorPlan, opts: { wallKeys?: string[]; d
   const cv = await loadCv()
   if (!buf) buf = await (await must(supabase.storage.from(BUCKET).download(fp.pdf_path)) as Blob).arrayBuffer()
   const v = await readVectorPage(buf, fp.page_no, log)
+  ;(window as any).__vec = v; (window as any).__cv = cv   // để kiểm thử thuật toán nhận phòng ngay trên bản vẽ thật
   if (v.nSeg < 20) throw new Error('File này gần như không có nét vector (có thể là PDF ảnh/scan). Hãy xuất PDF từ AutoCAD ở dạng vector.')
   const keys = opts.wallKeys ?? fp.geometry?.wall_keys
   const sel = keys ? new Set(v.classes.map((c, i) => (keys.includes(c.key) ? i : -1)).filter(i => i >= 0)) : guessWallClasses(v)
