@@ -292,8 +292,17 @@ async function pairViews(room: Room, page: Page, v: PageViews, url: string, log:
 
 /** Vị trí do phân tích tạo ra (xoá được khi chạy lại): origin='ai', hoặc dòng cũ chưa đánh dấu có trang & chưa chỉnh tay */
 const AI_OCC = 'origin.eq.ai,and(origin.is.null,page_id.not.is.null,view.is.null)'
+/** Chỉ quản trị viên được chạy phân tích AI (máy chủ cũng chặn). Kiểm tra TRƯỚC khi đụng vào dữ liệu để không bao giờ xoá rồi mới báo lỗi quyền. */
+async function assertAdmin() {
+  const { data: u } = await supabase.auth.getUser()
+  const { data } = await supabase.from('profiles').select('role,active').eq('id', u.user?.id ?? '').maybeSingle()
+  if (!data || !data.active || data.role !== 'admin') throw new Error('Chỉ quản trị viên mới được chạy phân tích bằng AI – chưa thay đổi gì trong dữ liệu.')
+}
+
 export async function analyzeRoom(project: Project, room: Room, log: Log) {
+  await assertAdmin()
   await must(supabase.from('rooms').update({ analysis_status: 'running' }).eq('id', room.id))
+  let prior: Occurrence[] = [], applied = false
   try {
     // trang của phòng này + trang slide dùng chung (một ảnh/camera trong slide thuộc phòng này dù trang gán cho phòng khác)
     const every = await must(supabase.from('pages').select('*').eq('project_id', project.id).order('page_no')) as Page[]
@@ -303,6 +312,7 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
     if (!pages.length) throw new Error('Phòng chưa có trang phối cảnh nào')
     // Chạy lại AN TOÀN: chỉ xoá các vị trí do phân tích tạo ra. Giữ lại vị trí/hình người dùng tự thêm hoặc đã chỉnh tay, và KHÔNG xoá mã vật liệu nào
     // (mã cũ vẫn còn nên AI nhận lại đúng mã đã sửa thông tin; mã không còn nhận ra sẽ hiện ở tab Kiểm tra “chưa gán phòng”).
+    prior = await must(supabase.from('occurrences').select('*').eq('room_id', room.id).or(AI_OCC)) as Occurrence[]
     await must(supabase.from('occurrences').delete().eq('room_id', room.id).or(AI_OCC))
 
     for (const [i, page] of pages.entries()) {
@@ -331,7 +341,7 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
           const its = (rr.tool?.items ?? []) as AIItem[]
           log(`      AI nhận diện ${its.length} hạng mục`)
           const rid = cam?.room_id && roomIds.has(cam.room_id) ? cam.room_id : room.id
-          await applyItems(project, room, its, page, bk, log, { rect, roomId: rid })
+          await applyItems(project, room, its, page, bk, log, { rect, roomId: rid }); applied = true
           await sleep(3000)
         }
         await must(supabase.from('pages').update({ analyzed: true }).eq('id', page.id))
@@ -345,7 +355,7 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
       }, log)
       const items = (r.tool?.items ?? []) as AIItem[]
       log(`    AI nhận diện ${items.length} hạng mục`)
-      await applyItems(project, room, items, page, book, log)
+      await applyItems(project, room, items, page, book, log); applied = true
       await must(supabase.from('pages').update({ analyzed: true }).eq('id', page.id))
       if (i < pages.length - 1) await sleep(4000) // giãn cách để nằm trong hạn mức miễn phí
     }
@@ -357,7 +367,9 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
     try { await syncLibrary(project.id, await must(supabase.from('entries').select('*').eq('project_id', project.id)) as Entry[]) } catch { /* */ }
     await must(supabase.from('rooms').update({ analysis_status: 'done', analysis_log: null }).eq('id', room.id))
   } catch (e) {
-    await supabase.from('rooms').update({ analysis_status: 'error', analysis_log: String(e) }).eq('id', room.id)
+    // lỗi trước khi AI ghi được gì: trả lại đúng các vị trí/hình đã xoá để chạy lại (không để mất dữ liệu khi AI hỏng giữa chừng)
+    if (!applied && prior.length) { try { await supabase.from('occurrences').upsert(prior, { onConflict: 'id', ignoreDuplicates: true }) } catch { /* */ } }
+    await supabase.from('rooms').update({ analysis_status: prior.length ? 'done' : 'error', analysis_log: String(e) }).eq('id', room.id)
     throw e
   }
 }

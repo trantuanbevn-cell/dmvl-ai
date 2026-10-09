@@ -75,7 +75,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   onPick: (o: Occurrence) => void; onDetail: (id: string) => void; onRemove: (o: Occurrence) => void
   onAdd: (p: { section_key?: string | null; copy?: string; group: string; category: string; name: string; part_vn?: string | null; parent_id?: string | null; hint?: string }) => void
 }) {
-  const { canEdit } = useAuth()
+  const { canEdit, isAdmin } = useAuth()
   const pageById = useMemo(() => new Map(d.pages.map(p => [p.id, p])), [d.pages])
   const legacy = useMemo(() => legacyCodes(d.entries), [d.entries])
   const symMap = useMemo(() => symbolMap(d.entries), [d.entries])
@@ -158,6 +158,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     if (!room || !d.project) return
     const hasPages = d.pages.some(p => p.room_id === roomId && (p.kind === 'render' || p.kind === 'plan'))
     if (!hasPages) { toast(`Đã thêm ${room.code}. Phòng này chưa có trang phối cảnh nên chưa có ảnh – bấm “＋ ảnh” khi có.`); return }
+    if (!isAdmin) { toast(`Đã thêm vị trí ${room.code}. Bấm “＋ ảnh” để khoanh hình tay (chỉ quản trị viên mới chạy được AI rà phòng).`); return }
     if (!confirm(`Đã thêm vị trí ${room.code} ${room.name_vn}.\n\nĐể AI rà lại phòng này, tìm vật liệu và tự khoanh mũi tên? (dùng lượt AI, mất vài chục giây; mã và thông tin đã sửa tay được giữ nguyên, có thể xuất hiện thêm mã mới ở trạng thái “Chờ duyệt”)\n\nBấm Huỷ = chỉ thêm vị trí, tự khoanh ảnh sau.`)) { setShotFor(e); return }
     setScanning(room.code)
     try {
@@ -258,7 +259,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                       : null}
                     {(shots.length > shown.length || missRooms.length > 0) && <div className="small muted" style={{ cursor: 'pointer' }} title="Bấm vào dòng để xem đủ ảnh các phòng">＋ {shots.length > shown.length ? `${shots.length - shown.length} ảnh khác` : ''}{shots.length > shown.length && missRooms.length ? ' · ' : ''}{missRooms.length ? `${missRooms.length} phòng chưa khoanh` : ''} – bấm để xem đủ</div>}
                     {!locs.length && !shots.length && <div className="ic-none tiny"><span>{e.source === 'inferred' ? 'Suy luận' : 'Chưa có ảnh'}</span></div>}
-                    {canEdit && locs.some(l => !shots.some(o => o.room_id === l.room.id) && d.pages.some(p => p.room_id === l.room.id && p.kind === 'render')) && <div><button className="btn ghost sm" title="AI rà từng phòng chưa khoanh để tìm vật liệu và vẽ mũi tên" onClick={ev => { ev.stopPropagation(); scanMissing(e, locs.filter(l => !shots.some(o => o.room_id === l.room.id)).map(l => l.room.id)) }}>🔍 AI khoanh {locs.filter(l => !shots.some(o => o.room_id === l.room.id)).length} phòng còn thiếu</button></div>}
+                    {isAdmin && locs.some(l => !shots.some(o => o.room_id === l.room.id) && d.pages.some(p => p.room_id === l.room.id && p.kind === 'render')) && <div><button className="btn ghost sm" title="AI rà từng phòng chưa khoanh để tìm vật liệu và vẽ mũi tên" onClick={ev => { ev.stopPropagation(); scanMissing(e, locs.filter(l => !shots.some(o => o.room_id === l.room.id)).map(l => l.room.id)) }}>🔍 AI khoanh {locs.filter(l => !shots.some(o => o.room_id === l.room.id)).length} phòng còn thiếu</button></div>}
                       {canEdit && <button className="btn ghost sm" title="Thêm hình phối cảnh" onClick={ev => { ev.stopPropagation(); setShotRoom(null); setShotFor(e) }}>＋ ảnh</button>}</td>
                     <td>{[...pair('name', lang), ...pair('material', lang), ...pair('desc', lang)].map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} miss={M(k)} area={!String(k).startsWith('name')} ph={String(k).startsWith('name') ? 'Tên hạng mục' : String(k).startsWith('material') ? 'Vật liệu / màu / bề mặt' : 'Thông số kỹ thuật'} /></div>)}
                       <div className="ed-line lab"><i>{lang === 'en' ? 'Composition' : 'Cấu tạo'}</i><Ed e={e} k="composition" area ph={lang === 'en' ? 'Composition' : 'Cấu tạo (vật liệu thành phần)'} /></div>
