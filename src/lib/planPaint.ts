@@ -18,12 +18,9 @@ export type PlanPaint = {
 const hex = (s: string): [number, number, number] => { const n = parseInt(s.replace('#', '').padEnd(6, '0'), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255] }
 
 export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorGeom, longEdge = 3400): Promise<PlanPaint> {
-  const TT = performance.now(), plog = (m: string) => console.info('[planPaint*]', m, Math.round(performance.now() - TT), 'ms')
-  plog('start ' + buf.byteLength)
-  // đọc nét vector (đúng thứ tự vẽ, đúng màu) rồi TỰ VẼ lên canvas: bỏ lớp dim + lưới trục, nhanh hơn và không phụ thuộc bộ dựng hình của PDF.js
+    // đọc nét vector (đúng thứ tự vẽ, đúng màu) rồi TỰ VẼ lên canvas: bỏ lớp dim + lưới trục, nhanh hơn và không phụ thuộc bộ dựng hình của PDF.js
   let vv: Awaited<ReturnType<typeof readVectorPage>> | null = null
   try { vv = await readVectorPage(buf, pageNo, undefined, { draw: true }) } catch (e) { console.warn('đọc vector lỗi', e) }
-  plog('readVector ' + (vv?.draw?.length ?? 0))
   let c: HTMLCanvasElement, cx: CanvasRenderingContext2D
   if (vv?.draw?.length) {
     const sc = longEdge / Math.max(vv.w, vv.h)
@@ -47,7 +44,6 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
     cx = c.getContext('2d', { willReadFrequently: true })!; cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height)
     await page.render({ canvasContext: cx, viewport: vp } as any).promise
   }
-  plog('drawn')
   const W = c.width, H = c.height, N = W * H
   const base = cx.getImageData(0, 0, W, H), d = base.data
   const lum = new Uint8Array(N), ink = new Uint8Array(N)
@@ -56,8 +52,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (!ink[i]) continue; if (x > 0) inkD[i - 1] = 1; if (x < W - 1) inkD[i + 1] = 1; if (y > 0) inkD[i - W] = 1; if (y < H - 1) inkD[i + W] = 1 }
 
   // bản đồ id phòng kín gốc – tô đa giác bằng thuật toán quét dòng (không khử răng cưa → không sinh pixel lẫn màu)
-  const T0 = performance.now(), lap = (m: string) => console.info('[planPaint]', m, Math.round(performance.now() - T0), 'ms')
-  const raw = g.raw_rooms ?? g.rooms
+    const raw = g.raw_rooms ?? g.rooms
   const roomOf = new Uint16Array(N)
   raw.forEach((r, k) => {
     for (const poly of roomPolys(r)) {
@@ -71,7 +66,6 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       }
     }
   })
-  lap('scanline')
   // lấp khe hở giữa 2 vùng giáp nhau (đa giác được đơn giản hoá riêng nên có thể hở 1–3 px) → không còn vệt trắng
   {
     const R = 3, out = roomOf.slice()
@@ -86,8 +80,6 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
     }
     roomOf.set(out)
   }
-
-  lap('gapfill')
   // thành phần liên thông của vùng "không nét" trong từng phòng
   const comp = new Int32Array(N), sizes: number[] = [0], compRoom: number[] = [0], stack = new Int32Array(N)
   for (let s = 0; s < N; s++) {
@@ -136,8 +128,6 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
     oc.getContext('2d')!.putImageData(out, 0, 0)
     return oc
   }
-
-  lap('keep')
   // ---- bản vector: viền các vùng sàn (có lỗ cho đồ nội thất) + nét bản vẽ gốc đúng thứ tự vẽ
   let svg: PlanPaint['svg'] = null
   try {
@@ -160,7 +150,6 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
         }
         cs.delete(); hi.delete(); sub.delete(); floorD[k - 1] = d
       }
-      lap('contours')
       const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;')
       let lines = ''
       for (const r of vv.draw) {
@@ -178,6 +167,5 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       }
     }
   } catch (e) { console.warn('Không dựng được bản vector, dùng ảnh', e) }
-  lap('done')
   return { W, H, crop, paint, svg }
 }

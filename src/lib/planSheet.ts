@@ -19,12 +19,10 @@ export function usePlanPaint(fp?: FloorPlan) {
     setBusy(true)
     ;(async () => {
       try {
-        console.info('[usePlanPaint] download', fp.pdf_path)
         const { data, error } = await supabase.storage.from(BUCKET).download(fp.pdf_path); if (error) throw new Error(error.message)
-        console.info('[usePlanPaint] downloaded')
         const p = await buildPlanPaint(await data.arrayBuffer(), fp.page_no, g)
         cache.set(sig, p); if (!dead) setPp(p)
-      } catch (e) { console.info('[usePlanPaint] error', String(e)); if (!dead) toast('Không dựng được mặt bằng: ' + String(e)) }
+      } catch (e) { if (!dead) toast('Không dựng được mặt bằng: ' + String(e)) }
       if (!dead) setBusy(false)
     })()
     return () => { dead = true; setBusy(false) }
