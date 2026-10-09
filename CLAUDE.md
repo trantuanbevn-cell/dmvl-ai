@@ -8,3 +8,6 @@
 
 Nguyên tắc: miễn phí; AI chỉ dùng để nhìn ảnh, mọi việc khác là phần mềm; mọi thay đổi push thẳng `main`; trả lời người dùng bằng tiếng Việt, ngắn gọn.
 Kỹ thuật: `projects.kind` = 'catalog' | 'concept' (cùng bảng để dữ liệu dùng chung: floor_plans, rooms…).
+
+## Phân quyền tính năng lớn (quy ước bắt buộc)
+Mọi tính năng lớn mới **mặc định chỉ admin (chủ dự án) thấy/dùng**. Thêm vào `src/lib/features.ts` (FEATURES), ẩn menu + route bằng `useAuth().can('key')`. Admin cấp cho từng thành viên bằng ô tích ở trang Thành viên (lưu `profiles.features text[]`, mặc định rỗng).

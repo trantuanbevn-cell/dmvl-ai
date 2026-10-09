@@ -17,7 +17,7 @@ import { ConceptList, ConceptPage } from './pages/Concept'
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(-2).map(w => w[0]).join('').toUpperCase() || '?'
 
 function Shell({ session }: { session: Session }) {
-  const { profile, role, isAdmin, name, loading } = useAuth()
+  const { profile, role, isAdmin, can, name, loading } = useAuth()
   const online = useOnline()
   const nav = useNavigate()
   const out = async () => { await supabase.auth.signOut(); nav('/') }
@@ -33,7 +33,7 @@ function Shell({ session }: { session: Session }) {
       <header className="topbar">
         <Link to="/" className="brand"><span className="brand-mark">DM</span> DMVL AI <small>Danh mục vật liệu hoàn thiện</small></Link>
         <nav>
-          {isAdmin && <Link to="/concept">Dàn trang concept</Link>}
+          {can('concept') && <Link to="/concept">Dàn trang concept</Link>}
           <Link to="/">Lập danh mục</Link>
           {isAdmin && <Link to="/team">Thành viên</Link>}
           {isAdmin && <Link to="/settings">Cài đặt</Link>}
@@ -51,8 +51,8 @@ function Shell({ session }: { session: Session }) {
           <Route path="/" element={<Projects />} />
           <Route path="/p/:id" element={<ProjectPage />} />
           <Route path="/p/:id/:tab" element={<ProjectPage />} />
-          <Route path="/concept" element={isAdmin ? <ConceptList /> : <div className="page"><div className="card muted">Chức năng này chỉ dành cho quản trị viên.</div></div>} />
-          <Route path="/c/:id" element={isAdmin ? <ConceptPage /> : <div className="page"><div className="card muted">Chức năng này chỉ dành cho quản trị viên.</div></div>} />
+          <Route path="/concept" element={can('concept') ? <ConceptList /> : <div className="page"><div className="card muted">Bạn chưa được cấp quyền dùng chức năng này.</div></div>} />
+          <Route path="/c/:id" element={can('concept') ? <ConceptPage /> : <div className="page"><div className="card muted">Bạn chưa được cấp quyền dùng chức năng này.</div></div>} />
           <Route path="/team" element={<Team />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>

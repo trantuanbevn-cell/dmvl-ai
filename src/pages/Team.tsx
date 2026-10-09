@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth, ROLE_VN, ROLE_HELP, type Role } from '../lib/auth'
+import { FEATURES } from '../lib/features'
+import { supabase } from '../lib/supabase'
 import { useOnline } from '../lib/presence'
 import { listUsers, createUser, updateUser, deleteUser, genPassword, loginName, slugName, inviteText, listProjectsLite, listMembers, setMemberProjects, type TeamUser, type ProjectLite } from '../lib/team'
 
@@ -17,7 +19,9 @@ export default function Team() {
   const [members, setMembers] = useState<Map<string, string[]> | null>(new Map())
   const [open, setOpen] = useState<string | null>(null) // user id đang mở bảng chọn dự án
   const [newProj, setNewProj] = useState<string[]>([])
-  const load = () => Promise.all([listUsers().then(setUsers), listProjectsLite().then(setProjects), listMembers().then(setMembers)]).catch(e => setErr(String(e.message ?? e)))
+  const [feats, setFeats] = useState<Map<string, string[]>>(new Map())
+  const loadFeats = () => supabase.from('profiles').select('id,features').then(({ data }) => setFeats(new Map((data ?? []).map((r: any) => [r.id, r.features ?? []]))))
+  const load = () => Promise.all([loadFeats(), listUsers().then(setUsers), listProjectsLite().then(setProjects), listMembers().then(setMembers)]).catch(e => setErr(String(e.message ?? e)))
   useEffect(() => { if (isAdmin) load() }, [isAdmin])
   if (!isAdmin) return <div className="page"><div className="card muted">Chỉ quản trị viên mới xem được trang này.</div></div>
   const act = async (fn: () => Promise<unknown>, ok = '') => { setBusy(true); setErr(''); setMsg(''); try { await fn(); if (ok) setMsg(ok); await load() } catch (e: any) { setErr(String(e.message ?? e)) } setBusy(false) }
@@ -49,7 +53,7 @@ export default function Team() {
       </form>
       <div className="card">
         <table className="tbl">
-          <thead><tr><th /><th>Tài khoản</th><th>Vai trò</th><th>Dự án được truy cập</th><th>Hoạt động</th><th>Trạng thái</th><th /></tr></thead>
+          <thead><tr><th /><th>Tài khoản</th><th>Vai trò</th><th>Dự án được truy cập</th><th>Tính năng</th><th>Hoạt động</th><th>Trạng thái</th><th /></tr></thead>
           <tbody>{users.map(u => {
             const me = u.id === session.user.id, on = online.find(o => o.id === u.id)
             return (
@@ -64,6 +68,7 @@ export default function Team() {
                     {open === u.id && <ProjectPicker projects={projects} value={members.get(u.id) ?? []} onChange={v => act(async () => { await setMemberProjects(u.id, v) })} disabled={busy} />}
                   </>}
                 </td>
+                <td className="small">{u.role === 'admin' ? <span className="muted">Tất cả</span> : FEATURES.map(ft => { const cur = feats.get(u.id) ?? []; return <label key={ft.key} className="row gap sm-gap small"><input type="checkbox" disabled={busy} checked={cur.includes(ft.key)} onChange={e => act(async () => { const nx = e.target.checked ? [...cur, ft.key] : cur.filter(x => x !== ft.key); const { error } = await supabase.from('profiles').update({ features: nx }).eq('id', u.id); if (error) throw error })} /> {ft.label}</label> })}</td>
                 <td className="small">{on ? <span style={{ color: '#2e7d32' }}>● đang online{on.tab ? ` – tab ${on.tab}` : ''}</span> : <span className="muted">đăng nhập {ago(u.last_sign_in_at)}</span>}</td>
                 <td>{u.active ? <span className="pill">Đang dùng</span> : <span className="pill st-error">Đã khoá</span>}</td>
                 <td className="row gap sm-gap">
