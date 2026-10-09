@@ -78,7 +78,7 @@ export function FloorCard({ d, fp, run, busy }: { d: ProjectData; fp: FloorPlan;
   )
 }
 
-export default function FloorPlans({ d }: { d: ProjectData }) {
+export default function FloorPlans({ d, concept }: { d: ProjectData; concept?: boolean }) {
   const p = d.project!
   const [label, setLabel] = useState('')
   const [den, setDen] = useState(100)
@@ -94,7 +94,7 @@ export default function FloorPlans({ d }: { d: ProjectData }) {
   }
   return (
     <div className="card">
-      <h3>Mặt bằng gốc theo tầng (PDF vector từ AutoCAD) <span className="muted small">– tuỳ chọn, giúp đọc chính xác hơn</span></h3>
+      <h3>{concept ? '① Mặt bằng gốc theo tầng (PDF vector từ AutoCAD)' : 'Mặt bằng gốc theo tầng (PDF vector từ AutoCAD)'} {!concept && <span className="muted small">– tuỳ chọn, giúp đọc chính xác hơn</span>}</h3>
       <details className="small muted"><summary>Cách dùng</summary><p>Trong AutoCAD, xuất mặt bằng từng tầng ra PDF <b>dạng vector</b> (không chụp ảnh), tốt nhất bật “layers”. Điền tên tầng (vd “Tầng 5”) và tỉ lệ bản vẽ, rồi tải lên. Phần mềm đọc nét tường theo độ dày nét/layer, tách các phòng kín và đo <b>diện tích thật</b>; sau đó đối chiếu với mặt bằng trong file concept để biết mỗi ảnh phối cảnh nằm ở phòng nào của bản vẽ gốc. Không dùng AI.</p></details>
       <div className="row gap">
         <input placeholder="Tên tầng, vd: Tầng 5" value={label} onChange={e => setLabel(e.target.value)} />

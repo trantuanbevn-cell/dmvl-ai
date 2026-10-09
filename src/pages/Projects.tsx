@@ -12,7 +12,7 @@ export default function Projects() {
   const [loc, setLoc] = useState('')
   const nav = useNavigate()
   const { canEdit, isAdmin } = useAuth()
-  const load = () => supabase.from('projects').select('*').order('created_at', { ascending: false }).then(({ data }) => setList((data ?? []) as Project[]))
+  const load = () => supabase.from('projects').select('*').neq('kind', 'concept').order('created_at', { ascending: false }).then(({ data }) => setList((data ?? []) as Project[]))
   useEffect(() => { load() }, [])
   const create = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,7 +26,7 @@ export default function Projects() {
   }
   return (
     <div className="page">
-      <h1>Dự án</h1>
+      <h1>Lập danh mục vật liệu</h1>
       {canEdit && <form className="card row gap" onSubmit={create}>
         <input placeholder="Tên dự án, vd: BOH Khách sạn Waldorf Astoria" value={name} onChange={e => setName(e.target.value)} required style={{ flex: 2 }} />
         <input placeholder="Địa điểm" value={loc} onChange={e => setLoc(e.target.value)} style={{ flex: 1 }} />

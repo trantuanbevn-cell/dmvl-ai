@@ -7,7 +7,6 @@ import { toast } from '../lib/toast'
 import { buildPlanPaint, type PlanPaint } from '../lib/planPaint'
 import { PW, PH, roomKey, pole, layoutSheet, leader, freeSpot, snapAlign, measureFont, fontOf, type Spec, type Rect } from '../lib/sheetLayout'
 import { jpegPdf } from '../lib/miniPdf'
-import { FloorCard } from './FloorPlans'
 
 const PALETTE = ['#d4a9b8', '#8d8d8d', '#a9b8bf', '#7f8d96', '#a9c4a0', '#c5d6c0', '#8d8d6e', '#c9b8a8', '#b0a088', '#c98d78', '#b5707a', '#8fa583', '#b9a6c9', '#9fc3c8', '#d9c07a']
 const NEUTRAL = '#e3ded8'
@@ -31,8 +30,6 @@ export default function ConceptSheet({ d }: { d: ProjectData }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const cache = useRef(new Map<string, PlanPaint>())
   const dirty = useRef(false), timer = useRef<number | undefined>()
-  const [open1, setOpen1] = useState(false)
-  const run = async (fn: () => Promise<void>) => { try { await fn() } catch (e) { toast(String(e)) } await d.reload() }
 
   // ---- nạp bản vẽ + tính vùng sàn
   const sig = fp && g ? `${fp.id}:${(g.raw_rooms ?? g.rooms).length}:${g.w}:${fp.scale_den}` : ''
@@ -152,22 +149,18 @@ export default function ConceptSheet({ d }: { d: ProjectData }) {
     } catch (e) { toast(String(e)) }
   }
 
-  if (!floors.length) return <div className="card"><h3>Dàn trang concept</h3><p className="muted">Chưa có mặt bằng. Vào tab <b>Hồ sơ &amp; phòng</b> → “Mặt bằng gốc theo tầng”, tải PDF vector xuất từ AutoCAD (mỗi tầng một file), rồi quay lại đây.</p></div>
+  if (!floors.length) return <div className="card"><h3>Dàn trang concept</h3><p className="muted">Chưa có mặt bằng. Tải PDF vector xuất từ AutoCAD (mỗi tầng một file) ở phần phía trên.</p></div>
   const selC = live.find(c => c.key === sel)
   const selIdx = named.findIndex(r => roomKey(r) === sel)
   const hidden = named.filter(r => sheet.items[roomKey(r)]?.hide)
 
   return (
     <div className="card concept">
-      <div className="row between"><h3 style={{ margin: 0 }}>Dàn trang concept – mặt bằng tổng</h3>
+      <div className="row between"><h3 style={{ margin: 0 }}>Trang mặt bằng tổng</h3>
         <select value={fp.id} onChange={e => { setFid(e.target.value); setSel(null) }}>{floors.map((f: FloorPlan) => <option key={f.id} value={f.id}>{f.floor_label}</option>)}</select></div>
-      <details className="step-box" open={open1 || !named.length} onToggle={e => setOpen1((e.target as HTMLDetailsElement).open)}>
-        <summary><b>① Chia / gộp &amp; đặt tên không gian</b> <span className="muted small">– chỉ những không gian đã đặt tên mới có ô tên trên trang · {named.length} đã đặt tên</span></summary>
-        <FloorCard d={d} fp={fp} run={run} busy={busy} />
-      </details>
-      <div className="step-box"><b>② Trang mặt bằng tổng</b> <span className="muted small">– kéo ô tên để dời (tự hút thẳng hàng, không chồng nhau); kéo chấm đỏ để dời điểm nối nét đứt</span></div>
-      {!g && <div className="note">Mặt bằng này chưa được đọc. Mở “① …” rồi tính lại phòng.</div>}
-      {g && !named.length && <div className="note">Chưa có không gian nào được đặt tên. Mở “① Chia / gộp &amp; đặt tên không gian”, bấm “Gộp / đặt tên không gian”, chọn các vùng và đặt tên (có thể dùng “Áp dụng tất cả gợi ý”).</div>}
+      <div className="step-box"><b>Trang mặt bằng tổng</b> <span className="muted small">– kéo ô tên để dời (tự hút thẳng hàng, không chồng nhau); kéo chấm đỏ để dời điểm nối nét đứt</span></div>
+      {!g && <div className="note">Mặt bằng này chưa được đọc – xem phần “Mặt bằng gốc theo tầng” phía trên.</div>}
+      {g && !named.length && <div className="note">Chưa có không gian nào được đặt tên. Ở phần “Mặt bằng gốc theo tầng” phía trên, bấm “Gộp / đặt tên không gian”, chọn các vùng và đặt tên.</div>}
       {busy && <div className="small muted"><span className="spinner" /> Đang dựng mặt bằng và tô màu sàn (khoảng 5–15 giây)…</div>}
       {pp && <>
         <div className="row gap wrap sheet-tools">

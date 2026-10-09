@@ -12,6 +12,7 @@ import Projects from './pages/Projects'
 import ProjectPage from './pages/ProjectPage'
 import SettingsPage from './pages/Settings'
 import Team from './pages/Team'
+import { ConceptList, ConceptPage } from './pages/Concept'
 
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(-2).map(w => w[0]).join('').toUpperCase() || '?'
 
@@ -32,7 +33,8 @@ function Shell({ session }: { session: Session }) {
       <header className="topbar">
         <Link to="/" className="brand"><span className="brand-mark">DM</span> DMVL AI <small>Danh mục vật liệu hoàn thiện</small></Link>
         <nav>
-          <Link to="/">Dự án</Link>
+          {isAdmin && <Link to="/concept">Dàn trang concept</Link>}
+          <Link to="/">Lập danh mục</Link>
           {isAdmin && <Link to="/team">Thành viên</Link>}
           {isAdmin && <Link to="/settings">Cài đặt</Link>}
           <UpdateBell />
@@ -49,6 +51,8 @@ function Shell({ session }: { session: Session }) {
           <Route path="/" element={<Projects />} />
           <Route path="/p/:id" element={<ProjectPage />} />
           <Route path="/p/:id/:tab" element={<ProjectPage />} />
+          <Route path="/concept" element={isAdmin ? <ConceptList /> : <div className="page"><div className="card muted">Chức năng này chỉ dành cho quản trị viên.</div></div>} />
+          <Route path="/c/:id" element={isAdmin ? <ConceptPage /> : <div className="page"><div className="card muted">Chức năng này chỉ dành cho quản trị viên.</div></div>} />
           <Route path="/team" element={<Team />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
