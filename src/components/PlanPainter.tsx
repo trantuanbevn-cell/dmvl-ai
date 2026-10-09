@@ -8,8 +8,7 @@ import { toast } from '../lib/toast'
 import { roomPolys, addMerge, removeMerge, centroidOf, addCut, removeCut } from '../lib/cadZones'
 import { computeFloor } from '../lib/floorPlans'
 import { roomKey, pole } from '../lib/sheetLayout'
-import { PALETTE, NEUTRAL } from '../lib/palette'
-const hsl2hex = (h: number, s: number, l: number) => { const a = s * Math.min(l, 1 - l), f = (n: number) => { const k = (n + h / 30) % 12, c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); return Math.round(255 * c).toString(16).padStart(2, '0') }; return `#${f(0)}${f(8)}${f(4)}` }
+import { PALETTE, NEUTRAL, autoRoomColor } from '../lib/palette'
 
 type VB = { x: number; y: number; w: number; h: number }
 
@@ -33,7 +32,7 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
 
   const rooms = g?.rooms ?? []
   const named = useMemo(() => rooms.filter(r => r.user && r.names[0]), [g]) // eslint-disable-line
-  const autoColor = (r: FloorRoom) => { const i = Math.max(0, rooms.findIndex(x => x.id === r.id)); return hsl2hex((i * 137.508) % 360, 0.42 + (i % 3) * 0.08, 0.68 + (i % 2) * 0.07) }
+  const autoColor = (r: FloorRoom) => autoRoomColor(rooms.findIndex(x => x.id === r.id))
   const colorOf = (r: FloorRoom) => sheet.items[roomKey(r)]?.color ?? autoColor(r)
   const nextColor = () => PALETTE.find(c => !named.some(r => colorOf(r) === c)) ?? PALETTE[named.length % PALETTE.length]
 
@@ -58,10 +57,16 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
   useEffect(() => {
     const u = selRooms.find(r => r.user && r.names[0])
     if (u) { setNm(u.names[0] ?? ''); setNmEn(u.names[1] ?? ''); setColor(colorOf(u)) }
-    else { const t = selRooms.find(r => r.names[0]); setNm(t?.names[0] ?? ''); setNmEn(t?.names[1] ?? ''); setColor(nextColor()) }
+    else { const t = selRooms.find(r => r.names[0]); setNm(t?.names[0] ?? ''); setNmEn(t?.names[1] ?? ''); setColor(selRooms[0] ? colorOf(selRooms[0]) : nextColor()) }
     setReal('')
   }, [sel.join(',')]) // eslint-disable-line
 
+  const recomputed = useRef(false)
+  useEffect(() => {
+    if (!g || g.algo === 2 || !canEdit || recomputed.current || busy) return
+    recomputed.current = true; setWork('Đang áp thuật toán nhận diện không gian mới (khoảng 10–20 giây)…')
+    computeFloor(fp, {}, () => {}).then(() => d.reload()).catch(e => toast(String(e))).finally(() => setWork(''))
+  }, [g, canEdit, busy]) // eslint-disable-line
   const wheelRef = useRef<(e: WheelEvent) => void>(() => {})
   useEffect(() => { const el = svgRef.current; if (!el) return; const f = (e: WheelEvent) => wheelRef.current(e); el.addEventListener('wheel', f, { passive: false }); return () => el.removeEventListener('wheel', f) }, [pp])
   if (!g) return <div className="note">Mặt bằng này chưa được đọc – quay lại bước ① để tải/đọc lại PDF.</div>
@@ -178,8 +183,8 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
             <input placeholder="Tên tiếng Việt" value={nm} onChange={e => setNm(e.target.value)} data-lang="none" />
             <input placeholder="English name (tuỳ chọn)" value={nmEn} onChange={e => setNmEn(e.target.value)} data-lang="none" />
             <div className="small">Màu sàn</div>
-            <div className="deck-colors">{PALETTE.map(c => <button key={c} type="button" className={'deck-sw' + (color === c ? ' on' : '')} style={{ background: c }} onClick={() => { setColor(c); setColors(selRooms.filter(r => r.user && r.names[0]), c) }} />)}
-              <input type="color" value={color} onChange={e => { setColor(e.target.value); setColors(selRooms.filter(r => r.user && r.names[0]), e.target.value) }} /></div>
+            <div className="deck-colors">{PALETTE.map(c => <button key={c} type="button" className={'deck-sw' + (color === c ? ' on' : '')} style={{ background: c }} onClick={() => { setColor(c); setColors(selRooms, c) }} />)}
+              <input type="color" value={color} onChange={e => { setColor(e.target.value); setColors(selRooms, e.target.value) }} /></div>
             <div className="row gap wrap">
               <button className="btn sm primary" disabled={!nm.trim() || !!work} onClick={apply}>{selRooms.length > 1 ? `Gộp ${selRooms.length} không gian thành 1 phòng & đặt tên` : selRooms[0].user ? 'Cập nhật tên' : 'Đặt tên cho phòng'}</button>
               {selRooms.some(r => r.user) && <button className="btn sm" disabled={!!work} onClick={unname} title="Bỏ tên, trả các không gian đã gộp về các vùng gốc">↺ Tách lại / bỏ tên</button>}</div>

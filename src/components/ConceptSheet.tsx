@@ -8,7 +8,7 @@ import { PW, PH, roomKey, pole, layoutSheet, leader, freeSpot, snapAlign, fontOf
 import { jpegPdf } from '../lib/miniPdf'
 import { PAPER, type PaperSize } from '../lib/deck'
 
-import { PALETTE, NEUTRAL } from '../lib/palette'
+import { NEUTRAL, autoRoomColor } from '../lib/palette'
 const lumOf = (h: string) => { const n = parseInt(h.slice(1), 16); return (0.3 * ((n >> 16) & 255) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255)) / 255 }
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
@@ -22,7 +22,9 @@ export default function ConceptSheet({ d, fp, sheet, commit, pp, busy, size = 'A
 
   // ---- phòng đã đặt tên → ô tên
   const named = useMemo(() => (g?.rooms ?? []).filter(r => r.user && r.names[0]).sort((a, b) => a.id - b.id), [g])
-  const colorOf = (key: string, i: number) => sheet.items[key]?.color ?? PALETTE[i % PALETTE.length]
+  const allRooms = g?.rooms ?? []
+  const colorOf = (key: string, i: number) => sheet.items[key]?.color ?? autoRoomColor(i)
+  const idxOf = (r: { id: number }) => allRooms.findIndex(x => x.id === r.id)
   const specs: Spec[] = useMemo(() => {
     if (!pp || !g) return []
     return named.map((r, i) => ({ r, i, key: roomKey(r) })).filter(x => !sheet.items[x.key]?.hide).map(({ r, key }) => {
@@ -38,7 +40,7 @@ export default function ConceptSheet({ d, fp, sheet, commit, pp, busy, size = 'A
     const m = new Map<number, string>()
     if (!g) return m
     for (const r of g.raw_rooms ?? g.rooms) m.set(r.id, NEUTRAL)
-    named.forEach((r, i) => { const key = roomKey(r); const c = sheet.items[key]?.hide ? NEUTRAL : colorOf(key, i); for (const id of r.merged ?? [r.id]) m.set(id, c) })
+    allRooms.forEach((r, i) => { const key = roomKey(r); const c = sheet.items[key]?.hide ? NEUTRAL : colorOf(key, i); for (const id of r.merged ?? [r.id]) m.set(id, c) })
     return m
   }, [g, named, sheet]) // eslint-disable-line
   const colorSig = useMemo(() => [...colorMap].map(([k, v]) => k + v).join(','), [colorMap])
@@ -109,7 +111,7 @@ export default function ConceptSheet({ d, fp, sheet, commit, pp, busy, size = 'A
   }
 
   const selC = live.find(c => c.key === sel)
-  const selIdx = named.findIndex(r => roomKey(r) === sel)
+  const selIdx = allRooms.findIndex(r => roomKey(r) === sel)
   const hidden = named.filter(r => sheet.items[roomKey(r)]?.hide)
 
   return (
@@ -138,7 +140,7 @@ export default function ConceptSheet({ d, fp, sheet, commit, pp, busy, size = 'A
           {layout && planUrl && <image href={planUrl} x={layout.plan.x} y={layout.plan.y} width={layout.plan.w} height={layout.plan.h} />}
           {layout && live.map(c => <path key={'l' + c.key} d={leader(c, layout.plan.x + c.ax * layout.plan.w, layout.plan.y + c.ay * layout.plan.h)} fill="none" stroke="#d62828" strokeWidth={2} strokeDasharray="7 5" />)}
           {layout && live.map(c => <circle key={'a' + c.key} cx={layout.plan.x + c.ax * layout.plan.w} cy={layout.plan.y + c.ay * layout.plan.h} r={5} fill="#d62828" />)}
-          {live.map((c, k) => { const idx = named.findIndex(r => roomKey(r) === c.key), col = colorOf(c.key, idx < 0 ? k : idx), tc = lumOf(col) > 0.62 ? '#2b2b2b' : '#fff'; let ty = c.y + 12
+          {live.map((c, k) => { const idx = allRooms.findIndex(r => roomKey(r) === c.key), col = colorOf(c.key, idx < 0 ? k : idx), tc = lumOf(col) > 0.62 ? '#2b2b2b' : '#fff'; let ty = c.y + 12
             return <g key={c.key} className={'sheet-box' + (sel === c.key ? ' on' : '')} onPointerDown={e => startDrag(e, c.key, 'box')} style={{ cursor: canEdit ? 'grab' : 'default' }}>
               <rect x={c.x + 2} y={c.y + 4} width={c.w} height={c.h} rx={16} fill="#000" opacity={0.14} />
               <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={16} fill={col} stroke="#fff" strokeWidth={3} />

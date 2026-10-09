@@ -38,7 +38,7 @@ export type FloorGeom = {
   w: number; h: number; m_per_pt: number; door_w: number; leaked: boolean; doors?: number
   wall_keys: string[]; classes: { key: string; layer: string; lw: number; fill: boolean; len: number; n: number }[]
   rooms: FloorRoom[]
-  raw_rooms?: FloorRoom[]; uncut_rooms?: FloorRoom[]; cuts?: ZoneCut[]; merges?: ZoneMerge[]; suggest?: ZoneSuggest[]; compare?: ZoneCompare[]
+  algo?: number; raw_rooms?: FloorRoom[]; uncut_rooms?: FloorRoom[]; cuts?: ZoneCut[]; merges?: ZoneMerge[]; suggest?: ZoneSuggest[]; compare?: ZoneCompare[]
 }
 /** Trang dàn mặt bằng tổng (concept): vị trí ô tên (toạ độ trang 1920×1080), màu, diện tích sửa tay… Khoá phòng = tâm "x,y" làm tròn 1/1000 */
 /** ax, ay: điểm đầu nét đứt trong phòng, toạ độ 0..1 theo khung cắt của mặt bằng */
