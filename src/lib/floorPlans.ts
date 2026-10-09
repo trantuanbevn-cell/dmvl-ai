@@ -3,6 +3,7 @@ import { supabase, BUCKET } from './supabase'
 import { loadCv } from './cv'
 import { readVectorPage, guessWallClasses, detectDoors } from './vector'
 import { applyMerges, applyCuts } from './cadZones'
+import { detectScale } from './dims'
 import { rasterWalls, findRooms, mPerPt } from './cad'
 import { renderPdfPage } from './pdf'
 import type { Project, FloorPlan, FloorGeom } from './types'
@@ -26,12 +27,19 @@ export async function addFloorPlan(project: Project, file: File, label: string, 
 
 /** Đọc lại bản vẽ và tìm phòng. Có thể đổi nhóm nét tường, bề rộng cửa, tỉ lệ. */
 export async function computeFloor(fp: FloorPlan, opts: { wallKeys?: string[]; doorW?: number; scaleDen?: number }, log: Log, buf?: ArrayBuffer) {
-  const scaleDen = opts.scaleDen ?? fp.scale_den
   log('Đang nạp bộ xử lý ảnh...')
   const cv = await loadCv()
   if (!buf) buf = await (await must(supabase.storage.from(BUCKET).download(fp.pdf_path)) as Blob).arrayBuffer()
   const v = await readVectorPage(buf, fp.page_no, log)
   if (v.nSeg < 20) throw new Error('File này gần như không có nét vector (có thể là PDF ảnh/scan). Hãy xuất PDF từ AutoCAD ở dạng vector.')
+  // tỉ lệ: người dùng chỉnh tay > tự đọc từ dim + lưới trục > giá trị đã lưu
+  const det = detectScale(v)
+  const userSet = opts.scaleDen != null && opts.scaleDen !== fp.scale_den
+  let scaleDen = fp.scale_den, scaleSrc: 'dim' | 'user' | 'default' = 'default', scaleNote = ''
+  if (userSet) { scaleDen = opts.scaleDen!; scaleSrc = 'user'; scaleNote = 'Tỉ lệ do bạn nhập/chỉnh theo diện tích thật.' }
+  else if (fp.geometry?.scale_src === 'user') { scaleSrc = 'user'; scaleNote = fp.geometry.scale_note ?? '' }
+  else if (det && det.conf >= 0.6) { scaleDen = det.den; scaleSrc = 'dim'; scaleNote = `Tự đọc từ dim + lưới trục: ${det.note}.` }
+  log(det ? `Đọc dim/lưới trục: tỉ lệ 1:${det.den} (${det.note}, tin cậy ${Math.round(det.conf * 100)}%)${scaleSrc === 'dim' ? ' → dùng tỉ lệ này.' : ''}` : 'Không đọc được dim/lưới trục – dùng tỉ lệ đã nhập.')
   const keys = opts.wallKeys ?? fp.geometry?.wall_keys
   const sel = keys ? new Set(v.classes.map((c, i) => (keys.includes(c.key) ? i : -1)).filter(i => i >= 0)) : guessWallClasses(v)
   if (!sel.size) throw new Error('Không chọn được nhóm nét nào làm tường')
@@ -48,7 +56,7 @@ export async function computeFloor(fp: FloorPlan, opts: { wallKeys?: string[]; d
     w: v.w, h: v.h, m_per_pt: mPerPt(scaleDen), door_w: doorW, leaked: res.leaked,
     wall_keys: [...sel].map(i => v.classes[i].key),
     classes: v.classes.map(c => ({ ...c })).sort((a, b) => b.len - a.len).slice(0, 60),
-    algo: 2, doors: doors.length, rooms: res.rooms, raw_rooms: res.rooms, uncut_rooms: res.rooms, cuts: fp.geometry?.cuts ?? [], merges: fp.geometry?.merges ?? [],
+    algo: 3, scale_src: scaleSrc, scale_note: scaleNote, doors: doors.length, rooms: res.rooms, raw_rooms: res.rooms, uncut_rooms: res.rooms, cuts: fp.geometry?.cuts ?? [], merges: fp.geometry?.merges ?? [],
   }
   if (geom.cuts?.length) geom.raw_rooms = applyCuts(res.rooms, geom.cuts)
   geom.rooms = applyMerges(geom.raw_rooms!, geom.merges!)

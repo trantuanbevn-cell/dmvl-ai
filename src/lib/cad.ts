@@ -1,5 +1,6 @@
 // Từ nét vẽ vector → mặt nạ tường → các phòng kín (diện tích thật). Không dùng AI.
 import type { VecPage } from './vector'
+import { isAnnoLayer } from './dims'
 
 export type CadRoom = {
   id: number; area_m2: number; poly: number[][] // chuẩn hoá 0..1 theo trang
@@ -40,11 +41,11 @@ export function rasterWalls(v: VecPage, selected: Set<number>, pxPerPt: number, 
   if (partitions) {
     // đường dài ở layer khác (vách WC, kệ...) có 1 đầu chạm tường → coi là vách ngăn
     const m = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) m[i] = d[i * 4] > 100 ? 1 : 0
-    const r = Math.round(0.12 / mpp * pxPerPt) + 1, minL = 0.8 / mpp
+    const r = Math.round(0.3 / mpp * pxPerPt) + 1, minL = 2.0 / mpp
     const near = (x: number, y: number) => { const px = Math.round(x * pxPerPt), py = Math.round(y * pxPerPt); for (let dy = -r; dy <= r; dy++) { const yy = py + dy; if (yy < 0 || yy >= H) continue; for (let dx = -r; dx <= r; dx++) { const xx = px + dx; if (xx >= 0 && xx < W && m[yy * W + xx]) return true } } return false }
     g.lineWidth = 1.8; g.beginPath()
     for (let i = 0; i < v.nSeg; i++) {
-      const cl = v.classes[v.cls[i]]; if (cl.fill || selected.has(v.cls[i]) || /TEXT|NOTE|HATCH|DIM/i.test(cl.layer)) continue
+      const cl = v.classes[v.cls[i]]; if (cl.fill || selected.has(v.cls[i]) || isAnnoLayer(cl.layer) || /TEXT|NOTE|HATCH/i.test(cl.layer)) continue
       const x0 = v.segs[i * 4], y0 = v.segs[i * 4 + 1], x1 = v.segs[i * 4 + 2], y1 = v.segs[i * 4 + 3]
       if (Math.hypot(x1 - x0, y1 - y0) < minL) continue
       if (near(x0, y0) || near(x1, y1)) { g.moveTo(x0 * pxPerPt, y0 * pxPerPt); g.lineTo(x1 * pxPerPt, y1 * pxPerPt) }
@@ -57,7 +58,7 @@ export function rasterWalls(v: VecPage, selected: Set<number>, pxPerPt: number, 
 }
 
 /** Tách vùng trống thành các không gian: mỗi "cổ hẹp" (cửa mở, hành lang nối khu...) là ranh giới (watershed theo khoảng cách) */
-function splitNecks(cv: any, mask: Uint8Array, W: number, H: number, mPerPx: number, alpha = 0.62, wideM = 0.8, minHalfM = 0.1): { lab: Int32Array; n: number } {
+function splitNecks(cv: any, mask: Uint8Array, W: number, H: number, mPerPx: number, alpha = 0.62, wideM = 2.0, minHalfM = 0.25): { lab: Int32Array; n: number } {
   const N = W * H
   const fm = new cv.Mat(H, W, cv.CV_8UC1); for (let i = 0; i < N; i++) fm.data[i] = mask[i] ? 0 : 255
   const dt = new cv.Mat(); cv.distanceTransform(fm, dt, cv.DIST_L2, 5); const D = dt.data32F as Float32Array; fm.delete()
@@ -86,7 +87,7 @@ function splitNecks(cv: any, mask: Uint8Array, W: number, H: number, mPerPx: num
 }
 
 /** Tìm các không gian kín. doorW chỉ dùng để "đóng" khe nhỏ (≤ vài px); việc tách phòng do splitNecks đảm nhiệm */
-export function findRooms(cv: any, v: VecPage, mask: Uint8Array, W: number, H: number, pxPerPt: number, scaleDen: number, doorW = 1.0, minArea = 0.3): CadResult {
+export function findRooms(cv: any, v: VecPage, mask: Uint8Array, W: number, H: number, pxPerPt: number, scaleDen: number, doorW = 1.0, minArea = 0.75): CadResult {
   const mpp = mPerPt(scaleDen), mPerPx = mpp / pxPerPt
   void doorW
   const wall = new cv.Mat(H, W, cv.CV_8UC1); wall.data.set(mask)
@@ -115,7 +116,7 @@ export function findRooms(cv: any, v: VecPage, mask: Uint8Array, W: number, H: n
     if (area < minArea || area > maxArea) continue
     const bx = st.data32S[i * 5], by = st.data32S[i * 5 + 1], bw = st.data32S[i * 5 + 2], bh = st.data32S[i * 5 + 3]
     // bỏ mảnh mỏng (dải hẹp sát tường) – bề dày trung bình < 0.25 m
-    if (area / (Math.max(bw, bh) * mPerPx) < 0.25 && area < 3) continue
+    if (area / (Math.max(bw, bh) * mPerPx) < 0.6 && area < 7) continue
     const sub = new cv.Mat(bh, bw, cv.CV_8UC1)
     for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) sub.data[y * bw + x] = L[(by + y) * W + bx + x] === i ? 255 : 0
     const cs = new cv.MatVector(), hi = new cv.Mat(); cv.findContours(sub, cs, hi, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)

@@ -63,7 +63,7 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
 
   const recomputed = useRef(false)
   useEffect(() => {
-    if (!g || g.algo === 2 || !canEdit || recomputed.current || busy) return
+    if (!g || g.algo === 3 || !canEdit || recomputed.current || busy) return
     recomputed.current = true; setWork('Đang áp thuật toán nhận diện không gian mới (khoảng 10–20 giây)…')
     computeFloor(fp, {}, () => {}).then(() => d.reload()).catch(e => toast(String(e))).finally(() => setWork(''))
   }, [g, canEdit, busy]) // eslint-disable-line

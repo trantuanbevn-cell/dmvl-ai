@@ -2,6 +2,7 @@
 import * as pdfjs from 'pdfjs-dist'
 import './pdf' // nạp worker
 import { cleanText } from './pdf'
+import { isAnnoLayer } from './dims'
 
 const OPS = pdfjs.OPS as Record<string, number>
 
@@ -193,7 +194,7 @@ export function guessWallClasses(v: VecPage): Set<number> {
   const byName = v.classes.map((c, i) => (!c.fill && /wall|tuong|tường|a-wall|struct|column|cot|cột|vach|vách/i.test(c.layer) ? i : -1)).filter(i => i >= 0)
   const glass = v.classes.map((c, i) => (!c.fill && /glass|kinh|kính|window|curtain|cua so|cửa sổ|vach kinh|vách kính|partition/i.test(c.layer) ? i : -1)).filter(i => i >= 0)
   if (byName.length) { byName.forEach(i => out.add(i)); glass.forEach(i => out.add(i)); return out }
-  const stroke = v.classes.map((c, i) => ({ c, i })).filter(x => !x.c.fill)
+  const stroke = v.classes.map((c, i) => ({ c, i })).filter(x => !x.c.fill && !isAnnoLayer(x.c.layer))
   const total = stroke.reduce((s, x) => s + x.c.len, 0) || 1
   const widths = [...new Set(stroke.map(x => x.c.lw))].sort((a, b) => b - a)
   let thr = widths[widths.length - 1] ?? 0

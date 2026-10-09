@@ -3,6 +3,7 @@
 import * as pdfjs from 'pdfjs-dist'
 import './pdf'
 import { roomPolys } from './cadZones'
+import { isAnnoLayer } from './dims'
 import type { FloorGeom } from './types'
 
 export type PlanPaint = {
@@ -18,7 +19,14 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
   const v1 = page.getViewport({ scale: 1 }), vp = page.getViewport({ scale: longEdge / Math.max(v1.width, v1.height) })
   const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height)
   const cx = c.getContext('2d', { willReadFrequently: true })!; cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height)
-  await page.render({ canvasContext: cx, viewport: vp }).promise
+  // ẩn lớp lưới trục + dim: chỉ dùng làm dữ liệu đo, không thể hiện trên mặt bằng màu
+  let ocp: Promise<any> | undefined
+  try {
+    const cfg: any = await (doc as any).getOptionalContentConfig()
+    for (const [id, gp] of Object.entries((cfg.getGroups?.() ?? {}) as Record<string, { name?: string }>)) if (isAnnoLayer(String(gp?.name ?? ''))) cfg.setVisibility(id, false)
+    ocp = Promise.resolve(cfg)
+  } catch { /* PDF không có layer */ }
+  await page.render({ canvasContext: cx, viewport: vp, ...(ocp ? { optionalContentConfigPromise: ocp } : {}) } as any).promise
   const W = c.width, H = c.height, N = W * H
   const base = cx.getImageData(0, 0, W, H), d = base.data
   const lum = new Uint8Array(N), ink = new Uint8Array(N)

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ProjectData } from '../lib/useProject'
 import type { FloorPlan, FloorGeom } from '../lib/types'
 import { supabase } from '../lib/supabase'
@@ -14,6 +14,7 @@ export function FloorCard({ d, fp, run, busy, compact }: { d: ProjectData; fp: F
   const [keys, setKeys] = useState<string[]>(g?.wall_keys ?? [])
   const [door, setDoor] = useState(g?.door_w ?? 1.0)
   const [den, setDen] = useState(fp.scale_den)
+  useEffect(() => { setDen(fp.scale_den) }, [fp.scale_den])
   const [sel, setSel] = useState<number | null>(null)
   const log = useLog(() => {})
   const { canEdit } = useAuth()
@@ -33,7 +34,7 @@ export function FloorCard({ d, fp, run, busy, compact }: { d: ProjectData; fp: F
   const total = g?.rooms.reduce((s, r) => s + r.area_m2, 0) ?? 0
   return (
     <div className="floor-card">
-      <div className="row between"><h4 style={{ margin: 0 }}>{fp.floor_label} <span className="muted small">· tỉ lệ 1:{fp.scale_den} · {g ? `${g.rooms.length} phòng, ${Math.round(total)} m²` : 'chưa đọc'}</span></h4>
+      <div className="row between"><h4 style={{ margin: 0 }}>{fp.floor_label} <span className="muted small">· tỉ lệ 1:{fp.scale_den}{g?.scale_src === 'dim' ? ' (đọc từ dim)' : ''} · {g ? `${g.rooms.length} phòng, ${Math.round(total)} m²` : 'chưa đọc'}</span></h4>
         <button className="btn ghost sm danger" disabled={busy} onClick={() => confirm(`Xoá mặt bằng ${fp.floor_label}?`) && run(async () => { await deleteFloorPlan(fp) })}>Xoá</button></div>
       {g?.leaked && <div className="note">⚠ Tìm được rất ít phòng kín – tường có thể chưa liền nét. Thử chọn thêm nhóm nét tường bên dưới hoặc tăng bề rộng cửa.</div>}
       {compact && g && <div className="small muted">Đã đọc <b>{g.raw_rooms?.length ?? g.rooms.length}</b> vùng kín · nhận diện <b>{g.doors ?? 0}</b> cửa đi. Sang bước ② để tô màu – gộp – tách – đặt tên phòng.</div>}
