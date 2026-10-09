@@ -26,8 +26,7 @@ export function findSimilar(entries: Entry[], p: Probe, limit = 5): Similar[] {
     const nameSim = nameA.size && nameB.size ? ni / Math.min(nameA.size, nameB.size) : 0
     let s = Math.max(jac, nameSim * 0.8)
     if (e.group_code === p.group) s += 0.12; else s *= 0.6
-    const dE = deltaE(p.color, e.color_hex)
-    if (dE != null) { if (dE < 10) { s += 0.2; why.push('màu rất gần') } else if (dE > 30) s *= 0.55 }
+    const dE = null as number | null // không dùng mã màu trích từ ảnh để so trùng
     if (s > score) score = s
     if (nameSim >= 0.8 && e.group_code === p.group) why.push('tên gần giống')
     else if (jac >= 0.4) why.push('vật liệu mô tả giống')

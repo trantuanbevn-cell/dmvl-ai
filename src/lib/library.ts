@@ -23,7 +23,7 @@ export async function librarySuggestions(e: Entry, limit = 5): Promise<(LibProdu
   const { data } = await supabase.from('library_products').select('*').eq('group_code', e.group_code).limit(500)
   const words = new Set(n(`${e.name_vn} ${e.material_vn ?? ''}`).split(/[^a-z0-9]+/).filter(w => w.length > 2))
   return ((data ?? []) as LibProduct[]).map(p => {
-    const dE = deltaE(e.color_hex, p.color_hex)
+    const dE: number | null = null
     const pw = n(`${p.product_name ?? ''} ${p.tags ?? ''}`).split(/[^a-z0-9]+/)
     const overlap = pw.filter(w => words.has(w)).length
     const score = (dE == null ? 30 : dE) - overlap * 5

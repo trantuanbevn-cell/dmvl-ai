@@ -44,7 +44,7 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
       try { matUrl = (await matMontage(e, urls)) ?? '' } catch { /* */ }
       const mvSrc = e.mat_view?.img ? urls[e.mat_view.img] : e.product_image_url
       if (!matUrl && mvSrc && (e.mat_view?.img || e.mat_view?.region)) { try { matUrl = (await regionCanvas(mvSrc, e.mat_view?.region, 300)).toDataURL('image/png') } catch { /* */ } }
-      const map = matUrl ? `<img src="${matUrl}">` : e.product_image_url ? `<img src="${esc(e.product_image_url)}">` : e.color_hex ? `<div class="sw" style="background:${esc(e.color_hex)}"></div><small>${esc(e.color_hex)}</small>` : ''
+      const map = matUrl ? `<img src="${matUrl}">` : e.product_image_url ? `<img src="${esc(e.product_image_url)}">` : ''
       const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
       const cl = entryCells(e, L, [...new Set(occ.map(o => o.category ?? e.category).filter(Boolean) as string[])], locs)
       rows += `<tr class="${e.source === 'inferred' ? 'inf' : ''}"><td>${stt}</td><td class="code">${esc(symbolOf(e, L, sym.legacy, sym.en))}</td><td class="code">${esc(e.product_code ?? '')}</td><td>${html1(cl.cat)}</td><td>${html1(cl.loc)}</td><td class="im">${img}</td>

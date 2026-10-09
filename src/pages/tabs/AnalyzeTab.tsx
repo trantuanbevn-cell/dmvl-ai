@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { aiInfo } from '../../lib/ai'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { analyzeRoom, applyInference, writeSpecs, fillColors } from '../../lib/pipeline'
+import { analyzeRoom, applyInference, writeSpecs } from '../../lib/pipeline'
 import { roomTypeLabel } from '../../lib/codes'
 import type { ProjectData } from '../../lib/useProject'
 import { analyzePlans } from '../../lib/planPipeline'
@@ -50,7 +50,6 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
   const reapply = () => run(async () => {
     await autoBackup(p, 'Tự động trước khi áp lại quy tắc')
     for (const r of d.rooms) { const n = await applyInference(p, r); log(`${r.code}: quy tắc suy luận → ${n} hạng mục`) }
-    await fillColors(p)
     const n = await writeSpecs(p, { force: true })
     log(`Đã viết lại thông số cho ${n} mã theo mẫu (không dùng AI).`)
   })

@@ -149,11 +149,9 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
       const mvSrc = e.mat_view?.img ? urls[e.mat_view.img] : e.product_image_url
       if (!mapB64 && mvSrc && (e.mat_view?.img || e.mat_view?.region)) { try { mapB64 = (await regionCanvas(mvSrc, e.mat_view?.region, 300)).toDataURL('image/png').split(',')[1] } catch { /* ảnh ngoài bị chặn → dùng ảnh gốc */ } }
       if (!mapB64) mapB64 = e.product_image_url ? await productImage(e.product_image_url) : null
-      if (!mapB64 && e.color_hex) mapB64 = swatchBase64(e.color_hex)
       if (mapB64) {
         const id = wb.addImage({ base64: mapB64, extension: 'png' })
         ws.addImage(id, { tl: { col: sc - 1 + 0.08, row: r - 1 + 0.08 }, ext: { width: 120, height: 92 } })
-        if (!e.product_image_url && e.color_hex && !e.product_url) { row.getCell(sc).value = `\n\n\n\n\n${e.color_hex}`; row.getCell(sc).font = { name: 'Arial', size: 7, color: { argb: 'FF666666' } } }
       }
       r++
     }

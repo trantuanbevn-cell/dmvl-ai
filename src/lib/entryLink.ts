@@ -3,7 +3,7 @@
 import { supabase } from './supabase'
 import type { Entry } from './types'
 
-export const SYNC_KEYS = ['product_code', 'color_hex', 'brand', 'product_name', 'origin', 'product_url', 'product_image_url'] as const
+export const SYNC_KEYS = ['product_code', 'brand', 'product_name', 'origin', 'product_url', 'product_image_url'] as const
 export const SYNC_LABEL: Record<string, string> = { product_code: 'Mã sản phẩm', color_hex: 'Màu', brand: 'Hãng', product_name: 'Tên sản phẩm', origin: 'Xuất xứ', product_url: 'Link sản phẩm', product_image_url: 'Ảnh mẫu' }
 type SyncPatch = Partial<Pick<Entry, typeof SYNC_KEYS[number]>>
 const pickSync = (p: Record<string, unknown>) => { const o: Record<string, unknown> = {}; for (const k of SYNC_KEYS) if (k in p) o[k] = p[k]; return o }
@@ -65,7 +65,7 @@ export function linkSuggestions(all: Entry[]): { a: Entry; b: Entry; why: string
     if (a.id === b.id || (a.link_id && a.link_id === b.link_id)) return
     const k = [a.id, b.id].sort().join('|'); if (seen.has(k)) return; seen.add(k); out.push({ a, b, why })
   }
-  for (const [key, why] of [['product_code', 'cùng mã sản phẩm'], ['color_hex', 'cùng mã màu']] as const) {
+  for (const [key, why] of [['product_code', 'cùng mã sản phẩm']] as const) {
     const m = new Map<string, Entry[]>()
     for (const e of live) { const v = norm(e[key]); if (v) m.set(v, [...(m.get(v) ?? []), e]) }
     for (const list of m.values()) for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) add(list[i], list[j], why + ' ' + (list[i][key] ?? ''))

@@ -86,7 +86,6 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
               <div className="small muted">{o.room_id ? roomById.get(o.room_id)?.code : ''}{pg ? ` · tr.${pg.page_no}` : ''}{o.note ? ` · ${o.note}` : ''}</div>
             </div>)
         })}
-        <div className="swatch" style={{ background: entry.color_hex ?? '#ddd' }} title="Màu trích từ ảnh"><span>{entry.color_hex}</span></div>
       </div>
 
       <div className="loc-box link-box"><b>🔗 Liên kết đồng bộ:</b>{' '}

@@ -26,9 +26,8 @@ export function checkEntries(d: ProjectData, lang: Lang): EntryIssues[] {
     const cat = occ.find(o => o.category)?.category ?? e.category
     const ok = cat ? CATEGORY_GROUPS[cat] : undefined
     if (ok && !ok.includes(e.group_code)) issues.push({ kind: 'err', text: `Hạng mục “${cat}” không khớp nhóm ${e.group_code}` })
-    if (e.color_hex && !/^#[0-9a-f]{6}$/i.test(e.color_hex.trim())) issues.push({ kind: 'err', text: `Mã màu “${e.color_hex}” sai định dạng` })
     const same = e.product_code ? (byCode.get(norm(e.product_code)) ?? []).filter(x => x.id !== e.id) : []
-    for (const k of ['brand', 'color_hex'] as const) {
+    for (const k of ['brand'] as const) {
       const diff = same.filter(x => norm(x[k]) && norm(e[k]) && norm(x[k]) !== norm(e[k]))
       if (diff.length) issues.push({ kind: 'err', text: `Cùng mã SP ${e.product_code} nhưng ${SYNC_LABEL[k].toLowerCase()} khác ${diff.map(x => x.code).join(', ')}` })
     }

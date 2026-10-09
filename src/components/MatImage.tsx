@@ -57,7 +57,6 @@ export default function MatImage({ d, e }: { d: ProjectData; e: Entry }) {
         {slots.map((s, i) => (
           <div key={i} style={{ position: 'relative' }}>
             {s.src ? <MatView url={s.src} region={s.region} maxW={mw} maxH={mh} onDouble={() => setBig(s.src!)} />
-              : i === 0 && e.color_hex ? <div className="mat-sw" style={{ background: e.color_hex }} title={e.color_hex}><span>{e.color_hex}</span></div>
               : <div className="ic-none tiny"><span>Chưa có mẫu</span></div>}
             {canEdit && i > 0 && <button className="crop-edit show" style={{ right: 'auto', left: 0 }} title="Xoá ảnh này" onClick={ev => { ev.stopPropagation(); removeExtra(i) }}>✕</button>}
             {canEdit && <button className="crop-edit show" title="Cắt / thay ảnh vật liệu" onClick={ev => { ev.stopPropagation(); setEd(i) }}>✎</button>}

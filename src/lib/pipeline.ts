@@ -349,7 +349,6 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
       await must(supabase.from('pages').update({ analyzed: true }).eq('id', page.id))
       if (i < pages.length - 1) await sleep(4000) // giãn cách để nằm trong hạn mức miễn phí
     }
-    await fillColors(project, room)
     try { const m = await autoMerge(await must(supabase.from('entries').select('*').eq('project_id', project.id)) as Entry[]); if (m) log(`  ${room.code} – tự gộp ${m} mã trùng (cùng vật liệu, khác góc nhìn)`) } catch (e) { log(`  (không tự gộp được mã trùng: ${String(e).slice(0, 80)})`) }
     await fillPlanQty(project)
     const added = await applyInference(project, room)
@@ -360,24 +359,6 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
   } catch (e) {
     await supabase.from('rooms').update({ analysis_status: 'error', analysis_log: String(e) }).eq('id', room.id)
     throw e
-  }
-}
-
-/** Lấy màu chủ đạo từ điểm ảnh của vùng crop (không dùng AI) */
-export async function fillColors(project: Project, room?: Room) {
-  const entries = await must(supabase.from('entries').select('*').eq('project_id', project.id).is('color_hex', null)) as Entry[]
-  if (!entries.length) return
-  let q = supabase.from('occurrences').select('*').in('entry_id', entries.map(e => e.id)).not('bbox', 'is', null)
-  if (room) q = q.eq('room_id', room.id)
-  const occ = await must(q) as Occurrence[]
-  const pages = await must(supabase.from('pages').select('*').eq('project_id', project.id)) as Page[]
-  const urls = await signedUrls(pages.map(p => p.image_path))
-  for (const e of entries) {
-    const o = occ.filter(x => x.entry_id === e.id).sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0]
-    const pg = o ? pages.find(p => p.id === o.page_id) : undefined
-    if (!o || !pg) continue
-    const hex = await sampleColor(urls[pg.image_path], o.bbox!)
-    if (hex) await must(supabase.from('entries').update({ color_hex: hex }).eq('id', e.id))
   }
 }
 

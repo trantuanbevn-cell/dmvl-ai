@@ -23,7 +23,7 @@ function Side({ d, e, tag, onKeep, busy, label }: { d: ProjectData; e: Entry; ta
       <div className="dc-head"><b className="code big-code">{e.code}</b> <b>{e.name_vn}</b> <span className="src">{tag}</span></div>
       <div className="dc-shots">{shots.slice(0, 4).map(o => <OccCrop key={o.id} d={d} o={o} height={190} maxWidth={300} />)}
         {!shots.length && <div className="ic-none wide" style={e.color_hex ? { background: e.color_hex } : undefined}><span>Chưa có ảnh crop</span></div>}
-        {e.color_hex && <span className="swatch" style={{ background: e.color_hex, height: 190, width: 90 }}><span>{e.color_hex}</span></span>}</div>
+</div>
       {row('Vật liệu', e.material_vn)}{row('Thông số', e.desc_vn)}{row('Bộ phận', e.part_vn)}{row('Hãng', [e.brand, e.product_code].filter(Boolean).join(' · '))}{row('Xuất xứ', e.origin)}
       <div className="dc-row"><span>Có ở</span>{locs.length ? locs.map(l => <span key={l.room.id} className="loc-tag">{l.room.code} {l.room.name_vn}</span>) : 'chưa gán phòng'}</div>
       {onKeep && <button className="btn primary" disabled={busy} onClick={onKeep}>{label ?? `Gộp – giữ mã ${e.code}`}</button>}
