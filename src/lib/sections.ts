@@ -62,7 +62,7 @@ export const newPrefixError = (code: string, ownKey?: string): string => {
 
 // Bố cục QUẢN LÝ nhóm (lưu theo dự án: projects.section_layout): nhóm lớn tự tạo/gộp/tách, thứ tự nhóm lớn, mục nào thuộc nhóm lớn nào và thứ tự các mục.
 // Chỉ đổi cách sắp xếp/trình bày – không đụng tới nội dung vật liệu.
-export type SectionLayout = { bandOrder?: string[]; customBands?: { key: string; vn: string; en: string }[]; assign?: Record<string, string>; order?: string[] }
+export type SectionLayout = { bandOrder?: string[]; customBands?: { key: string; vn: string; en: string }[]; assign?: Record<string, string>; order?: string[]; merge?: Record<string, string> }
 let LAYOUT: SectionLayout = {}
 export const setSectionLayout = (l: SectionLayout | null | undefined) => { LAYOUT = l ?? {}; CACHE = null }
 export const getSectionLayout = (): SectionLayout => LAYOUT
@@ -73,7 +73,7 @@ export const bandKeys = (): string[] => {
   return out.length ? out : [...base, ...custom]
 }
 export const bandInfo = (k: string): { vn: string; en: string } => BANDS[k] ?? LAYOUT.customBands?.find(b => b.key === k) ?? { vn: k, en: k }
-export const allSections = (): Section[] => {
+const fullSections = (): Section[] => {
   if (CACHE) return CACHE
   const base = [...SECTIONS]
   for (const c of CUSTOM) { let at = -1; base.forEach((x, i) => { if (x.band === c.band) at = i }); base.splice(at + 1, 0, c) }
@@ -83,11 +83,31 @@ export const allSections = (): Section[] => {
   list.sort((a, b) => keys.indexOf(a.s.band) - keys.indexOf(b.s.band) || (ord.get(a.s.key) ?? 1e6 + a.i) - (ord.get(b.s.key) ?? 1e6 + b.i))
   return (CACHE = list.map(x => x.s))
 }
+/** Mục nhỏ đã GỘP vào mục khác (chỉ để trình bày/xuất file; mã và nội dung vật liệu không đổi) */
+export const mergedInto = (key: string): string | undefined => LAYOUT.merge?.[key]
+export const mergedMembers = (target: string): Section[] => fullSections().filter(x => LAYOUT.merge?.[x.key] === target)
+let CACHE2: Section[] | null = null, CACHE2_SRC: Section[] | null = null
+export const allSections = (): Section[] => { const f = fullSections(); if (CACHE2_SRC !== f) { CACHE2_SRC = f; CACHE2 = f.filter(x => !LAYOUT.merge?.[x.key]) } return CACHE2! }
+const resolve = (k: string) => { let c = k, n = 0; while (LAYOUT.merge?.[c] && n++ < 5) c = LAYOUT.merge[c]; return c }
 export function sectionOf(e: Pick<Entry, 'group_code' | 'category'> & { section_key?: string | null }): Section {
-  const all = allSections()
-  if (e.section_key) { const c = all.find(x => x.key === e.section_key && x.custom); if (c) return c }
-  const k = (e.group_code === 'WD' || e.group_code === 'LM') && e.category === 'floor' ? 'floor' : (SECTIONS.find(s => s.groups.includes(e.group_code)) ?? SECTIONS[SECTIONS.length - 1]).key
-  return all.find(x => x.key === k)!
+  const full = fullSections()
+  let k: string | undefined
+  if (e.section_key && full.some(x => x.key === e.section_key && x.custom)) k = e.section_key
+  k ??= (e.group_code === 'WD' || e.group_code === 'LM') && e.category === 'floor' ? 'floor' : (SECTIONS.find(s => s.groups.includes(e.group_code)) ?? SECTIONS[SECTIONS.length - 1]).key
+  const r = resolve(k)
+  return allSections().find(x => x.key === r) ?? full.find(x => x.key === k)!
+}
+export const getNameOverrides = () => OVR
+/** Gộp các mục nhỏ vào mục đích (target) */
+export function mergeSections(keys: string[], target: string): SectionLayout {
+  const merge = { ...(LAYOUT.merge ?? {}) }
+  for (const k of keys) if (k !== target) { merge[k] = target; for (const o of Object.keys(merge)) if (merge[o] === k) merge[o] = target }
+  return { ...LAYOUT, merge }
+}
+/** Tách các mục đã gộp vào target về lại như cũ */
+export function unmergeSections(target: string): SectionLayout {
+  const merge = { ...(LAYOUT.merge ?? {}) }; for (const o of Object.keys(merge)) if (merge[o] === target) delete merge[o]
+  return { ...LAYOUT, merge }
 }
 // Tên hạng mục do người dùng đổi (lưu theo dự án: projects.section_names) – dùng chung cho bảng, xuất Excel và bản in
 export type NameOverrides = Record<string, { vn?: string; en?: string }>
