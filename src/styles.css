@@ -315,3 +315,12 @@ input[readonly], textarea[readonly] { cursor: default }
 .sp-flag a { cursor: pointer; color: var(--brown); margin-left: 6px; text-decoration: underline } .sp-flag .sp-ign { color: #2e7d32 }
 
 .chip.add { border-style: dashed; color: var(--brown); background: #fffaf3 } .chip.add:hover { background: #f6e9d8 }
+
+/* Thông báo đẩy có bản cập nhật */
+.upd-bg { position: fixed; inset: 0; z-index: 9999; background: rgba(30,18,8,.45); display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh }
+.upd-box { background: #fff; border-radius: 18px; padding: 24px 28px; width: min(440px, 92vw); text-align: center; box-shadow: 0 18px 60px rgba(0,0,0,.35); border-top: 6px solid var(--brown); animation: updIn .25s ease-out }
+.upd-box h3 { margin: 6px 0 4px; font-size: 20px } .upd-ic { font-size: 40px; animation: updRing 1.2s ease-in-out infinite; transform-origin: 50% 10% }
+.upd-act { display: flex; gap: 10px; justify-content: center; margin-top: 14px } .upd-act .btn.primary { padding: 10px 18px; font-size: 15px }
+.bell-btn.ring { animation: updRing 1.6s ease-in-out infinite }
+@keyframes updIn { from { transform: translateY(-16px); opacity: 0 } to { transform: none; opacity: 1 } }
+@keyframes updRing { 0%,100% { transform: rotate(0) } 10%,30%,50% { transform: rotate(14deg) } 20%,40% { transform: rotate(-14deg) } 60% { transform: rotate(0) } }
