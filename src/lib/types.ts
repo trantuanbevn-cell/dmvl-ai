@@ -30,13 +30,15 @@ export const SOURCE_EN: Record<string, string> = { image: 'Image', inferred: 'In
 export type FloorRoom = { id: number; area_m2: number; poly: number[][]; cx: number; cy: number; names: string[]; label_area?: number; polys?: number[][][]; user?: boolean; merged?: number[] }
 /** Gộp/đặt tên không gian do người dùng (hoặc gợi ý từ concept): members = tâm (0..1) của các phòng kín gốc – giữ nguyên khi tính lại bản vẽ */
 export type ZoneMerge = { name: string; name_en?: string; members: [number, number][]; src?: 'user' | 'concept' }
+/** Đường cắt chia 1 phòng kín thành 2: 2 điểm (0..1) của đường thẳng cắt qua phòng */
+export type ZoneCut = { a: [number, number]; b: [number, number] }
 export type ZoneSuggest = { name: string; members: [number, number][]; area: number; label_area: number; page_no: number }
 export type ZoneCompare = { label: string; label_area: number; page_no: number; cad_ids: number[]; cad_area: number; page_id?: string }
 export type FloorGeom = {
   w: number; h: number; m_per_pt: number; door_w: number; leaked: boolean; doors?: number
   wall_keys: string[]; classes: { key: string; layer: string; lw: number; fill: boolean; len: number; n: number }[]
   rooms: FloorRoom[]
-  raw_rooms?: FloorRoom[]; merges?: ZoneMerge[]; suggest?: ZoneSuggest[]; compare?: ZoneCompare[]
+  raw_rooms?: FloorRoom[]; uncut_rooms?: FloorRoom[]; cuts?: ZoneCut[]; merges?: ZoneMerge[]; suggest?: ZoneSuggest[]; compare?: ZoneCompare[]
 }
 /** Trang dàn mặt bằng tổng (concept): vị trí ô tên (toạ độ trang 1920×1080), màu, diện tích sửa tay… Khoá phòng = tâm "x,y" làm tròn 1/1000 */
 /** ax, ay: điểm đầu nét đứt trong phòng, toạ độ 0..1 theo khung cắt của mặt bằng */

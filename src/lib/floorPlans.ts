@@ -2,7 +2,7 @@
 import { supabase, BUCKET } from './supabase'
 import { loadCv } from './cv'
 import { readVectorPage, guessWallClasses, detectDoors } from './vector'
-import { applyMerges } from './cadZones'
+import { applyMerges, applyCuts } from './cadZones'
 import { rasterWalls, findRooms, mPerPt } from './cad'
 import { renderPdfPage } from './pdf'
 import type { Project, FloorPlan, FloorGeom } from './types'
@@ -47,9 +47,10 @@ export async function computeFloor(fp: FloorPlan, opts: { wallKeys?: string[]; d
     w: v.w, h: v.h, m_per_pt: mPerPt(scaleDen), door_w: doorW, leaked: res.leaked,
     wall_keys: [...sel].map(i => v.classes[i].key),
     classes: v.classes.map(c => ({ ...c })).sort((a, b) => b.len - a.len).slice(0, 60),
-    doors: doors.length, rooms: res.rooms, raw_rooms: res.rooms, merges: fp.geometry?.merges ?? [],
+    doors: doors.length, rooms: res.rooms, raw_rooms: res.rooms, uncut_rooms: res.rooms, cuts: fp.geometry?.cuts ?? [], merges: fp.geometry?.merges ?? [],
   }
-  geom.rooms = applyMerges(res.rooms, geom.merges!)
+  if (geom.cuts?.length) geom.raw_rooms = applyCuts(res.rooms, geom.cuts)
+  geom.rooms = applyMerges(geom.raw_rooms!, geom.merges!)
   await must(supabase.from('floor_plans').update({ scale_den: scaleDen, geometry: geom, status: 'ready' }).eq('id', fp.id))
   log(`Xong: tìm được ${res.rooms.length} phòng kín${geom.merges?.length ? `, áp lại ${geom.merges.length} phép gộp/đặt tên` : ''}${res.leaked ? ' – ít quá, có thể tường chưa kín: thử chọn thêm nhóm nét tường hoặc tăng bề rộng cửa' : ''}.`)
 }

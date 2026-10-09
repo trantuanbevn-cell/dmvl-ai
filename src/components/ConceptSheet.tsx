@@ -1,54 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ProjectData } from '../lib/useProject'
 import type { FloorPlan, SheetItem, SheetLayout } from '../lib/types'
-import { supabase, BUCKET } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { toast } from '../lib/toast'
-import { buildPlanPaint, type PlanPaint } from '../lib/planPaint'
+import type { PlanPaint } from '../lib/planPaint'
 import { PW, PH, roomKey, pole, layoutSheet, leader, freeSpot, snapAlign, fontOf, type Spec, type Rect } from '../lib/sheetLayout'
 import { jpegPdf } from '../lib/miniPdf'
 import { PAPER, type PaperSize } from '../lib/deck'
 
-const PALETTE = ['#d4a9b8', '#8d8d8d', '#a9b8bf', '#7f8d96', '#a9c4a0', '#c5d6c0', '#8d8d6e', '#c9b8a8', '#b0a088', '#c98d78', '#b5707a', '#8fa583', '#b9a6c9', '#9fc3c8', '#d9c07a']
-const NEUTRAL = '#e3ded8'
+import { PALETTE, NEUTRAL } from '../lib/palette'
 const lumOf = (h: string) => { const n = parseInt(h.slice(1), 16); return (0.3 * ((n >> 16) & 255) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255)) / 255 }
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
-export default function ConceptSheet({ d, size = 'A3' }: { d: ProjectData; size?: PaperSize }) {
+export default function ConceptSheet({ d, fp, sheet, commit, pp, busy, size = 'A3' }: { d: ProjectData; fp: FloorPlan; sheet: SheetLayout; commit: (s: SheetLayout) => void; pp: PlanPaint | null; busy: boolean; size?: PaperSize }) {
   const { canEdit } = useAuth()
-  const floors = d.floors
-  const [fid, setFid] = useState(floors[0]?.id ?? '')
-  const fp = floors.find(f => f.id === fid) ?? floors[0]
-  const g = fp?.geometry ?? null
-  const [sheets, setSheets] = useState<Record<string, SheetLayout>>({})
-  const sheet: SheetLayout = (fp && (sheets[fp.id] ?? fp.sheet)) || { items: {} }
-  const [pp, setPp] = useState<PlanPaint | null>(null)
-  const [busy, setBusy] = useState(false)
+  const g = fp.geometry ?? null
   const [planUrl, setPlanUrl] = useState('')
   const [sel, setSel] = useState<string | null>(null)
   const [drag, setDrag] = useState<{ key: string; kind: 'box' | 'anchor'; x: number; y: number } | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
-  const cache = useRef(new Map<string, PlanPaint>())
-  const dirty = useRef(false), timer = useRef<number | undefined>()
-
-  // ---- nạp bản vẽ + tính vùng sàn
-  const sig = fp && g ? `${fp.id}:${(g.raw_rooms ?? g.rooms).length}:${g.w}:${fp.scale_den}` : ''
-  useEffect(() => {
-    setPp(null); setPlanUrl('')
-    if (!fp || !g || !sig) return
-    const hitc = cache.current.get(sig); if (hitc) { setPp(hitc); return }
-    let dead = false
-    setBusy(true)
-    ;(async () => {
-      try {
-        const { data, error } = await supabase.storage.from(BUCKET).download(fp.pdf_path); if (error) throw new Error(error.message)
-        const p = await buildPlanPaint(await data.arrayBuffer(), fp.page_no, g)
-        cache.current.set(sig, p); if (!dead) setPp(p)
-      } catch (e) { if (!dead) toast('Không dựng được mặt bằng: ' + String(e)) }
-      if (!dead) setBusy(false)
-    })()
-    return () => { dead = true; setBusy(false) }
-  }, [sig]) // eslint-disable-line
 
   // ---- phòng đã đặt tên → ô tên
   const named = useMemo(() => (g?.rooms ?? []).filter(r => r.user && r.names[0]).sort((a, b) => a.id - b.id), [g])
@@ -78,14 +48,6 @@ export default function ConceptSheet({ d, size = 'A3' }: { d: ProjectData; size?
     return () => clearTimeout(t)
   }, [pp, colorSig]) // eslint-disable-line
 
-  // ---- lưu
-  const commit = (next: SheetLayout) => {
-    if (!fp) return
-    setSheets(s => ({ ...s, [fp.id]: next })); dirty.current = true
-    clearTimeout(timer.current)
-    timer.current = window.setTimeout(async () => { const { error } = await supabase.from('floor_plans').update({ sheet: next }).eq('id', fp.id); if (error) toast('Lưu lỗi: ' + error.message); else dirty.current = false }, 700)
-  }
-  useEffect(() => () => { clearTimeout(timer.current); if (dirty.current) d.reload() }, []) // eslint-disable-line
   const setItem = (key: string, patch: Partial<SheetItem>) => commit({ ...sheet, items: { ...sheet.items, [key]: { ...sheet.items[key], ...patch } } })
   /** khoá cả bố cục hiện tại (vị trí mọi ô) rồi áp thay đổi cho 1 ô */
   const freeze = (over?: { key: string; x: number; y: number }, anchor?: { key: string; ax: number; ay: number }) => {
@@ -146,18 +108,15 @@ export default function ConceptSheet({ d, size = 'A3' }: { d: ProjectData; size?
     } catch (e) { toast(String(e)) }
   }
 
-  if (!floors.length) return <div className="card"><h3>Dàn trang concept</h3><p className="muted">Chưa có mặt bằng. Tải PDF vector xuất từ AutoCAD (mỗi tầng một file) ở phần phía trên.</p></div>
   const selC = live.find(c => c.key === sel)
   const selIdx = named.findIndex(r => roomKey(r) === sel)
   const hidden = named.filter(r => sheet.items[roomKey(r)]?.hide)
 
   return (
-    <div className="card concept">
-      <div className="row between"><h3 style={{ margin: 0 }}>Trang mặt bằng tổng</h3>
-        <select value={fp.id} onChange={e => { setFid(e.target.value); setSel(null) }}>{floors.map((f: FloorPlan) => <option key={f.id} value={f.id}>{f.floor_label}</option>)}</select></div>
+    <div className="concept">
       <div className="step-box"><b>Trang mặt bằng tổng</b> <span className="muted small">– kéo ô tên để dời (tự hút thẳng hàng, không chồng nhau); kéo chấm đỏ để dời điểm nối nét đứt</span></div>
-      {!g && <div className="note">Mặt bằng này chưa được đọc – xem phần “Mặt bằng gốc theo tầng” phía trên.</div>}
-      {g && !named.length && <div className="note">Chưa có không gian nào được đặt tên. Ở phần “Mặt bằng gốc theo tầng” phía trên, bấm “Gộp / đặt tên không gian”, chọn các vùng và đặt tên.</div>}
+      {!g && <div className="note">Mặt bằng này chưa được đọc – quay lại bước ① để tải/đọc lại PDF.</div>}
+      {g && !named.length && <div className="note">Chưa có phòng nào được đặt tên – sang bước ② để tô màu, gộp, tách và đặt tên phòng.</div>}
       {busy && <div className="small muted"><span className="spinner" /> Đang dựng mặt bằng và tô màu sàn (khoảng 5–15 giây)…</div>}
       {pp && <>
         <div className="row gap wrap sheet-tools">
