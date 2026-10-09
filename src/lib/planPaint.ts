@@ -4,10 +4,13 @@ import * as pdfjs from 'pdfjs-dist'
 import './pdf'
 import { roomPolys } from './cadZones'
 import { isAnnoLayer } from './dims'
-import { readVectorPage } from './vector'
+import { readVectorPage, detectDoors } from './vector'
 import { loadCv } from './cv'
 import type { FloorGeom } from './types'
 import { regularize } from './shape'
+import { makeWallSnap } from './wallsnap'
+import { islandHulls } from './furniture'
+import { wallSegments } from './cad'
 
 export type PlanPaint = {
   W: number; H: number; crop: { x: number; y: number; w: number; h: number }
@@ -135,22 +138,26 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
     const cv = await loadCv()
     if (vv?.draw?.length) {
       const sx = W / vv.w
+      // tường vector thật (kể cả ô cửa, vách) để bắt cạnh viền vào đúng mép tường; hình bao đồ rời/cột đứng lẻ để tô trắng
+      const wkeys = new Set(g.wall_keys), sel = new Set<number>(); vv.classes.forEach((c, i) => { if (wkeys.has(c.key)) sel.add(i) })
+      const withDoors = new Set(sel); vv.classes.forEach((c, i) => { if (/DOOR|CUA DI|CUA SO|WINDOW/i.test(c.layer) && !c.fill) withDoors.add(i) })
+      const wsegs = wallSegments(vv, withDoors, detectDoors(vv, g.m_per_pt), g.m_per_pt).map(v => v * sx)
+      const snap = makeWallSnap(wsegs, 1.4 * sx)
+      const hulls = islandHulls(vv, g.m_per_pt, sel)
+      const hullD = hulls.map(h => { let d = ''; for (let i = 0; i < h.length; i += 2) d += (i ? 'L' : 'M') + +h[i].toFixed(2) + ' ' + +h[i + 1].toFixed(2); return d + 'Z' }).join('')
       const floorD: string[] = raw.map(() => '')
       const ids = new Map<number, [number, number, number, number]>()
-      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const k = keep[y * W + x]; if (!k) continue; const b = ids.get(k); if (!b) ids.set(k, [x, y, x, y]); else { if (x < b[0]) b[0] = x; if (x > b[2]) b[2] = x; if (y < b[1]) b[1] = y; if (y > b[3]) b[3] = y } }
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const k = roomOf[y * W + x]; if (!k) continue; const b = ids.get(k); if (!b) ids.set(k, [x, y, x, y]); else { if (x < b[0]) b[0] = x; if (x > b[2]) b[2] = x; if (y < b[1]) b[1] = y; if (y > b[3]) b[3] = y } }
       for (const [k, [bx0, by0, bx1, by1]] of ids) {
         const bw = bx1 - bx0 + 7, bh = by1 - by0 + 7, sub = new cv.Mat(bh, bw, cv.CV_8UC1, new cv.Scalar(0))
-        for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) if (keep[y * W + x] === k) sub.data[(y - by0 + 3) * bw + (x - bx0 + 3)] = 255
-        // bịt các khe nhỏ do nét đồ đạc / nét đứt cửa (vẫn nằm trong vùng của chính phòng này, không tràn sang phòng khác)
-        const ker = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(5, 5)); cv.morphologyEx(sub, sub, cv.MORPH_CLOSE, ker); ker.delete()
-        for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { const X = x + bx0 - 3, Y = y + by0 - 3; if (sub.data[y * bw + x] && X >= 0 && Y >= 0 && X < W && Y < H) { const o = keep[Y * W + X]; if (o && o !== k) sub.data[y * bw + x] = 0 } }
+        for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) if (roomOf[y * W + x] === k) sub.data[(y - by0 + 3) * bw + (x - bx0 + 3)] = 255
         const cs = new cv.MatVector(), hi = new cv.Mat(); cv.findContours(sub, cs, hi, cv.RETR_CCOMP, cv.CHAIN_APPROX_NONE)
         let d = ''
         for (let c = 0; c < cs.size(); c++) {
           const cc = cs.get(c), isHole = hi.data32S[c * 4 + 3] >= 0, area = cv.contourArea(cc)
           if (area < (isHole ? 0.25 : 0.3) * pxPerM * pxPerM) { cc.delete(); continue }   // lỗ nhỏ (<0,25 m²) coi như sàn liền
           const pts: [number, number][] = []; for (let q = 0; q < cc.rows; q++) pts.push([cc.data32S[q * 2] + bx0 - 3 + 0.5, cc.data32S[q * 2 + 1] + by0 - 3 + 0.5])
-          d += regularize(pts, pxPerM); cc.delete()
+          d += regularize(pts, pxPerM, snap); cc.delete()
         }
         cs.delete(); hi.delete(); sub.delete(); floorD[k - 1] = d
       }
@@ -167,7 +174,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       svg = (colorOfRaw: (rawId: number) => string) => {
         let f = ''
         raw.forEach((r, k) => { if (floorD[k]) { const c = colorOfRaw(r.id); f += `<path d="${floorD[k]}" fill="${c}" stroke="${c}" stroke-width="1.4"/>` } })
-        return `<g transform="translate(${-crop.x} ${-crop.y})" fill-rule="evenodd" stroke-linejoin="round">${f}</g>${lineLayer}`
+        return `<g transform="translate(${-crop.x} ${-crop.y})" fill-rule="evenodd" stroke-linejoin="round">${f}</g><g transform="translate(${-crop.x} ${-crop.y}) scale(${sx})"><path d="${hullD}" fill="#fff" stroke="none"/></g>${lineLayer}`
       }
     }
   } catch (e) { console.warn('Không dựng được bản vector, dùng ảnh', e) }

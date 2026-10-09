@@ -49,7 +49,7 @@ const f = (x: number) => +x.toFixed(2)
  * @param P điểm dày của đường viền (px, khép kín, không lặp điểm đầu)
  * @param u số px trên 1 m thật
  */
-export function regularize(P: Pt[], u: number): string {
+export function regularize(P: Pt[], u: number, snap?: (m: Pt, d: Pt, len: number) => { m: Pt; d: Pt } | null): string {
   const n = P.length; if (n < 4) return ''
   const eps = Math.max(1.4, 0.05 * u)
   const V = rdpClosed(P, eps), m = V.length; if (m < 3) return ''
@@ -129,6 +129,9 @@ export function regularize(P: Pt[], u: number): string {
     const b = nodes[(i + 1) % N], d = sub(b.p, a.p); if (len(d) < 1e-6) return null
     const dir = snapDir(d)
     const mid: Pt = a.fixed ? a.p : b.fixed ? b.p : [(a.p[0] + b.p[0]) / 2, (a.p[1] + b.p[1]) / 2]
+    // bắt vào tường vector thật nếu cạnh này chạy dọc một mép tường
+    const dl = len(d), sn = snap && dl > 4 ? snap([(a.p[0] + b.p[0]) / 2, (a.p[1] + b.p[1]) / 2], [d[0] / dl, d[1] / dl], dl) : null
+    if (sn) return { m: sn.m, d: sn.d }
     return { m: mid, d: dir }
   })
   const np: Pt[] = nodes.map(a => a.p)

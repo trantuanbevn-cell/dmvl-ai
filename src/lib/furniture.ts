@@ -9,16 +9,14 @@ export type Furn = { groups: FurnGroup[]; at: number[][] /* [nhóm, x, y] chuẩ
 
 type Comp = { layer: string; len: number; segs: number; cx: number; cy: number; a: number; b: number }
 
-export function detectFurniture(v: VecPage, mPerPt: number): Furn {
-  const cls = new Set<number>()
-  v.classes.forEach((c, i) => { if (FURN_RE.test(c.layer) && !isAnnoLayer(c.layer) && !/wall|tuong|door|cua/i.test(c.layer)) cls.add(i) })
-  // đoạn thẳng: nét + cạnh của vùng tô
+/** Gom các nét của những lớp cho trước thành từng vật (các nét nối đầu nhau = một vật) */
+export function segComponents(v: VecPage, cls: Set<number>, tol = 0.1): { S: number[]; L: number[]; groups: number[][] } {
   const S: number[] = [], L: number[] = []
   for (let i = 0; i < v.nSeg; i++) if (cls.has(v.cls[i])) { S.push(v.segs[i * 4], v.segs[i * 4 + 1], v.segs[i * 4 + 2], v.segs[i * 4 + 3]); L.push(v.cls[i]) }
   for (const f of v.fills) if (cls.has(f.cls)) for (let i = 0; i + 3 < f.pts.length; i += 2) { S.push(f.pts[i], f.pts[i + 1], f.pts[i + 2], f.pts[i + 3]); L.push(f.cls) }
   const n = L.length
   const par = new Int32Array(n).map((_, i) => i), find = (i: number): number => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i] } return i }
-  const tol = 0.1, cell = new Map<string, number>() // hai đầu nét cách nhau < 0.1 pt coi như nối
+  const cell = new Map<string, number>()
   const key = (x: number, y: number) => Math.round(x / tol) + ',' + Math.round(y / tol)
   for (let i = 0; i < n; i++) for (const o of [0, 2]) {
     const x = S[i * 4 + o], y = S[i * 4 + o + 1]
@@ -27,8 +25,48 @@ export function detectFurniture(v: VecPage, mPerPt: number): Furn {
   }
   const by = new Map<number, number[]>()
   for (let i = 0; i < n; i++) { const r = find(i); let a = by.get(r); if (!a) by.set(r, a = []); a.push(i) }
+  return { S, L, groups: [...by.values()] }
+}
+
+/** Bao lồi của một nhóm nét (x,y phẳng) */
+export function hullOf(S: number[], idx: number[]): number[] {
+  const P: [number, number][] = []; for (const i of idx) { P.push([S[i * 4], S[i * 4 + 1]], [S[i * 4 + 2], S[i * 4 + 3]]) }
+  P.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  const cr = (o: number[], a: number[], b: number[]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+  const lo: [number, number][] = [], up: [number, number][] = []
+  for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p) }
+  for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p) }
+  const h = lo.slice(0, -1).concat(up.slice(0, -1)); return h.flat()
+}
+
+/** Hình bao (pt) của từng đồ rời / cột đứng lẻ: để tô TRẮNG đúng hình vật, không tô màu sàn lên trên */
+export function islandHulls(v: VecPage, mPerPt: number, wallCls: Set<number>): number[][] {
+  const out: number[][] = []
+  const fc = new Set<number>(); v.classes.forEach((c, i) => { if (FURN_RE.test(c.layer) && !isAnnoLayer(c.layer) && !/wall|tuong|door|cua/i.test(c.layer)) fc.add(i) })
+  const run = (cls: Set<number>, minM: number, maxM: number, minSegs: number) => {
+    if (!cls.size) return
+    const { S, groups } = segComponents(v, cls)
+    for (const idx of groups) {
+      if (idx.length < minSegs) continue
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9
+      for (const i of idx) for (const o of [0, 2]) { x0 = Math.min(x0, S[i * 4 + o]); x1 = Math.max(x1, S[i * 4 + o]); y0 = Math.min(y0, S[i * 4 + o + 1]); y1 = Math.max(y1, S[i * 4 + o + 1]) }
+      const w = (x1 - x0) * mPerPt, h = (y1 - y0) * mPerPt
+      if (Math.max(w, h) < minM || Math.max(w, h) > maxM || Math.min(w, h) < 0.12) continue
+      const hl = hullOf(S, idx); if (hl.length >= 6) out.push(hl)
+    }
+  }
+  run(fc, 0.15, 5, 2)
+  run(wallCls, 0.25, 2.5, 4)   // cột đứng lẻ: nhóm nét tường nhỏ, không dính vào tường
+  return out
+}
+
+export function detectFurniture(v: VecPage, mPerPt: number): Furn {
+  const cls = new Set<number>()
+  v.classes.forEach((c, i) => { if (FURN_RE.test(c.layer) && !isAnnoLayer(c.layer) && !/wall|tuong|door|cua/i.test(c.layer)) cls.add(i) })
+  const { S, L, groups: comps0 } = segComponents(v, cls)
+  const by = comps0
   const comps: Comp[] = []
-  for (const idx of by.values()) {
+  for (const idx of by) {
     let len = 0, sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0, w = 0
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9
     for (const i of idx) {

@@ -165,3 +165,34 @@ export function maskPreview(mask: Uint8Array, W: number, H: number, maxEdge = 90
   const s = Math.min(1, maxEdge / Math.max(W, H)), o = document.createElement('canvas'); o.width = Math.round(W * s); o.height = Math.round(H * s)
   o.getContext('2d')!.drawImage(c, 0, 0, o.width, o.height); return o.toDataURL('image/png')
 }
+
+/** Các đoạn thẳng làm "ranh giới" của không gian (dạng vector, toạ độ pt): nét tường, cạnh vùng tô tường, ô cửa đi, vách ngăn. Cùng tập với rasterWalls. */
+export function wallSegments(v: VecPage, selected: Set<number>, doors: number[][] = [], mpp = 0.03528): number[] {
+  const out: number[] = []
+  const wall: number[] = []
+  for (let i = 0; i < v.nSeg; i++) { const ci = v.cls[i]; if (!selected.has(ci) || v.classes[ci].fill) continue; wall.push(v.segs[i * 4], v.segs[i * 4 + 1], v.segs[i * 4 + 2], v.segs[i * 4 + 3]) }
+  for (const f of v.fills) {
+    if (!selected.has(f.cls)) continue
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9
+    for (let i = 0; i < f.pts.length; i += 2) { x0 = Math.min(x0, f.pts[i]); x1 = Math.max(x1, f.pts[i]); y0 = Math.min(y0, f.pts[i + 1]); y1 = Math.max(y1, f.pts[i + 1]) }
+    if ((x1 - x0) * (y1 - y0) > 0.25 * v.w * v.h) continue
+    const n = f.pts.length / 2
+    for (let i = 0; i < n; i++) { const j = (i + 1) % n; wall.push(f.pts[i * 2], f.pts[i * 2 + 1], f.pts[j * 2], f.pts[j * 2 + 1]) }
+  }
+  out.push(...wall)
+  for (const d of doors) out.push(d[0], d[1], d[2], d[3])
+  // vách ngăn: nét dài ở layer khác có một đầu chạm tường
+  const cs = 12, grid = new Map<number, number[]>(), gx = Math.ceil(v.w / cs) + 2
+  const key = (x: number, y: number) => Math.floor(y / cs) * gx + Math.floor(x / cs)
+  for (let i = 0; i < wall.length; i += 4) { const a = (Math.hypot(wall[i + 2] - wall[i], wall[i + 3] - wall[i + 1]) / cs) | 0; for (let k = 0; k <= a; k++) { const t = a ? k / a : 0, kk = key(wall[i] + (wall[i + 2] - wall[i]) * t, wall[i + 1] + (wall[i + 3] - wall[i + 1]) * t); let g = grid.get(kk); if (!g) grid.set(kk, g = []); g.push(i) } }
+  const r = 0.3 / mpp, minL = 2.0 / mpp
+  const dseg = (px: number, py: number, i: number) => { const ax = wall[i], ay = wall[i + 1], bx = wall[i + 2], by = wall[i + 3], vx = bx - ax, vy = by - ay, l2 = vx * vx + vy * vy || 1, t = Math.max(0, Math.min(1, ((px - ax) * vx + (py - ay) * vy) / l2)); return Math.hypot(px - ax - vx * t, py - ay - vy * t) }
+  const near = (x: number, y: number) => { const ci = Math.floor(x / cs), cj = Math.floor(y / cs), R = Math.ceil(r / cs); for (let j = cj - R; j <= cj + R; j++) for (let i = ci - R; i <= ci + R; i++) for (const s of grid.get(j * gx + i) ?? []) if (dseg(x, y, s) <= r) return true; return false }
+  for (let i = 0; i < v.nSeg; i++) {
+    const cl = v.classes[v.cls[i]]; if (cl.fill || selected.has(v.cls[i]) || isAnnoLayer(cl.layer) || /TEXT|NOTE|HATCH/i.test(cl.layer)) continue
+    const x0 = v.segs[i * 4], y0 = v.segs[i * 4 + 1], x1 = v.segs[i * 4 + 2], y1 = v.segs[i * 4 + 3]
+    if (Math.hypot(x1 - x0, y1 - y0) < minL) continue
+    if (near(x0, y0) || near(x1, y1)) out.push(x0, y0, x1, y1)
+  }
+  return out
+}
