@@ -39,6 +39,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (!ink[i]) continue; if (x > 0) inkD[i - 1] = 1; if (x < W - 1) inkD[i + 1] = 1; if (y > 0) inkD[i - W] = 1; if (y < H - 1) inkD[i + W] = 1 }
 
   // bản đồ id phòng kín gốc – tô đa giác bằng thuật toán quét dòng (không khử răng cưa → không sinh pixel lẫn màu)
+  const T0 = performance.now(), lap = (m: string) => console.info('[planPaint]', m, Math.round(performance.now() - T0), 'ms')
   const raw = g.raw_rooms ?? g.rooms
   const roomOf = new Uint16Array(N)
   raw.forEach((r, k) => {
@@ -53,9 +54,10 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       }
     }
   })
+  lap('scanline')
   // lấp khe hở giữa 2 vùng giáp nhau (đa giác được đơn giản hoá riêng nên có thể hở 1–3 px) → không còn vệt trắng
   {
-    const R = 3, fillTo = new Map<number, number>()
+    const R = 3, out = roomOf.slice()
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const i = y * W + x; if (roomOf[i]) continue
       let l = 0, r = 0, u = 0, d2 = 0, dl = 0, dr = 0, du = 0, dd = 0
@@ -63,11 +65,12 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       let best = 0, bd = 99
       if (l && r) { if (dl <= dr) { best = l; bd = dl } else { best = r; bd = dr } }
       if (u && d2) { const [v, dist] = du <= dd ? [u, du] : [d2, dd]; if (dist < bd) { best = v; bd = dist } }
-      if (best) fillTo.set(i, best)
+      if (best) out[i] = best
     }
-    for (const [i, v] of fillTo) roomOf[i] = v
+    roomOf.set(out)
   }
 
+  lap('gapfill')
   // thành phần liên thông của vùng "không nét" trong từng phòng
   const comp = new Int32Array(N), sizes: number[] = [0], compRoom: number[] = [0], stack = new Int32Array(N)
   for (let s = 0; s < N; s++) {
@@ -117,11 +120,12 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
     return oc
   }
 
+  lap('keep')
   // ---- bản vector: viền các vùng sàn (có lỗ cho đồ nội thất) + nét bản vẽ gốc đúng thứ tự vẽ
   let svg: PlanPaint['svg'] = null
   try {
     const cv = await loadCv()
-    const vv = await readVectorPage(buf, pageNo, undefined, { draw: true })
+    const vv = await readVectorPage(buf, pageNo, undefined, { draw: true }); lap('readVector ' + (vv.draw?.length ?? 0))
     if (vv.draw?.length) {
       const sx = W / vv.w
       const floorD: string[] = raw.map(() => '')
@@ -140,6 +144,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
         }
         cs.delete(); hi.delete(); sub.delete(); floorD[k - 1] = d
       }
+      lap('contours')
       const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;')
       let lines = ''
       for (const r of vv.draw) {
@@ -157,5 +162,6 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       }
     }
   } catch (e) { console.warn('Không dựng được bản vector, dùng ảnh', e) }
+  lap('done')
   return { W, H, crop, paint, svg }
 }
