@@ -1,4 +1,4 @@
-// Edge Function "translate" – dịch Việt → Anh chuyên ngành nội thất cho các ô tiếng Anh còn trống (chỉ quản trị viên).
+// Edge Function "translate" – dịch Việt → Anh chuyên ngành nội thất cho các ô tiếng Anh còn trống (quản trị viên và biên tập viên; chỉ điền ô tiếng Anh trống nên an toàn).
 // Dùng cùng nhà cung cấp/khoá với hàm "ai" (Secrets: AI_PROVIDER, GEMINI_API_KEY, ANTHROPIC_API_KEY...). Trả JSON { items: [{ id, en }] }.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
     const tok = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
     const { data: u } = await admin.auth.getUser(tok)
     const { data: me } = u?.user ? await admin.from('profiles').select('role,active').eq('id', u.user.id).maybeSingle() : { data: null }
-    if (!me || !me.active || me.role !== 'admin') return json({ error: 'Chỉ quản trị viên mới được dịch bằng AI' }, 403)
+    if (!me || !me.active || !['admin', 'editor'].includes(me.role)) return json({ error: 'Bạn không có quyền dịch' }, 403)
     if (!Array.isArray(items) || !items.length || items.length > 40) return json({ error: 'Danh sách dịch không hợp lệ (1–40 mục)' }, 400)
 
     const list = items.map(i => `### ${i.id}${i.kind ? ` (${i.kind})` : ''}\n${String(i.vi).slice(0, 3000)}${i.draft ? `\n[draft: ${i.draft}]` : ''}`).join('\n\n')
