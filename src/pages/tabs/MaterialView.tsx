@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../lib/auth'
 import { CATEGORY_GROUPS } from '../../lib/codes'
 import { supabase } from '../../lib/supabase'
-import { allSections, BANDS, sectionOf, sectionTitle, bandTitle, type Lang } from '../../lib/sections'
+import { allSections, bandKeys, moveSection, sectionOf, sectionTitle, bandTitle, type Lang } from '../../lib/sections'
 import SectionNames from '../../components/SectionNames'
 import NewSection from '../../components/NewSection'
+import BandManager, { saveLayout } from '../../components/BandManager'
 import RoomSections from '../../components/RoomSections'
 import AddMaterial, { type AddPreset } from '../../components/AddMaterial'
 import type { ProjectData } from '../../lib/useProject'
@@ -42,6 +43,10 @@ export default function MaterialView({ d }: { d: ProjectData }) {
   const [flt, setFlt] = useState<'all' | 'pending' | 'inferred' | 'missing'>('all')
   const [renaming, setRenaming] = useState(false)
   const [newSec, setNewSec] = useState(false)
+  const [bands, setBands] = useState(false)
+  const [dragKey, setDragKey] = useState<string | null>(null)
+  const [over, setOver] = useState<string | null>(null)   // 'band:X' hoặc 'sec:key'
+  const drop = (band: string, before?: string) => { const k = dragKey; setDragKey(null); setOver(null); if (k && k !== before) saveLayout(d, moveSection(k, band, before)) }
   const [sel, setSel] = useState<string | null>(null)
   const [dlg, setDlg] = useState<AddPreset | null>(null)
   const selEntry = d.entries.find(e => e.id === sel)
@@ -64,12 +69,18 @@ export default function MaterialView({ d }: { d: ProjectData }) {
             {([['all', 'Tất cả'], ['pending', 'Chờ duyệt'], ['inferred', 'Suy luận'], ['missing', '⚠ Thiếu thông tin']] as const).map(([k, l]) => <button key={k} className={'chip' + (flt === k ? ' on' : '')} onClick={() => setFlt(k)}>{l}</button>)}
           </div>
           <div className="nav-row"><button className={'chip' + (!only ? ' on' : '')} onClick={() => { setOnly(''); setSel(null) }}>Tất cả vật liệu <span className="cnt">{live.filter(inRoom).length}</span></button>
-            {canEdit && <button className="chip add" onClick={() => setNewSec(true)} title="Tạo thêm một nhóm vật liệu mới cho dự án">＋ Tạo nhóm vật liệu</button>}</div>
-          {Object.keys(BANDS).map(b => {
-            const row = secs.filter(x => x.sec.band === b); if (!row.length) return null
-            return <div key={b} className="nav-row"><span className="nav-band">{bandTitle(b, 'vn').split(' – ')[0].replace(/^[A-D]\. /, '')}</span>
+            {canEdit && <button className="chip add" onClick={() => setNewSec(true)} title="Tạo thêm một nhóm vật liệu mới cho dự án">＋ Tạo nhóm vật liệu</button>}
+            {canEdit && <button className="chip add" onClick={() => setBands(true)} title="Tạo / tách / gộp các nhóm lớn (Hoàn thiện, Nội thất…) và chuyển mục giữa các nhóm">⇅ Quản lý nhóm lớn</button>}
+            {canEdit && <span className="small muted" style={{ marginLeft: 6 }}>kéo thả ô vật liệu sang hàng khác để chuyển nhóm</span>}</div>
+          {bandKeys().map(b => {
+            const row = secs.filter(x => x.sec.band === b); if (!row.length && !canEdit) return null
+            return <div key={b} className={'nav-row' + (over === 'band:' + b ? ' drop' : '')} onDragOver={e => { if (dragKey) { e.preventDefault(); setOver('band:' + b) } }} onDragLeave={() => setOver(o => (o === 'band:' + b ? null : o))} onDrop={e => { e.preventDefault(); drop(b) }}>
+              <span className="nav-band">{bandTitle(b, 'vn').split(' – ')[0].replace(/^[A-Z]\d?\. /, '')}</span>
+              {!row.length && <span className="small muted">Nhóm trống – kéo thả ô vật liệu vào đây</span>}
               {row.map(({ sec, list }) => { const n = list.filter(inRoom).length, m = nMiss(list); return (
-                <button key={sec.key} className={'chip' + (only === sec.key ? ' on' : n > 0 && m === 0 ? ' done' : '')} onClick={() => { setOnly(sec.key); setSel(null) }} title={sec.en}>{sectionTitle(sec, 'vn')} <span className="cnt">{n}</span>{n > 0 && m === 0 && <span className="cnt ok" title="đã đủ thông tin">✓</span>}{m > 0 && <span className="cnt warn" title="dòng còn thiếu thông tin">⚠{m}</span>}</button>) })}
+                <button key={sec.key} draggable={canEdit} onDragStart={e => { setDragKey(sec.key); e.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => { setDragKey(null); setOver(null) }}
+                  onDragOver={e => { if (dragKey && dragKey !== sec.key) { e.preventDefault(); e.stopPropagation(); setOver('sec:' + sec.key) } }} onDrop={e => { e.preventDefault(); e.stopPropagation(); drop(b, sec.key) }}
+                  className={'chip' + (only === sec.key ? ' on' : n > 0 && m === 0 ? ' done' : '') + (over === 'sec:' + sec.key ? ' drop-before' : '') + (dragKey === sec.key ? ' dragging' : '')} onClick={() => { setOnly(sec.key); setSel(null) }} title={sec.en}>{sectionTitle(sec, 'vn')} <span className="cnt">{n}</span>{n > 0 && m === 0 && <span className="cnt ok" title="đã đủ thông tin">✓</span>}{m > 0 && <span className="cnt warn" title="dòng còn thiếu thông tin">⚠{m}</span>}</button>) })}
             </div>
           })}
         </div>
@@ -82,6 +93,7 @@ export default function MaterialView({ d }: { d: ProjectData }) {
         </div>
       </div>
       {newSec && <NewSection d={d} onClose={() => setNewSec(false)} onDone={k => { setNewSec(false); setOnly(k); setSel(null) }} />}
+      {bands && <BandManager d={d} onClose={() => setBands(false)} />}
       {renaming && <SectionNames d={d} onClose={() => setRenaming(false)} />}
       {dlg && <AddMaterial d={d} room={room} preset={dlg} onClose={() => setDlg(null)} onDone={id => { setDlg(null); setSel(id) }} />}
       {selEntry && <EntryPanel d={d} entry={selEntry} onClose={() => setSel(null)} />}

@@ -6,7 +6,7 @@ import LinkCell from './LinkCell'
 import { toast } from '../lib/toast'
 import { saveEntry, linkedWith } from '../lib/entryLink'
 import { CATEGORIES, CATEGORY_GROUPS } from '../lib/codes'
-import { groupBySection, sectionOf, allSections, sectionTitle, bandTitle, legacyCodes, symbolOf, symbolMap, BANDS, type Lang } from '../lib/sections'
+import { groupBySection, sectionOf, allSections, sectionTitle, bandTitle, legacyCodes, symbolOf, symbolMap, BANDS, bandKeys, type Lang } from '../lib/sections'
 import { locationsOf } from '../lib/locations'
 import type { ProjectData } from '../lib/useProject'
 import type { Entry, Occurrence, Room } from '../lib/types'
@@ -159,7 +159,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                     <td className="c-stt">{n}</td>
                     <td className="c-code"><b>{symbolOf(e, lang, legacy, symMap)}</b>{ms.length > 0 && <div><span className="miss-badge" title={'Còn thiếu: ' + missText(ms)}>⚠ thiếu {new Set(ms.map(m => m.label)).size}</span></div>}{e.link_id && <div><span className="link-badge" title={'Liên kết đồng bộ với: ' + (linkedWith(e, d.entries).map(x => x.code).join(', ') || '—')}>🔗 {linkedWith(e, d.entries).map(x => x.code).join(', ')}</span></div>}<div><span className={'src src-' + e.source}>{e.source === 'image' ? 'Ảnh' : e.source === 'inferred' ? 'Suy luận' : 'Tay'}</span></div></td>
                     <td className="c-vl"><Ed e={e} k="product_code" ph="Mã vật liệu" miss={M('product_code')} /></td>
-                    <td><select value={sectionOf(e).key} disabled={!canEdit} onClick={x => x.stopPropagation()} onChange={x => setSection(e, os, x.target.value)}>{Object.keys(BANDS).map(b => <optgroup key={b} label={bandTitle(b, lang)}>{allSections().filter(x => x.band === b).map(x => <option key={x.key} value={x.key}>{sectionTitle(x, lang)}</option>)}</optgroup>)}</select>
+                    <td><select value={sectionOf(e).key} disabled={!canEdit} onClick={x => x.stopPropagation()} onChange={x => setSection(e, os, x.target.value)}>{bandKeys().map(b => <optgroup key={b} label={bandTitle(b, lang)}>{allSections().filter(x => x.band === b).map(x => <option key={x.key} value={x.key}>{sectionTitle(x, lang)}</option>)}</optgroup>)}</select>
                       {pair('part', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} ph="Bộ phận áp dụng" /></div>)}</td>
                     <td className="c-loc">{locs.map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room?.id ? ' here' : '')}>{roomName(l.room, lang)}{canEdit && <a className="loc-x" title="Bỏ vị trí này" onClick={ev => { ev.stopPropagation(); delLoc(e, l.room) }}>✕</a>}</span>)}
                       {canEdit && <select className="loc-add" value="" onClick={x => x.stopPropagation()} onChange={x => addLoc(e, x.target.value)}><option value="">＋ thêm phòng…</option>{d.rooms.filter(r => !locs.some(l => l.room.id === r.id)).map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}</select>}</td>

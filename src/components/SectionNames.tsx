@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { allSections, BANDS, type NameOverrides } from '../lib/sections'
+import { allSections, bandKeys, bandInfo, type NameOverrides } from '../lib/sections'
 import type { ProjectData } from '../lib/useProject'
 import { toast } from '../lib/toast'
 
@@ -10,7 +10,7 @@ export default function SectionNames({ d, onClose }: { d: ProjectData; onClose: 
   const [busy, setBusy] = useState(false)
   const set = (k: string, f: 'vn' | 'en', x: string) => setV(p => ({ ...p, [k]: { ...p[k], [f]: x } }))
   const rows: { k: string; vn: string; en: string; band?: boolean; custom?: boolean }[] = [
-    ...Object.entries(BANDS).map(([b, t]) => ({ k: 'band:' + b, vn: t.vn, en: t.en, band: true })),
+    ...bandKeys().map(b => ({ k: 'band:' + b, vn: bandInfo(b).vn, en: bandInfo(b).en, band: true })),
     ...allSections().map(s => ({ k: s.key, vn: s.vn, en: s.en, custom: s.custom })),
   ]
   const del = async (key: string) => {

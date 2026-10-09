@@ -42,16 +42,37 @@ export const SECTIONS: Section[] = [
 
 // Nhóm vật liệu do người dùng tạo thêm (lưu theo dự án: projects.custom_sections), xếp cuối nhóm lớn mà nó thuộc về
 let CUSTOM: Section[] = []
-export const setCustomSections = (c: CustomSection[] | null | undefined) => { CUSTOM = (c ?? []).map(x => ({ key: x.key, vn: x.vn, en: x.en, band: x.band, groups: [x.group], custom: true })) }
+let CACHE: Section[] | null = null
+export const setCustomSections = (c: CustomSection[] | null | undefined) => { CUSTOM = (c ?? []).map(x => ({ key: x.key, vn: x.vn, en: x.en, band: x.band, groups: [x.group], custom: true })); CACHE = null }
+
+// Bố cục QUẢN LÝ nhóm (lưu theo dự án: projects.section_layout): nhóm lớn tự tạo/gộp/tách, thứ tự nhóm lớn, mục nào thuộc nhóm lớn nào và thứ tự các mục.
+// Chỉ đổi cách sắp xếp/trình bày – không đụng tới nội dung vật liệu.
+export type SectionLayout = { bandOrder?: string[]; customBands?: { key: string; vn: string; en: string }[]; assign?: Record<string, string>; order?: string[] }
+let LAYOUT: SectionLayout = {}
+export const setSectionLayout = (l: SectionLayout | null | undefined) => { LAYOUT = l ?? {}; CACHE = null }
+export const getSectionLayout = (): SectionLayout => LAYOUT
+export const bandKeys = (): string[] => {
+  const base = Object.keys(BANDS), custom = (LAYOUT.customBands ?? []).map(b => b.key)
+  if (!LAYOUT.bandOrder) return [...base, ...custom]
+  const out = LAYOUT.bandOrder.filter(k => base.includes(k) || custom.includes(k))
+  return out.length ? out : [...base, ...custom]
+}
+export const bandInfo = (k: string): { vn: string; en: string } => BANDS[k] ?? LAYOUT.customBands?.find(b => b.key === k) ?? { vn: k, en: k }
 export const allSections = (): Section[] => {
-  const out = [...SECTIONS]
-  for (const c of CUSTOM) { let at = -1; out.forEach((x, i) => { if (x.band === c.band) at = i }); out.splice(at + 1, 0, c) }
-  return out
+  if (CACHE) return CACHE
+  const base = [...SECTIONS]
+  for (const c of CUSTOM) { let at = -1; base.forEach((x, i) => { if (x.band === c.band) at = i }); base.splice(at + 1, 0, c) }
+  const keys = bandKeys(), ord = new Map((LAYOUT.order ?? []).map((k, i) => [k, i]))
+  const ok = (b?: string) => !!b && keys.includes(b)
+  const list = base.map((x, i) => ({ s: { ...x, band: ok(LAYOUT.assign?.[x.key]) ? LAYOUT.assign![x.key] : ok(x.band) ? x.band : keys[0] }, i }))
+  list.sort((a, b) => keys.indexOf(a.s.band) - keys.indexOf(b.s.band) || (ord.get(a.s.key) ?? 1e6 + a.i) - (ord.get(b.s.key) ?? 1e6 + b.i))
+  return (CACHE = list.map(x => x.s))
 }
 export function sectionOf(e: Pick<Entry, 'group_code' | 'category'> & { section_key?: string | null }): Section {
-  if (e.section_key) { const c = CUSTOM.find(x => x.key === e.section_key); if (c) return c }
-  if ((e.group_code === 'WD' || e.group_code === 'LM') && e.category === 'floor') return SECTIONS.find(s => s.key === 'floor')!
-  return SECTIONS.find(s => s.groups.includes(e.group_code)) ?? SECTIONS[SECTIONS.length - 1]
+  const all = allSections()
+  if (e.section_key) { const c = all.find(x => x.key === e.section_key && x.custom); if (c) return c }
+  const k = (e.group_code === 'WD' || e.group_code === 'LM') && e.category === 'floor' ? 'floor' : (SECTIONS.find(s => s.groups.includes(e.group_code)) ?? SECTIONS[SECTIONS.length - 1]).key
+  return all.find(x => x.key === k)!
 }
 // Tên hạng mục do người dùng đổi (lưu theo dự án: projects.section_names) – dùng chung cho bảng, xuất Excel và bản in
 export type NameOverrides = Record<string, { vn?: string; en?: string }>
@@ -63,7 +84,63 @@ const pick = (base: { vn: string; en: string }, o: { vn?: string; en?: string } 
 }
 export const sectionTitle = (s: Section, lang: Lang) => pick(s, OVR[s.key], lang)
 export const sectionName = (s: Section, lang: 'vn' | 'en') => pick(s, OVR[s.key], lang)
-export const bandTitle = (b: string, lang: Lang) => pick(BANDS[b], OVR['band:' + b], lang)
+/** Tên nhóm lớn; chữ cái đầu (A., B., C…) luôn tự đánh lại theo thứ tự hiện tại nên không bao giờ lệch khi tách/gộp/đổi chỗ */
+export const bandTitle = (b: string, lang: Lang) => {
+  const idx = Math.max(0, bandKeys().indexOf(b)), L = String.fromCharCode(65 + (idx % 26)) + (idx >= 26 ? Math.floor(idx / 26) : '')
+  const strip = (t: string) => t.replace(/^[A-Z]\d?\s*[.)]\s*/, '')
+  const i = bandInfo(b), o = OVR['band:' + b]
+  const vn = L + '. ' + strip(o?.vn?.trim() || i.vn), en = L + '. ' + strip(o?.en?.trim() || i.en)
+  return lang === 'vn' ? vn : lang === 'en' ? en : `${vn} / ${en}`
+}
+
+// ---- Thao tác quản lý nhóm lớn (trả về bố cục mới; người gọi lưu vào dự án)
+const rnd = () => Math.random().toString(36).slice(2, 6)
+const seq = () => allSections().map(x => x.key)
+const withOrder = (l: SectionLayout, order: string[]): SectionLayout => ({ ...l, order })
+/** Chuyển một mục sang nhóm lớn khác; đặt trước mục beforeKey (nếu có) hoặc cuối nhóm lớn đó */
+export function moveSection(key: string, toBand: string, beforeKey?: string): SectionLayout {
+  const all = allSections(), rest = all.filter(x => x.key !== key)
+  let at = rest.length
+  if (beforeKey && rest.some(x => x.key === beforeKey)) at = rest.findIndex(x => x.key === beforeKey)
+  else { const last = rest.map(x => x.band).lastIndexOf(toBand); at = last >= 0 ? last + 1 : (() => { const keys = bandKeys(), bi = keys.indexOf(toBand); const nxt = rest.findIndex(x => keys.indexOf(x.band) > bi); return nxt < 0 ? rest.length : nxt })() }
+  const order = rest.map(x => x.key); order.splice(at, 0, key)
+  return { ...withOrder({ ...LAYOUT, bandOrder: bandKeys() }, order), assign: { ...(LAYOUT.assign ?? {}), [key]: toBand } }
+}
+export function addBand(vn: string, en: string, afterBand?: string): { layout: SectionLayout; key: string } {
+  const key = `b_${rnd()}`, keys = bandKeys(), at = afterBand ? keys.indexOf(afterBand) + 1 : keys.length
+  const bandOrder = [...keys]; bandOrder.splice(at, 0, key)
+  return { key, layout: { ...LAYOUT, order: LAYOUT.order ?? seq(), bandOrder, customBands: [...(LAYOUT.customBands ?? []), { key, vn: vn.toUpperCase(), en: (en || vn).toUpperCase() }] } }
+}
+export const bandSections = (b: string) => allSections().filter(x => x.band === b)
+export function removeBand(b: string): SectionLayout {
+  const keys = bandKeys().filter(k => k !== b)
+  return { ...LAYOUT, order: LAYOUT.order ?? seq(), bandOrder: keys, customBands: (LAYOUT.customBands ?? []).filter(x => x.key !== b) }
+}
+/** Gộp nhóm lớn `from` vào `to` (các mục nối vào cuối `to`), rồi bỏ nhóm lớn `from` */
+export function mergeBand(from: string, to: string): SectionLayout {
+  const moved = bandSections(from).map(x => x.key); let l = { ...LAYOUT }
+  const assign = { ...(l.assign ?? {}) }; for (const k of moved) assign[k] = to
+  const rest = allSections().filter(x => !moved.includes(x.key)).map(x => x.key)
+  const lastTo = allSections().filter(x => !moved.includes(x.key)).map(x => x.band).lastIndexOf(to)
+  const order = [...rest]; order.splice(lastTo >= 0 ? lastTo + 1 : order.length, 0, ...moved)
+  l = { ...l, assign, order, bandOrder: bandKeys() }
+  const keys = bandKeys().filter(k => k !== from)
+  return { ...l, bandOrder: keys, customBands: (l.customBands ?? []).filter(x => x.key !== from) }
+}
+/** Tách các mục đã chọn của nhóm lớn `from` thành một nhóm lớn mới đặt ngay sau nó */
+export function splitBand(from: string, keysToMove: string[], vn: string, en: string): { layout: SectionLayout; key: string } {
+  const a = addBand(vn, en, from), assign = { ...(a.layout.assign ?? {}) }
+  for (const k of keysToMove) assign[k] = a.key
+  const all = allSections(), moved = all.filter(x => keysToMove.includes(x.key)).map(x => x.key), rest = all.filter(x => !moved.includes(x.key)).map(x => x.key)
+  return { key: a.key, layout: { ...a.layout, assign, order: [...rest, ...moved] } }
+}
+export function moveBand(b: string, dir: -1 | 1): SectionLayout {
+  const keys = bandKeys(), i = keys.indexOf(b), j = i + dir
+  if (i < 0 || j < 0 || j >= keys.length) return LAYOUT
+  ;[keys[i], keys[j]] = [keys[j], keys[i]]
+  return { ...LAYOUT, order: LAYOUT.order ?? seq(), bandOrder: keys }
+}
+
 
 /** Nhóm các mã theo mục chuẩn, đúng thứ tự công ty; mã sắp theo ký hiệu */
 export function groupBySection<T extends Entry>(entries: T[]): { section: Section; items: T[] }[] {
@@ -158,8 +235,8 @@ export const PRESETS: { key: string; label: string; make: () => Record<string, S
   { key: 'one', label: 'Gộp tất cả vào 1 sheet', make: () => ({}) },
   { key: 'loose', label: 'Tách riêng đồ rời', make: () => ({ loose: 'own' }) },
   { key: 'furn', label: 'Tách nội thất (liền tường + rời) ra 1 sheet', make: () => ({ joinery: 'c1', loose: 'c1' }) },
-  { key: 'bands', label: 'Hoàn thiện (A+B) | Nội thất & thiết bị (C) | Decor & art (D)', make: () => Object.fromEntries(SECTIONS.map(s => [s.key, s.band === 'D' ? 'c2' : s.band === 'C' ? 'c1' : 'main'])) as Record<string, SheetTarget> },
-  { key: 'all', label: 'Mỗi mục vật liệu 1 sheet riêng', make: () => Object.fromEntries(SECTIONS.map(s => [s.key, 'own'])) as Record<string, SheetTarget> },
+  { key: 'bands', label: 'Hoàn thiện (A+B) | Nội thất & thiết bị (C) | Decor & art (D)', make: () => Object.fromEntries(allSections().map(s => [s.key, s.band === 'D' ? 'c2' : s.band === 'A' || s.band === 'B' ? 'main' : 'c1'])) as Record<string, SheetTarget> },
+  { key: 'all', label: 'Mỗi mục vật liệu 1 sheet riêng', make: () => Object.fromEntries(allSections().map(s => [s.key, 'own'])) as Record<string, SheetTarget> },
 ]
 const safeName = (s: string) => s.replace(/[\\/*?:\[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 31) || 'Sheet'
 export function planSheets<T extends Entry>(groups: { section: Section; items: T[] }[], o: ExportOpts): { name: string; groups: { section: Section; items: T[] }[] }[] {

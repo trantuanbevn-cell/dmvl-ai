@@ -1,4 +1,4 @@
-import { setNameOverrides, setCustomSections } from './sections'
+import { setNameOverrides, setCustomSections, setSectionLayout } from './sections'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase, signedUrls } from './supabase'
 import { toast } from './toast'
@@ -35,6 +35,7 @@ export function useProject(id: string): ProjectData {
     const urls = paths.length ? await signedUrls(paths) : {}
     setCustomSections((p.data as any)?.custom_sections)
     setNameOverrides((p.data as any)?.section_names)
+    setSectionLayout((p.data as any)?.section_layout)
     setS({ project: p.data as Project, rooms: (r.data ?? []) as Room[], pages, entries, occ, warnings: (w.data ?? []) as Warning[], floors, rules: (ru.data ?? []) as ProjectRule[], urls, loading: false })
   }, [id])
   useEffect(() => { reload() }, [reload])
