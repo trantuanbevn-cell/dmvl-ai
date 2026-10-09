@@ -20,24 +20,34 @@ const hex = (s: string): [number, number, number] => { const n = parseInt(s.repl
 export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorGeom, longEdge = 3400): Promise<PlanPaint> {
   const TT = performance.now(), plog = (m: string) => console.info('[planPaint*]', m, Math.round(performance.now() - TT), 'ms')
   plog('start ' + buf.byteLength)
-  const doc = await pdfjs.getDocument({ data: buf.slice(0) }).promise
-  plog('doc')
-  const page = await doc.getPage(Math.min(pageNo, doc.numPages))
-  plog('page')
-  const v1 = page.getViewport({ scale: 1 }), vp = page.getViewport({ scale: longEdge / Math.max(v1.width, v1.height) })
-  const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height)
-  const cx = c.getContext('2d', { willReadFrequently: true })!; cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height)
-  // ẩn lớp lưới trục + dim: chỉ dùng làm dữ liệu đo, không thể hiện trên mặt bằng màu
-  let ocp: Promise<any> | undefined
-  const dbg = new URLSearchParams(location.search).get('dbg') ?? ''
-  if (!dbg.includes('nooc')) try {
-    const cfg: any = await (doc as any).getOptionalContentConfig()
-    for (const [id, gp] of Object.entries((cfg.getGroups?.() ?? {}) as Record<string, { name?: string }>)) if (isAnnoLayer(String(gp?.name ?? ''))) cfg.setVisibility(id, false)
-    ocp = Promise.resolve(cfg)
-  } catch { /* PDF không có layer */ }
-  plog('oc ' + !!ocp)
-  await page.render({ canvasContext: cx, viewport: vp, ...(ocp ? { optionalContentConfigPromise: ocp } : {}) } as any).promise
-  plog('rendered')
+  // đọc nét vector (đúng thứ tự vẽ, đúng màu) rồi TỰ VẼ lên canvas: bỏ lớp dim + lưới trục, nhanh hơn và không phụ thuộc bộ dựng hình của PDF.js
+  let vv: Awaited<ReturnType<typeof readVectorPage>> | null = null
+  try { vv = await readVectorPage(buf, pageNo, undefined, { draw: true }) } catch (e) { console.warn('đọc vector lỗi', e) }
+  plog('readVector ' + (vv?.draw?.length ?? 0))
+  let c: HTMLCanvasElement, cx: CanvasRenderingContext2D
+  if (vv?.draw?.length) {
+    const sc = longEdge / Math.max(vv.w, vv.h)
+    c = document.createElement('canvas'); c.width = Math.round(vv.w * sc); c.height = Math.round(vv.h * sc)
+    cx = c.getContext('2d', { willReadFrequently: true })!; cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height)
+    cx.setTransform(c.width / vv.w, 0, 0, c.height / vv.h, 0, 0); cx.lineJoin = 'round'; cx.lineCap = 'round'
+    for (const r of vv.draw) {
+      if (isAnnoLayer(vv.classes[r.cls]?.layer ?? '')) continue
+      const p = new Path2D(r.d)
+      if (r.fc) { cx.fillStyle = r.fc; cx.fill(p) }
+      if (r.sc) { cx.strokeStyle = r.sc; cx.lineWidth = Math.max(r.lw, 0.18); cx.stroke(p) }
+    }
+    cx.fillStyle = '#000'
+    for (const t of vv.texts) { if (t.t.length < 2 || /^[\d.,\s]+$/.test(t.t)) continue; cx.save(); cx.translate(t.x, t.y); if (t.rot) cx.rotate((t.rot * Math.PI) / 180); cx.font = `${t.h}px Arial, sans-serif`; cx.fillText(t.t, 0, 0); cx.restore() }
+    cx.setTransform(1, 0, 0, 1, 0, 0)
+  } else { // không đọc được nét vector → dựng bằng PDF.js (không ẩn được lớp)
+    const doc = await pdfjs.getDocument({ data: buf.slice(0) }).promise
+    const page = await doc.getPage(Math.min(pageNo, doc.numPages))
+    const v1 = page.getViewport({ scale: 1 }), vp = page.getViewport({ scale: longEdge / Math.max(v1.width, v1.height) })
+    c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height)
+    cx = c.getContext('2d', { willReadFrequently: true })!; cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height)
+    await page.render({ canvasContext: cx, viewport: vp } as any).promise
+  }
+  plog('drawn')
   const W = c.width, H = c.height, N = W * H
   const base = cx.getImageData(0, 0, W, H), d = base.data
   const lum = new Uint8Array(N), ink = new Uint8Array(N)
@@ -132,8 +142,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
   let svg: PlanPaint['svg'] = null
   try {
     const cv = await loadCv()
-    const vv = await readVectorPage(buf, pageNo, undefined, { draw: true }); lap('readVector ' + (vv.draw?.length ?? 0))
-    if (vv.draw?.length) {
+    if (vv?.draw?.length) {
       const sx = W / vv.w
       const floorD: string[] = raw.map(() => '')
       const ids = new Map<number, [number, number, number, number]>()
