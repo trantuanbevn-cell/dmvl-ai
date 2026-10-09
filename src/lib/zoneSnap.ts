@@ -77,7 +77,7 @@ export type SnapStats = { chains: number; straightened: number; poly: number; fl
  * @param wsegs nét tường dạng đoạn thẳng [x1,y1,x2,y2,…] theo px
  * @param pxPerM số px trên 1 m thật
  */
-export function straightenZones(lab: Uint16Array, W: number, H: number, wallMask: Uint8Array, wsegs: ArrayLike<number>, pxPerM: number): SnapStats {
+export function straightenZones(lab: Uint16Array, W: number, H: number, wallMask: Uint8Array, wsegs: ArrayLike<number>, pxPerM: number, inkMask?: Uint8Array): SnapStats {
   const st: SnapStats = { chains: 0, straightened: 0, poly: 0, flipped: 0, absorbed: 0, pockets: 0 }
   const wm2 = dilate(wallMask, W, H, 2), wm5 = dilate(wallMask, W, H, Math.max(4, Math.round(0.16 * pxPerM))), wm1 = dilate(wallMask, W, H, 1)
   const grid = segGrid(wsegs)
@@ -170,7 +170,7 @@ export function straightenZones(lab: Uint16Array, W: number, H: number, wallMask
     }
   }
   // 2) gom mảnh vụn / dải mỏng; 3) tô nốt ô kín nhỏ (cung mở cửa)
-  const r = absorbSmall(lab, W, H, wm1, pxPerM)
+  const r = absorbSmall(lab, W, H, inkMask ?? wm1, pxPerM)
   st.absorbed = r.absorbed; st.pockets = r.pockets
   return st
 }
@@ -256,7 +256,7 @@ export function absorbSmall(lab: Uint16Array, W: number, H: number, wm1: Uint8Ar
   for (let c = 1; c <= comp0.n; c++) {
     if (S0.border[c]) continue
     const A = S0.area[c] / px2, t = (2 * S0.area[c]) / Math.max(1, S0.per[c]) / pxPerM
-    if (A > 3.5 || t < 0.3) continue
+    if (A > 8 || t < 0.3) continue
     const tgt = vote(S0.idx[c], 0, 5); if (!tgt) continue
     for (const i of S0.idx[c]) lab[i] = tgt
     pockets++

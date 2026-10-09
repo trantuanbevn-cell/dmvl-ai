@@ -100,7 +100,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
         for (let t = 0; t <= n; t++) { const x = Math.round(ax + ((bx - ax) * t) / n), y = Math.round(ay + ((by - ay) * t) / n); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < W && yy < H) wall[yy * W + xx] = 1 } }
       }
       nearWall = dilate(wall, W, H, 4)
-      straightenZones(roomOf, W, H, wall, wsegs, pxPerM)
+      straightenZones(roomOf, W, H, wall, wsegs, pxPerM, inkD)
       fillDoorSwings(roomOf, W, H, detectDoors(vv, g.m_per_pt).map(d => d.map(v => v * sx0)))
     } catch (e) { console.warn('bắt điểm ranh giới lỗi', e) }
   }
@@ -163,6 +163,16 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       const doors = detectDoors(vv, g.m_per_pt)
       const hulls = islandHulls(vv, g.m_per_pt, sel).filter(h => {
         let cx = 0, cy = 0; const n = h.length / 2; for (let i = 0; i < h.length; i += 2) { cx += h[i]; cy += h[i + 1] } cx /= n; cy /= n
+        // hình bao mà phần lớn bên trong là sàn thông thoáng (không bị nét bao kín, vd. tam giác nối lệch các nét rời) → không phải đồ nội thất, bỏ
+        const sx0 = W / vv.w, P: number[] = h.map(v => v * sx0); let bx0 = 1e9, by0 = 1e9, bx1 = -1e9, by1 = -1e9
+        for (let i = 0; i < P.length; i += 2) { bx0 = Math.min(bx0, P[i]); bx1 = Math.max(bx1, P[i]); by0 = Math.min(by0, P[i + 1]); by1 = Math.max(by1, P[i + 1]) }
+        let tot = 0, nonInk = 0, floorN = 0
+        for (let y = Math.max(0, Math.floor(by0)); y <= Math.min(H - 1, Math.ceil(by1)); y++) for (let x = Math.max(0, Math.floor(bx0)); x <= Math.min(W - 1, Math.ceil(bx1)); x++) {
+          let inside = false
+          for (let i = 0, j = P.length - 2; i < P.length; j = i, i += 2) if ((P[i + 1] > y) !== (P[j + 1] > y) && x < ((P[j] - P[i]) * (y - P[i + 1])) / (P[j + 1] - P[i + 1]) + P[i]) inside = !inside
+          if (inside) { tot++; if (!ink[y * W + x]) { nonInk++; if (keep[y * W + x]) floorN++ } }
+        }
+        if (tot > 0.5 * pxPerM * pxPerM && floorN > 0.5 * nonInk) return false
         return !doors.some(d => { const r = Math.hypot(d[2] - d[0], d[3] - d[1]); return Math.hypot(cx - d[0], cy - d[1]) < 0.95 * r })
       })
       const hullD = hulls.map(h => { let d = ''; for (let i = 0; i < h.length; i += 2) d += (i ? 'L' : 'M') + +h[i].toFixed(2) + ' ' + +h[i + 1].toFixed(2); return d + 'Z' }).join('')
@@ -176,7 +186,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
         let d = ''
         for (let c = 0; c < cs.size(); c++) {
           const cc = cs.get(c), isHole = hi.data32S[c * 4 + 3] >= 0, area = cv.contourArea(cc)
-          if (area < (isHole ? 0.25 : 0.3) * pxPerM * pxPerM) { cc.delete(); continue }   // lỗ nhỏ (<0,25 m²) coi như sàn liền
+          if (area < (isHole ? 8 : 0.3) * pxPerM * pxPerM) { cc.delete(); continue }   // sàn đổ liền một màu: bỏ mọi lỗ (đồ nội thất/ngóc ngách) – đồ nội thất tô trắng đè lên sau
           const pts: [number, number][] = []; for (let q = 0; q < cc.rows; q++) pts.push([cc.data32S[q * 2] + bx0 - 3 + 0.5, cc.data32S[q * 2 + 1] + by0 - 3 + 0.5])
           d += regularize(pts, pxPerM, snap, nearWall ? (q => { let h = 0; for (const p of q) { const x = Math.round(p[0]), y = Math.round(p[1]); if (x >= 0 && y >= 0 && x < W && y < H && nearWall![y * W + x]) h++ } return h >= 0.6 * q.length }) : undefined); cc.delete()
         }
