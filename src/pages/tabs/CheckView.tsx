@@ -7,7 +7,7 @@ import { toast } from '../../lib/toast'
 import { useAuth } from '../../lib/auth'
 import OccCrop from '../../components/OccCrop'
 import EntryPanel from '../../components/EntryPanel'
-import { checkEntries } from '../../lib/checks'
+import { checkEntries, fixCategory } from '../../lib/checks'
 import { linkSuggestions, linkConflicts, linkEntries, resyncGroup } from '../../lib/entryLink'
 import type { Lang } from '../../lib/sections'
 import SpellReview from '../../components/SpellReview'
@@ -128,7 +128,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
                 <td>{e.name_vn}</td>
                 <td>{is.map((i, k) => <span key={k} className={'chk-tag chk-' + i.kind}>{i.text}</span>)}</td>
                 <td className="small">{locationsOf(e.id, d.occ, d.rooms, d.pages).map(l => l.room.code).join(', ') || '—'}</td>
-                <td><button className="btn sm" onClick={() => setSel(e.id)}>Mở & sửa</button></td>
+                <td className="row gap sm-gap">{is.some(i => i.fix === 'category') && <button className="btn sm primary" title="Đặt “Bề mặt / mục” đúng theo nhóm mã" onClick={async () => { await fixCategory(e); await d.reload(); setTick(t => t + 1) }}>Tự sửa</button>}<button className="btn sm" onClick={() => setSel(e.id)}>Mở & sửa</button></td>
               </tr>))}</tbody>
           </table></div>}
           </div>
@@ -183,7 +183,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
             </div>
           </div>
         </div>)}
-      {selEntry && <div className="drawer-bg" onMouseDown={() => setSel(null)}><div className="drawer" onMouseDown={e => e.stopPropagation()}><EntryPanel d={d} entry={selEntry} onClose={() => setSel(null)} /></div></div>}
+      {selEntry && <div className="drawer-bg" onMouseDown={() => setSel(null)}><div className="drawer" onMouseDown={e => e.stopPropagation()}><EntryPanel d={d} entry={selEntry} issues={issues.find(r => r.e.id === selEntry.id)?.issues} onClose={() => setSel(null)} /></div></div>}
     </div>
   )
 }

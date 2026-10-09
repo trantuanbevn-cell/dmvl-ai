@@ -353,3 +353,7 @@ input[readonly], textarea[readonly] { cursor: default }
 .style-card svg { width: 100%; display: block; box-shadow: 0 1px 4px rgba(0,0,0,.2) }
 .shot-cap { font-size: 10px; line-height: 1.2; color: #777; max-width: 96px; cursor: pointer; word-break: break-word }
 .shot-wrap:has(.shot-cap) { display: inline-block; vertical-align: top; margin: 0 2px 4px }
+.fld.bad input, .fld.bad textarea, .fld.bad select { border-color: #d32f2f !important; background: #fff1f0 !important; box-shadow: 0 0 0 2px rgba(211,47,47,.18) }
+.fld.bad { color: #b71c1c; font-weight: 600 }
+.flag-box { outline: 2px solid #d32f2f; background: #fff1f0 !important; border-radius: 8px }
+.issue-banner { background: #fff1f0; border: 1px solid #d32f2f; border-radius: 8px; padding: 8px 10px; margin: 8px 0; color: #b71c1c }
