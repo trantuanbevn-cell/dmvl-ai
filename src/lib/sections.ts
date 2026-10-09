@@ -1,6 +1,6 @@
 // Chuẩn trình bày danh mục theo mẫu công ty (đối chiếu 11 file DMVL: Capital SQ, Villa Đà Nẵng, Waldorf BOH, Intimex, Thủy Tạ…):
 // nhóm theo vật liệu; bề mặt chính (sàn – tường – trần) lên đầu, rồi vật liệu/cấu kiện khác, nội thất & thiết bị, trang trí & artwork.
-import { GROUPS } from './codes'
+import { GROUPS, type Group } from './codes'
 import type { Entry } from './types'
 
 export type Lang = 'vn' | 'en' | 'both'
@@ -44,6 +44,21 @@ export const SECTIONS: Section[] = [
 let CUSTOM: Section[] = []
 let CACHE: Section[] | null = null
 export const setCustomSections = (c: CustomSection[] | null | undefined) => { CUSTOM = (c ?? []).map(x => ({ key: x.key, vn: x.vn, en: x.en, band: x.band, groups: [x.group], custom: true })); CACHE = null }
+
+/** Danh sách nhóm mã (tiền tố) = nhóm chuẩn + tiền tố do người dùng tự tạo cho nhóm vật liệu riêng của dự án */
+export const customGroups = (): Group[] => {
+  const seen = new Set(GROUPS.map(g => g.code)), out: Group[] = []
+  for (const c of CUSTOM) { const code = c.groups[0]; if (seen.has(code)) continue; seen.add(code); out.push({ code, vn: c.vn.charAt(0) + c.vn.slice(1).toLowerCase(), en: c.en.charAt(0) + c.en.slice(1).toLowerCase(), legacy: code, csi: '', attrs_vn: '', attrs_en: '', std_vn: '', std_intl: '' }) }
+  return out
+}
+export const allGroups = (): Group[] => [...GROUPS, ...customGroups()]
+/** Tiền tố mới hợp lệ: 2–5 chữ cái in hoa, chưa trùng nhóm/ký hiệu nào có sẵn */
+export const newPrefixError = (code: string, ownKey?: string): string => {
+  if (!/^[A-Z]{2,5}$/.test(code)) return 'Tiền tố gồm 2–5 chữ cái in hoa (A–Z), vd: EPX'
+  if (GROUPS.some(g => g.code === code) || PREFIXES.some(p => p.prefix === code)) return `“${code}” đã là tiền tố có sẵn – hãy chọn trong danh sách`
+  if (CUSTOM.some(c => c.groups[0] === code && c.key !== ownKey)) return `“${code}” đang được nhóm khác dùng`
+  return ''
+}
 
 // Bố cục QUẢN LÝ nhóm (lưu theo dự án: projects.section_layout): nhóm lớn tự tạo/gộp/tách, thứ tự nhóm lớn, mục nào thuộc nhóm lớn nào và thứ tự các mục.
 // Chỉ đổi cách sắp xếp/trình bày – không đụng tới nội dung vật liệu.

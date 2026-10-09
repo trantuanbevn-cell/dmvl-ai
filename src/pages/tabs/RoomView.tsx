@@ -2,7 +2,8 @@ import { syncLibrary } from '../../lib/matLibrary'
 import { useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { CATEGORIES, GROUPS, roomTypeLabel } from '../../lib/codes'
+import { CATEGORIES, roomTypeLabel } from '../../lib/codes'
+import { allGroups } from '../../lib/sections'
 import { clampBox } from '../../lib/crop'
 import type { ProjectData } from '../../lib/useProject'
 import type { Entry, Occurrence } from '../../lib/types'
@@ -176,7 +177,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
           {room && <RoomSuggest d={d} room={room} onAdd={setDlg} />}
           {canEdit && <div className="row gap add-row">
             <select value={add.category} onChange={e => setAdd({ ...add, category: e.target.value })}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.vn}</option>)}</select>
-            <select value={add.group} onChange={e => setAdd({ ...add, group: e.target.value })}>{GROUPS.map(g => <option key={g.code} value={g.code}>{g.code} – {g.vn}</option>)}</select>
+            <select value={add.group} onChange={e => setAdd({ ...add, group: e.target.value })}>{allGroups().map(g => <option key={g.code} value={g.code}>{g.code} – {g.vn}</option>)}</select>
             <input placeholder="Thêm hạng mục bị thiếu, vd: Ghế băng thay đồ" value={add.name} onChange={e => setAdd({ ...add, name: e.target.value })} onKeyDown={e => e.key === 'Enter' && addItem()} style={{ flex: 1 }} />
             <button className="btn primary sm" onClick={addItem}>+ Thêm</button>
           </div>}

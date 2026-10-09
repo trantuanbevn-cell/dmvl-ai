@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import ProductReadDialog from './ProductReadDialog'
 import { saveEntry, linkedWith, linkEntries, unlinkEntry, SYNC_LABEL } from '../lib/entryLink'
-import { GROUPS, CATEGORIES } from '../lib/codes'
+import { CATEGORIES } from '../lib/codes'
+import { allGroups } from '../lib/sections'
 import { writeSpecs, applyProduct } from '../lib/pipeline'
 import { librarySuggestions, saveToLibrary, searchLinks, LibProduct } from '../lib/library'
 import type { Entry } from '../lib/types'
@@ -100,7 +101,7 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
       </div>
 
       <div className="grid2">
-        <label className="fld">Nhóm<select value={entry.group_code} onChange={e => set({ group_code: e.target.value })}>{GROUPS.map(g => <option key={g.code} value={g.code}>{g.code} – {g.vn}</option>)}</select></label>
+        <label className="fld">Nhóm<select value={entry.group_code} onChange={e => set({ group_code: e.target.value })}>{allGroups().map(g => <option key={g.code} value={g.code}>{g.code} – {g.vn}</option>)}</select></label>
         <label className="fld">Bề mặt / mục<select value={entry.category ?? ''} onChange={e => set({ category: e.target.value })}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.vn}</option>)}</select></label>
       </div>
 

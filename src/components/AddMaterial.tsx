@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { CATEGORIES, GROUPS } from '../lib/codes'
+import { CATEGORIES } from '../lib/codes'
+import { allGroups } from '../lib/sections'
 import { addManualEntry, cloneExtra } from '../lib/pipeline'
 import { findSimilar } from '../lib/similar'
 import type { ProjectData } from '../lib/useProject'
@@ -60,7 +61,7 @@ export default function AddMaterial({ d, room: room0, preset, onClose, onDone }:
         {preset.hint && <p className="small muted">{preset.hint}</p>}
         {!room0 && <label className="fld">Phòng áp dụng (có thể thêm/bỏ sau ở cột Vị trí)<select value={roomSel} onChange={e => setRoomSel(e.target.value)}><option value="">— chưa gán phòng —</option>{d.rooms.map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}</select></label>}
         <div className="grid2">
-          <label className="fld">Nhóm<select value={f.group} onChange={e => setF({ ...f, group: e.target.value })}>{GROUPS.map(g => <option key={g.code} value={g.code}>{g.code} – {g.vn}</option>)}</select></label>
+          <label className="fld">Nhóm<select value={f.group} onChange={e => setF({ ...f, group: e.target.value })}>{allGroups().map(g => <option key={g.code} value={g.code}>{g.code} – {g.vn}</option>)}</select></label>
           <label className="fld">Bề mặt / mục<select value={f.category} onChange={e => setF({ ...f, category: e.target.value })}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.vn}</option>)}</select></label>
         </div>
         <label className="fld">Sao chép từ vật liệu có sẵn (nhân đôi, chỉ sửa vài nội dung)
