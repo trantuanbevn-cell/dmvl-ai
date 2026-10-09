@@ -1,5 +1,6 @@
 import { syncLibrary } from '../../lib/matLibrary'
 import { useEffect, useRef, useState } from 'react'
+import EnFill from '../../components/EnFill'
 import { useAuth } from '../../lib/auth'
 import { CATEGORY_GROUPS } from '../../lib/codes'
 import { supabase } from '../../lib/supabase'
@@ -69,6 +70,7 @@ export default function MaterialView({ d }: { d: ProjectData }) {
             <span className="small muted" style={{ marginLeft: 8 }}>Lọc:</span>
             {([['all', 'Tất cả'], ['pending', 'Chờ duyệt'], ['inferred', 'Suy luận'], ['missing', '⚠ Thiếu thông tin']] as const).map(([k, l]) => <button key={k} className={'chip' + (flt === k ? ' on' : '')} onClick={() => setFlt(k)}>{l}</button>)}
           </div>
+          <EnFill d={d} lang={lang} />
           <div className="nav-row"><button className={'chip' + (!only ? ' on' : '')} onClick={() => { setOnly(''); setSel(null) }}>Tất cả vật liệu <span className="cnt">{live.filter(inRoom).length}</span></button>
             {canEdit && <button className="chip add" onClick={() => setNewSec(true)} title="Tạo thêm một nhóm vật liệu mới cho dự án">＋ Tạo nhóm vật liệu</button>}
             {canEdit && <button className="chip add" onClick={() => setBands(true)} title="Tạo / tách / gộp các nhóm lớn (Hoàn thiện, Nội thất…) và chuyển mục giữa các nhóm">⇅ Quản lý nhóm lớn</button>}

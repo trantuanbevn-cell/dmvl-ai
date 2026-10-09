@@ -1,3 +1,4 @@
+import EnFill from '../../components/EnFill'
 import { syncLibrary } from '../../lib/matLibrary'
 import { useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -173,6 +174,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
             <span className="small muted" style={{ marginLeft: 12 }}>Lọc:</span>
             {([['all', 'Tất cả'], ['pending', 'Chờ duyệt'], ['inferred', 'Suy luận (không thấy trong ảnh)'], ['missing', `⚠ Thiếu thông tin${rm.rows ? ' (' + rm.rows + ')' : ''}`]] as const).map(([k, l]) => <button key={k} className={'chip' + (flt === k ? ' on' : '')} onClick={() => setFlt(k)}>{l}</button>)}
           </div>
+          <EnFill d={d} lang={lang} />
           <RoomSections d={d} room={room!} lang={lang} filter={flt} sel={sel} onPick={pick} onDetail={id => { setSel(id); setSelOcc(null) }} onRemove={removeOcc} onAdd={setDlg} />
           {room && <RoomSuggest d={d} room={room} onAdd={setDlg} />}
           {canEdit && <div className="row gap add-row">
