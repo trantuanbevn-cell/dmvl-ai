@@ -12,6 +12,7 @@ import type { ProjectData } from '../lib/useProject'
 import type { Entry, Occurrence, Room } from '../lib/types'
 import OccCrop from './OccCrop'
 import AddShot from './AddShot'
+import RoomShotFallback from './RoomShotFallback'
 import { analyzeRoom } from '../lib/pipeline'
 import MatImage from './MatImage'
 import { StatusDot } from '../pages/tabs/MaterialView'
@@ -133,6 +134,25 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     } catch (er) { toast('Rà phòng lỗi: ' + String(er)); setShotRoom(roomId); setShotFor(e) }
     setScanning(null); d.reload()
   }
+  /** Rà lần lượt các phòng chưa có ảnh của vật liệu này bằng AI (mỗi phòng 1 lượt phân tích) */
+  const scanMissing = async (e: Entry, roomIds: string[]) => {
+    if (!d.project) return
+    const rooms = roomIds.map(id => d.rooms.find(r => r.id === id)).filter((r): r is Room => !!r && d.pages.some(p => p.room_id === r.id && p.kind === 'render'))
+    if (!rooms.length) return
+    if (!confirm(`AI sẽ rà lần lượt ${rooms.length} phòng (${rooms.map(r => r.code).join(', ')}) để tìm ${e.name_vn} và khoanh mũi tên. Mỗi phòng mất vài chục giây và dùng lượt AI; thông tin đã sửa tay giữ nguyên, có thể xuất hiện thêm mã mới ở trạng thái “Chờ duyệt”. Tiếp tục?`)) return
+    let found = 0
+    for (const [i, room] of rooms.entries()) {
+      setScanning(`${room.code} (${i + 1}/${rooms.length})`)
+      try {
+        await analyzeRoom(d.project, room, () => {})
+        const { data: oc } = await supabase.from('occurrences').select('*').eq('entry_id', e.id).eq('room_id', room.id)
+        const rows = (oc ?? []) as Occurrence[]
+        if (rows.some(o => o.bbox)) { found++; const dead = rows.filter(o => !o.bbox && !o.page_id).map(o => o.id); if (dead.length) await supabase.from('occurrences').delete().in('id', dead) }
+      } catch (er) { toast(`${room.code}: ${String(er)}`) }
+    }
+    setScanning(null); await d.reload()
+    toast(`Xong: khoanh được ${found}/${rooms.length} phòng.${found < rooms.length ? ' Phòng còn lại AI không thấy vật liệu – bấm vào ảnh phòng để khoanh tay.' : ''}`, found ? 'ok' : undefined)
+  }
   /** Ghi chú cho hình: vd “Phối cảnh gốc: thảm – đã đổi sang sàn vinyl” (hình giữ nguyên, người xem hiểu ngữ cảnh) */
   const setNote = async (o: Occurrence, text: string | null) => {
     const { error } = await supabase.from('occurrences').update({ note: text || null, origin: 'manual' }).eq('id', o.id)
@@ -195,7 +215,10 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                     <td className="c-loc">{locs.map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room?.id ? ' here' : '')}>{roomName(l.room, lang)}{canEdit && <a className="loc-x" title="Bỏ vị trí này" onClick={ev => { ev.stopPropagation(); delLoc(e, l.room) }}>✕</a>}</span>)}
                       {canEdit && <select className="loc-add" value="" onClick={x => x.stopPropagation()} onChange={x => addLoc(e, x.target.value)}><option value="">＋ thêm phòng…</option>{d.rooms.filter(r => !locs.some(l => l.room.id === r.id)).map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}</select>}</td>
                     <td className="c-img">{shots.length ? shots.map(o => <span key={o.id} className="shot-wrap" draggable={canEdit} title={canEdit ? 'Kéo thả sang vật liệu khác để chuyển ảnh (giữ Ctrl để sao chép)' : undefined} onDragStart={ev => { ev.dataTransfer.setData('text/dmvl-occ', o.id); ev.dataTransfer.effectAllowed = 'copyMove' }} onDragEnd={() => setDropId(null)}><OccCrop d={d} o={o} height={64} maxWidth={90} /><div className="shot-cap" title={o.note ?? ''} onClick={ev => { ev.stopPropagation(); if (canEdit) { setNoteTxt(o.note ?? ''); setShotNote(o) } }}>{o.room_id ? d.rooms.find(r => r.id === o.room_id)?.code : ''}{o.note ? ' · ' + o.note : canEdit ? ' ✎' : ''}</div>{canEdit && <a className="shot-x" title="Xoá hình này" onClick={ev => { ev.stopPropagation(); delShot(o) }}>✕</a>}</span>)
-                      : <div className="ic-none tiny"><span>{e.source === 'inferred' ? 'Suy luận' : 'Chưa có ảnh'}</span></div>}
+                      : null}
+                    {locs.filter(l => !shots.some(o => o.room_id === l.room.id)).map(l => <RoomShotFallback key={l.room.id} d={d} roomId={l.room.id} onClick={canEdit ? () => { setShotRoom(l.room.id); setShotFor(e) } : undefined} />)}
+                    {!locs.length && !shots.length && <div className="ic-none tiny"><span>{e.source === 'inferred' ? 'Suy luận' : 'Chưa có ảnh'}</span></div>}
+                    {canEdit && locs.some(l => !shots.some(o => o.room_id === l.room.id) && d.pages.some(p => p.room_id === l.room.id && p.kind === 'render')) && <div><button className="btn ghost sm" title="AI rà từng phòng chưa khoanh để tìm vật liệu và vẽ mũi tên" onClick={ev => { ev.stopPropagation(); scanMissing(e, locs.filter(l => !shots.some(o => o.room_id === l.room.id)).map(l => l.room.id)) }}>🔍 AI khoanh {locs.filter(l => !shots.some(o => o.room_id === l.room.id)).length} phòng còn thiếu</button></div>}
                       {canEdit && <button className="btn ghost sm" title="Thêm hình phối cảnh" onClick={ev => { ev.stopPropagation(); setShotRoom(null); setShotFor(e) }}>＋ ảnh</button>}</td>
                     <td>{[...pair('name', lang), ...pair('material', lang), ...pair('desc', lang)].map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} miss={M(k)} area={!String(k).startsWith('name')} ph={String(k).startsWith('name') ? 'Tên hạng mục' : String(k).startsWith('material') ? 'Vật liệu / màu / bề mặt' : 'Thông số kỹ thuật'} /></div>)}
                       <div className="ed-line lab"><i>{lang === 'en' ? 'Composition' : 'Cấu tạo'}</i><Ed e={e} k="composition" area ph={lang === 'en' ? 'Composition' : 'Cấu tạo (vật liệu thành phần)'} /></div>

@@ -9,6 +9,7 @@ import { writeSpecs, applyProduct } from '../lib/pipeline'
 import { librarySuggestions, saveToLibrary, searchLinks, LibProduct } from '../lib/library'
 import type { Entry } from '../lib/types'
 import type { ProjectData } from '../lib/useProject'
+import RoomShotFallback from './RoomShotFallback'
 import { locationsOf } from '../lib/locations'
 import OccCrop from './OccCrop'
 import { useAuth } from '../lib/auth'
@@ -78,11 +79,11 @@ export default function EntryPanel({ d, entry, onClose }: { d: ProjectData; entr
       </div>
 
       <div className="crops-row">
-        {occ.map(o => {
+        {occ.filter((o, i) => o.bbox || !occ.some(x => x.room_id === o.room_id && x.bbox) && occ.findIndex(x => x.room_id === o.room_id && !x.bbox) === i).map(o => {
           const pg = o.page_id ? pageById.get(o.page_id) : undefined
           return (
             <div key={o.id} className="occ">
-              <OccCrop d={d} o={o} height={120} maxWidth={210} />
+              {o.bbox ? <OccCrop d={d} o={o} height={120} maxWidth={210} /> : o.room_id ? <RoomShotFallback d={d} roomId={o.room_id} height={120} width={210} /> : <OccCrop d={d} o={o} height={120} maxWidth={210} />}
               <div className="small muted">{o.room_id ? roomById.get(o.room_id)?.code : ''}{pg ? ` · tr.${pg.page_no}` : ''}{o.note ? ` · ${o.note}` : ''}</div>
             </div>)
         })}
