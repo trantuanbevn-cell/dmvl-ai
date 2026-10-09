@@ -89,11 +89,21 @@ export const mergedMembers = (target: string): Section[] => fullSections().filte
 let CACHE2: Section[] | null = null, CACHE2_SRC: Section[] | null = null
 export const allSections = (): Section[] => { const f = fullSections(); if (CACHE2_SRC !== f) { CACHE2_SRC = f; CACHE2 = f.filter(x => !LAYOUT.merge?.[x.key]) } return CACHE2! }
 const resolve = (k: string) => { let c = k, n = 0; while (LAYOUT.merge?.[c] && n++ < 5) c = LAYOUT.merge[c]; return c }
-export function sectionOf(e: Pick<Entry, 'group_code' | 'category'> & { section_key?: string | null }): Section {
+type SecEntry = Pick<Entry, 'group_code' | 'category'> & { section_key?: string | null }
+const rawKey = (e: SecEntry): string => {
+  if (e.section_key && fullSections().some(x => x.key === e.section_key && x.custom)) return e.section_key
+  return (e.group_code === 'WD' || e.group_code === 'LM') && e.category === 'floor' ? 'floor' : (SECTIONS.find(s => s.groups.includes(e.group_code)) ?? SECTIONS[SECTIONS.length - 1]).key
+}
+/** Tiền tố ký hiệu hiệu lực: mục đã gộp thì dùng tiền tố của mục đích (đánh số liên tục cùng dãy) */
+export function effPrefix(e: SecEntry): string {
+  const k = rawKey(e), r = resolve(k)
+  if (r === k) return intlPrefix(e.group_code)
+  const t = fullSections().find(x => x.key === r)
+  return t ? intlPrefix(t.groups[0]) : intlPrefix(e.group_code)
+}
+export function sectionOf(e: SecEntry): Section {
   const full = fullSections()
-  let k: string | undefined
-  if (e.section_key && full.some(x => x.key === e.section_key && x.custom)) k = e.section_key
-  k ??= (e.group_code === 'WD' || e.group_code === 'LM') && e.category === 'floor' ? 'floor' : (SECTIONS.find(s => s.groups.includes(e.group_code)) ?? SECTIONS[SECTIONS.length - 1]).key
+  const k = rawKey(e)
   const r = resolve(k)
   return allSections().find(x => x.key === r) ?? full.find(x => x.key === k)!
 }
@@ -235,7 +245,7 @@ export const PREFIXES: Prefix[] = [
 ]
 export const INTL: Record<string, string> = Object.fromEntries(PREFIXES.flatMap(p => p.groups.map(g => [g, p.prefix])))
 export const intlPrefix = (group: string) => INTL[group] ?? group
-const intlCode = (e: Entry) => { const m = /^[A-Z]+-(\d+)/.exec(e.code); return m ? `${intlPrefix(e.group_code)}-${m[1]}` : e.code }
+const intlCode = (e: Entry) => { const m = /^[A-Z]+-(\d+)/.exec(e.code); return m ? `${effPrefix(e)}-${m[1]}` : e.code }
 /** Ký hiệu bản vẽ: luôn dùng chuẩn viết tắt tiếng Anh, cho cả bản tiếng Việt và tiếng Anh (tham số lang/legacy giữ lại cho tương thích) */
 export function symbolOf(e: Entry, _lang?: Lang, _legacy?: Map<string, string>, en?: Map<string, string>): string {
   return en?.get(e.id) ?? intlCode(e)
@@ -249,7 +259,7 @@ export function exportSymbols(list: Entry[], renumber: boolean) {
   const gi = (c: string) => GROUPS.findIndex(g => g.code === c)
   const cnt = new Map<string, number>(), used = new Map<string, Set<number>>()
   for (const e of [...list].sort((a, b) => gi(a.group_code) - gi(b.group_code) || a.code.localeCompare(b.code, undefined, { numeric: true }))) {
-    const pf = intlPrefix(e.group_code), u = used.get(pf) ?? new Set<number>(); used.set(pf, u)
+    const pf = effPrefix(e), u = used.get(pf) ?? new Set<number>(); used.set(pf, u)
     let k: number
     if (renumber) k = (cnt.get(pf) ?? 0) + 1
     else { k = Number(/(\d+)$/.exec(e.code)?.[1] ?? 0); if (!k || u.has(k)) k = Math.max(0, ...u) + 1 }
