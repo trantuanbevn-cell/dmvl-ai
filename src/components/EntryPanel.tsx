@@ -23,10 +23,11 @@ function Field({ e, k, label, area, onSaved, type = 'text' }: { e: Entry; k: F; 
     const error = await saveEntry(e, { [k]: val })
     if (error) alert(error.message); else onSaved()
   }
+  const dl = String(k).endsWith('_vn') ? 'vn' : String(k).endsWith('_en') ? 'en' : ['product_code', 'color_hex', 'product_url', 'product_image_url'].includes(String(k)) || type === 'number' ? 'none' : 'name'
   return (
     <label className="fld">{label}
-      {area ? <textarea value={v} onChange={x => setV(x.target.value)} onBlur={save} rows={3} />
-        : <input type={type} value={v} onChange={x => setV(x.target.value)} onBlur={save} />}
+      {area ? <textarea data-lang={dl} value={v} onChange={x => setV(x.target.value)} onBlur={save} rows={3} />
+        : <input data-lang={dl} type={type} value={v} onChange={x => setV(x.target.value)} onBlur={save} />}
     </label>
   )
 }

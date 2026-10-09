@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ProjectData } from '../../lib/useProject'
 import type { Entry } from '../../lib/types'
 import { findDuplicates, mergeEntries, type DupPair } from '../../lib/merge'
@@ -10,6 +10,9 @@ import EntryPanel from '../../components/EntryPanel'
 import { checkEntries } from '../../lib/checks'
 import { linkSuggestions, linkConflicts, linkEntries, resyncGroup } from '../../lib/entryLink'
 import type { Lang } from '../../lib/sections'
+import SpellReview from '../../components/SpellReview'
+import { spellScan } from '../../lib/spellScan'
+import { loadEnglish } from '../../lib/spell'
 
 function Side({ d, e, tag, onKeep, busy, label }: { d: ProjectData; e: Entry; tag: string; onKeep?: () => void; busy: boolean; label?: string }) {
   const shots = d.occ.filter(o => o.entry_id === e.id && o.bbox && o.page_id)
@@ -36,8 +39,6 @@ export default function CheckView({ d }: { d: ProjectData }) {
   const [lang, setLang] = useState<Lang>('vn')
   const [sel, setSel] = useState<string | null>(null)
   const [lopen, setLopen] = useState<string | null>(null) // khoá cặp liên kết đang xem chi tiết
-  const [ran, setRan] = useState<{ at: Date; n: number } | null>(null)
-  const [running, setRunning] = useState(false)
   const [lskip, setLskip] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('dmvl-link-skip') ?? '[]') } catch { return [] } })
   const issues = useMemo(() => checkEntries(d, lang), [d.entries, d.occ, lang])
   const nErr = issues.filter(r => r.issues.some(i => i.kind === 'err')).length
@@ -53,35 +54,73 @@ export default function CheckView({ d }: { d: ProjectData }) {
     try { await mergeEntries(keep, dup, d.entries); toast(`Đã gộp ${dup.code} vào ${keep.code}`, 'ok'); setOpen(null) } catch (e) { toast(String(e)) }
     setBusy(false)
   }
-  /** Rà lại toàn bộ: tải lại dữ liệu mới nhất từ mọi người đang sửa rồi tính lại mọi kiểm tra */
-  const runAll = async () => {
-    setRunning(true)
-    try { await d.reload(); setRan({ at: new Date(), n: 0 }); toast('Đã rà lại toàn bộ danh mục theo dữ liệu mới nhất', 'ok') } catch (e) { toast(String(e)) }
-    setRunning(false)
+  type CK = 'issues' | 'link' | 'dup' | 'spell'
+  const [modal, setModal] = useState<CK | null>(null)
+  const [busyCard, setBusyCard] = useState<CK | 'all' | null>(null)
+  const [pending, setPending] = useState<CK | 'all' | null>(null)
+  const [tick, setTick] = useState(0)
+  const [stamp, setStamp] = useState<Date | null>(null)
+  useEffect(() => { loadEnglish().then(() => setTick(t => t + 1)) }, [])
+  const spellItems = useMemo(() => spellScan(d), [d.entries, d.rooms, tick]) // eslint-disable-line
+  const spellAuto = spellItems.filter(i => i.after !== i.before).length
+  const cnt = { issues: issues.length, link: sugg.length + conflicts.length, dup: dups.length, spell: spellItems.length }
+  const allOk = Object.values(cnt).every(n => n === 0)
+  const openCard = (k: CK) => {
+    if (k === 'dup') { if (dups[0]) setOpen(keyOf(dups[0])) }
+    else if (k === 'link' && !conflicts.length && sugg[0]) setLopen(sugg[0].a.id + sugg[0].b.id)
+    else setModal(k)
   }
+  /** Check: tải lại dữ liệu mới nhất, chạy lại kiểm tra; có điểm sai khác thì phóng to giữa màn hình để xem chi tiết */
+  const runCheck = async (key: CK | 'all') => {
+    setBusyCard(key)
+    try { await d.reload(); await loadEnglish(); setTick(t => t + 1); setStamp(new Date()); setPending(key) } catch (e) { toast(String(e)) }
+    setBusyCard(null)
+  }
+  useEffect(() => {
+    if (!pending) return
+    const first = (pending === 'all' ? (['issues', 'link', 'dup', 'spell'] as CK[]) : [pending]).find(k => cnt[k] > 0)
+    setPending(null)
+    if (!first) toast(pending === 'all' ? '✓ Tất cả đạt – sẵn sàng xuất file' : '✓ Đạt – không có điểm sai khác', 'ok')
+    else openCard(first)
+  }, [pending]) // eslint-disable-line
   const linkSkip = (a: Entry, b: Entry) => { const n = [...lskip, a.id + b.id]; setLskip(n); try { localStorage.setItem('dmvl-link-skip', JSON.stringify(n)) } catch { /* */ } }
   const lkey = (x: { a: Entry; b: Entry }) => x.a.id + x.b.id
   const lcur = sugg.findIndex(x => lkey(x) === lopen), lpair = lcur >= 0 ? sugg[lcur] : null
   const lnext = () => { const n = sugg[lcur + 1] ?? sugg[lcur - 1]; setLopen(n ? lkey(n) : null) }
   const doLink = async (a: Entry, b: Entry) => { setBusy(true); try { await linkEntries(a, b, d.entries); toast(`Đã liên kết ${a.code} ↔ ${b.code}`, 'ok'); lnext(); d.reload() } catch (e) { toast(String(e)) } setBusy(false) }
   const go = (dir: number) => { const n = dups[cur + dir]; setOpen(n ? keyOf(n) : null) }
+  const cards: { k: CK; ic: string; t: string; sub: string; tone: string }[] = [
+    { k: 'issues', ic: '📋', t: 'Thiếu & sai thông tin', sub: `${nErr} sai/lệch · ${issues.length - nErr} thiếu`, tone: nErr ? 'err' : 'bad' },
+    { k: 'link', ic: '🔗', t: 'Vật liệu liên kết', sub: `${sugg.length} gợi ý · ${conflicts.length} nhóm đang lệch`, tone: conflicts.length ? 'err' : 'bad' },
+    { k: 'dup', ic: '🧩', t: 'Mã trùng', sub: 'Cùng một vật liệu thật nhưng nhiều mã', tone: 'bad' },
+    { k: 'spell', ic: '✍️', t: 'Chính tả & dấu câu', sub: `${spellAuto} tự sửa được · ${spellItems.length - spellAuto} nghi sai`, tone: 'bad' },
+  ]
   return (
     <div className="stack">
       <div className="card">
-        <div className="row between" style={{ flexWrap: 'wrap', gap: 8 }}>
-          <div><h3 style={{ margin: 0 }}>Rà soát toàn bộ danh mục</h3>
-            <div className="small muted">{ran ? `Đã chạy lúc ${ran.at.toLocaleTimeString('vi-VN')} – ` : ''}{dups.length} mã nghi trùng · {issues.length} mã có vấn đề ({nErr} sai/lệch) · {sugg.length} gợi ý liên kết · {conflicts.length} nhóm liên kết lệch</div></div>
+        <div className="qc-head">
+          <div><h3 style={{ margin: 0 }}>QC cuối – kiểm soát chất lượng trước khi xuất file</h3>
+            <div className="small muted">{stamp ? `Đã check lúc ${stamp.toLocaleTimeString('vi-VN')} theo dữ liệu mới nhất · ` : ''}Bấm <b>Check</b> ở từng mục (hoặc Check toàn bộ): phần mềm tải lại dữ liệu mới nhất, kiểm lại, nếu có điểm sai khác sẽ mở to giữa màn hình để xem và xử lý.</div></div>
           <div className="row gap">
-            <select value={lang} onChange={e => setLang(e.target.value as Lang)} title="Ngôn ngữ dùng để kiểm tra ô thiếu"><option value="vn">Kiểm tiếng Việt</option><option value="both">Kiểm song ngữ</option></select>
-            <button className="btn primary" disabled={running} onClick={runAll}>{running ? 'Đang rà…' : '▶ Chạy kiểm tra lại toàn bộ'}</button>
+            <select value={lang} onChange={e => setLang(e.target.value as Lang)} title="Ngôn ngữ dùng để kiểm ô thiếu"><option value="vn">Kiểm tiếng Việt</option><option value="both">Kiểm song ngữ</option></select>
+            <button className="btn primary" disabled={!!busyCard} onClick={() => runCheck('all')}>{busyCard === 'all' ? 'Đang check…' : '▶ Check toàn bộ'}</button>
           </div>
         </div>
-        <p className="small muted" style={{ marginBottom: 0 }}>Dùng ở bước cuối, sau khi mọi người đã nhập xong: nút này tải lại dữ liệu mới nhất rồi rà lại mã trùng, thông tin thiếu/sai và các mã liên kết.</p>
       </div>
-      <div className="card">
-        <h3>Mã sai hoặc thiếu thông tin ({issues.length})</h3>
-        {!issues.length ? <div className="ok-text">✓ Không phát hiện mã nào sai hoặc thiếu thông tin.</div> : (
-          <div style={{ overflowX: 'auto' }}><table className="tbl small" style={{ width: '100%' }}>
+      {allOk && <div className="qc-all">✓ Tất cả các mục đều đạt – danh mục sẵn sàng để xuất file.</div>}
+      <div className="qc-grid">{cards.map(c => { const n = cnt[c.k]; return (
+        <div key={c.k} className={'qc-card ' + (n ? c.tone : 'ok')} onClick={() => n && openCard(c.k)} title={n ? 'Bấm để xem chi tiết' : 'Đã đạt'}>
+          <div className="qc-ic">{c.ic}</div>
+          <div className="qc-num">{n ? n : '✓'}</div>
+          <div className="qc-tit">{c.t}</div>
+          <div className="qc-sub">{n ? c.sub : 'Đạt – không có điểm sai khác'}</div>
+          <button className="btn primary" disabled={!!busyCard} onClick={e => { e.stopPropagation(); runCheck(c.k) }}>{busyCard === c.k || busyCard === 'all' ? 'Đang check…' : '▶ Check'}</button>
+        </div>) })}</div>
+      {modal === 'issues' && (
+        <div className="modal-bg center" onMouseDown={() => setModal(null)}>
+          <div className="modal qc-modal" onMouseDown={e => e.stopPropagation()}>
+            <div className="row between"><h3 style={{ margin: 0 }}>📋 Mã sai hoặc thiếu thông tin ({issues.length})</h3><button className="btn ghost sm" onClick={() => setModal(null)}>✕</button></div>
+            {!issues.length ? <div className="ok-text">✓ Không còn mã nào sai hoặc thiếu thông tin.</div> : <div style={{ overflowX: 'auto' }}><table className="tbl small" style={{ width: '100%' }}>
             <thead><tr><th>Mã</th><th>Hạng mục</th><th>Vấn đề cần xử lý</th><th>Phòng</th><th /></tr></thead>
             <tbody>{issues.map(({ e, issues: is }) => (
               <tr key={e.id}>
@@ -91,12 +130,16 @@ export default function CheckView({ d }: { d: ProjectData }) {
                 <td className="small">{locationsOf(e.id, d.occ, d.rooms, d.pages).map(l => l.room.code).join(', ') || '—'}</td>
                 <td><button className="btn sm" onClick={() => setSel(e.id)}>Mở & sửa</button></td>
               </tr>))}</tbody>
-          </table></div>)}
-      </div>
-      {(sugg.length > 0 || conflicts.length > 0) && <div className="card">
-        <h3>Vật liệu liên kết với nhau</h3>
-        <p className="small muted">Các mã dùng chung một vật liệu/màu thật (vd cùng mã sơn xanh dùng cho tường và cho tranh). Khi đã liên kết, sửa mã sản phẩm, màu, hãng, xuất xứ, link ở một mã thì các mã kia tự đổi theo.</p>
-        {conflicts.map(c => (
+          </table></div>}
+          </div>
+        </div>)}
+      {modal === 'link' && (
+        <div className="modal-bg center" onMouseDown={() => setModal(null)}>
+          <div className="modal qc-modal" onMouseDown={e => e.stopPropagation()}>
+            <div className="row between"><h3 style={{ margin: 0 }}>🔗 Vật liệu liên kết với nhau</h3><button className="btn ghost sm" onClick={() => setModal(null)}>✕</button></div>
+            <p className="small muted">Các mã dùng chung một vật liệu/màu thật (vd cùng mã sơn xanh dùng cho tường và cho tranh). Khi đã liên kết, sửa mã sản phẩm, màu, hãng, xuất xứ, link ở một mã thì các mã kia tự đổi theo.</p>
+            {!conflicts.length && !sugg.length && <div className="ok-text">✓ Không còn gợi ý liên kết hay nhóm lệch.</div>}
+            {conflicts.map(c => (
           <div key={c.link_id} className="row sm-gap" style={{ padding: '8px 0', borderTop: '1px solid #eee', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 260 }}><span className="chk-tag chk-err">Đang lệch</span> {c.members.map(m => <b key={m.id} style={{ marginRight: 8 }}>{m.code}</b>)}<div className="small muted">Khác nhau ở: {c.keys.join(', ')}</div></div>
             {canEdit && c.members.map(m => <button key={m.id} className="btn sm" onClick={async () => { try { await resyncGroup(m, c.members); d.reload() } catch (e) { toast(String(e)) } }}>Đồng bộ theo {m.code}</button>)}
@@ -108,19 +151,9 @@ export default function CheckView({ d }: { d: ProjectData }) {
             {canEdit && <><button className="btn primary sm" onClick={async () => { try { await linkEntries(a, b, d.entries); d.reload() } catch (e) { toast(String(e)) } }}>🔗 Liên kết (theo {a.code})</button>
               <button className="btn ghost sm" onClick={() => linkSkip(a, b)}>Không liên quan</button></>}
           </div>))}
-      </div>}
-      <div className="card">
-        <h3>Kiểm tra mã trùng ({dups.length})</h3>
-        <p className="small muted">Cùng một vật liệu thật nhưng đang có nhiều mã (thường do nhiều góc camera hoặc do nhiều người cùng thêm). Bấm <b>Xem chi tiết</b> để so hai mã cạnh nhau kèm ảnh crop trên phối cảnh, rồi xác nhận gộp hoặc khác nhau. Các mục còn thiếu thông tin xem ngay trong từng phòng.</p>
-        {!dups.length && <div className="ok-text">✓ Không phát hiện mã nào nghi trùng.</div>}
-        {dups.map(p => (
-          <div key={keyOf(p)} className="row sm-gap" style={{ padding: '8px 0', borderTop: '1px solid #eee', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 260 }}><b>{p.keep.code}</b> {p.keep.name_vn} <span className="muted">· {p.keep.material_vn}</span><br /><b>{p.dup.code}</b> {p.dup.name_vn} <span className="muted">· {p.dup.material_vn}</span>
-              <div className="small muted">Giống {Math.round(p.score * 100)}%{p.why.length ? ' – ' + p.why.join(', ') : ''}</div></div>
-            <button className="btn primary sm" onClick={() => setOpen(keyOf(p))}>🔍 Xem chi tiết</button>
-            {canEdit && <button className="btn ghost sm" onClick={() => dismiss(p)}>Khác nhau</button>}
-          </div>))}
-      </div>
+          </div>
+        </div>)}
+      {modal === 'spell' && <SpellReview d={d} items={spellItems} onClose={() => { setModal(null); setTick(t => t + 1) }} onOpenEntry={setSel} />}
       {lpair && (
         <div className="modal-bg center" onMouseDown={() => setLopen(null)}>
           <div className="modal dup-modal" onMouseDown={e => e.stopPropagation()}>
