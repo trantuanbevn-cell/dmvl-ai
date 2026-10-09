@@ -29,7 +29,8 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
   const cx = c.getContext('2d', { willReadFrequently: true })!; cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height)
   // ẩn lớp lưới trục + dim: chỉ dùng làm dữ liệu đo, không thể hiện trên mặt bằng màu
   let ocp: Promise<any> | undefined
-  try {
+  const dbg = new URLSearchParams(location.search).get('dbg') ?? ''
+  if (!dbg.includes('nooc')) try {
     const cfg: any = await (doc as any).getOptionalContentConfig()
     for (const [id, gp] of Object.entries((cfg.getGroups?.() ?? {}) as Record<string, { name?: string }>)) if (isAnnoLayer(String(gp?.name ?? ''))) cfg.setVisibility(id, false)
     ocp = Promise.resolve(cfg)
