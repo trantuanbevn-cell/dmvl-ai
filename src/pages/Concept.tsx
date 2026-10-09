@@ -1,4 +1,5 @@
 // Bước 1 của quy trình khép kín: DÀN TRANG CONCEPT (độc lập) → đẩy sang LẬP DANH MỤC → KHÁI TOÁN / DỰ TOÁN.
+import { confirmDelete } from '../lib/deleteGuard'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
@@ -29,7 +30,7 @@ export function ConceptList() {
     if (error) return alert(error.message)
     nav(`/c/${data.id}`)
   }
-  const remove = async (p: Project) => { if (!confirm(`Xoá bộ concept "${p.name}" và toàn bộ dữ liệu?`)) return; await supabase.from('projects').delete().eq('id', p.id); load() }
+  const remove = async (p: Project) => { if (!(await confirmDelete(`bộ concept "${p.name}"`))) return; await supabase.from('projects').delete().eq('id', p.id); load() }
   return (
     <div className="page">
       <h1>Dàn trang concept</h1>

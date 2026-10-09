@@ -1,3 +1,4 @@
+import { confirmDelete } from '../lib/deleteGuard'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
@@ -21,13 +22,13 @@ export default function Projects() {
     nav(`/p/${data.id}/upload`)
   }
   const remove = async (p: Project) => {
-    if (!confirm(`Xoá dự án "${p.name}" và toàn bộ dữ liệu?`)) return
+    if (!(await confirmDelete(`dự án "${p.name}"`))) return
     await supabase.from('projects').delete().eq('id', p.id); load()
   }
   return (
     <div className="page">
       <h1>Lập danh mục vật liệu</h1>
-      {canEdit && <form className="card row gap" onSubmit={create}>
+      {isAdmin && <form className="card row gap" onSubmit={create}>
         <input placeholder="Tên dự án, vd: BOH Khách sạn Waldorf Astoria" value={name} onChange={e => setName(e.target.value)} required style={{ flex: 2 }} />
         <input placeholder="Địa điểm" value={loc} onChange={e => setLoc(e.target.value)} style={{ flex: 1 }} />
         <button className="btn primary">+ Tạo dự án</button>
