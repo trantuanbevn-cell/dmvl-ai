@@ -7,6 +7,7 @@ import { isAnnoLayer } from './dims'
 import { readVectorPage } from './vector'
 import { loadCv } from './cv'
 import type { FloorGeom } from './types'
+import { regularize } from './shape'
 
 export type PlanPaint = {
   W: number; H: number; crop: { x: number; y: number; w: number; h: number }
@@ -138,15 +139,18 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       const ids = new Map<number, [number, number, number, number]>()
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const k = keep[y * W + x]; if (!k) continue; const b = ids.get(k); if (!b) ids.set(k, [x, y, x, y]); else { if (x < b[0]) b[0] = x; if (x > b[2]) b[2] = x; if (y < b[1]) b[1] = y; if (y > b[3]) b[3] = y } }
       for (const [k, [bx0, by0, bx1, by1]] of ids) {
-        const bw = bx1 - bx0 + 3, bh = by1 - by0 + 3, sub = new cv.Mat(bh, bw, cv.CV_8UC1, new cv.Scalar(0))
-        for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) if (keep[y * W + x] === k) sub.data[(y - by0 + 1) * bw + (x - bx0 + 1)] = 255
-        const cs = new cv.MatVector(), hi = new cv.Mat(); cv.findContours(sub, cs, hi, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE)
+        const bw = bx1 - bx0 + 7, bh = by1 - by0 + 7, sub = new cv.Mat(bh, bw, cv.CV_8UC1, new cv.Scalar(0))
+        for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) if (keep[y * W + x] === k) sub.data[(y - by0 + 3) * bw + (x - bx0 + 3)] = 255
+        // bịt các khe nhỏ do nét đồ đạc / nét đứt cửa (vẫn nằm trong vùng của chính phòng này, không tràn sang phòng khác)
+        const ker = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(5, 5)); cv.morphologyEx(sub, sub, cv.MORPH_CLOSE, ker); ker.delete()
+        for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { const X = x + bx0 - 3, Y = y + by0 - 3; if (sub.data[y * bw + x] && X >= 0 && Y >= 0 && X < W && Y < H) { const o = keep[Y * W + X]; if (o && o !== k) sub.data[y * bw + x] = 0 } }
+        const cs = new cv.MatVector(), hi = new cv.Mat(); cv.findContours(sub, cs, hi, cv.RETR_CCOMP, cv.CHAIN_APPROX_NONE)
         let d = ''
         for (let c = 0; c < cs.size(); c++) {
-          const cc = cs.get(c); if (cv.contourArea(cc) < 3) { cc.delete(); continue }
-          const ap = new cv.Mat(); cv.approxPolyDP(cc, ap, 0.6, true)
-          if (ap.rows >= 3) { for (let q = 0; q < ap.rows; q++) d += (q ? 'L' : 'M') + (ap.data32S[q * 2] + bx0 - 1 + 0.5) + ' ' + (ap.data32S[q * 2 + 1] + by0 - 1 + 0.5); d += 'Z' }
-          ap.delete(); cc.delete()
+          const cc = cs.get(c), isHole = hi.data32S[c * 4 + 3] >= 0, area = cv.contourArea(cc)
+          if (area < (isHole ? 0.25 : 0.3) * pxPerM * pxPerM) { cc.delete(); continue }   // lỗ nhỏ (<0,25 m²) coi như sàn liền
+          const pts: [number, number][] = []; for (let q = 0; q < cc.rows; q++) pts.push([cc.data32S[q * 2] + bx0 - 3 + 0.5, cc.data32S[q * 2 + 1] + by0 - 3 + 0.5])
+          d += regularize(pts, pxPerM); cc.delete()
         }
         cs.delete(); hi.delete(); sub.delete(); floorD[k - 1] = d
       }
