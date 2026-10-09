@@ -19,7 +19,7 @@ import ConceptSheet from '../components/ConceptSheet'
 export default function ProjectPage() {
   const { id = '', tab = 'overview' } = useParams()
   const data = useProject(id)
-  const { canEdit } = useAuth()
+  const { canEdit, isAdmin } = useAuth()
   // mở dự án → đồng bộ các mã vào thư viện công ty (một lần mỗi lần mở)
   const synced = useRef(false)
   // Slide đã tách phòng: tự gán ô ảnh cho đúng phòng để ảnh đại diện khớp ở mọi màn hình
@@ -34,7 +34,7 @@ export default function ProjectPage() {
   const TABS: [string, string, string, string?][] = [
     ['overview', '🏠', 'Tổng quan'],
     ['upload', '📄', 'Hồ sơ & phòng', `${data.rooms.length} phòng`],
-    ['concept', '🖼', 'Dàn trang concept'],
+    ...(isAdmin ? [['concept', '🖼', 'Dàn trang concept'] as [string, string, string]] : []),
     ['analyze', '✨', 'Phân tích', `${analyzed}/${data.rooms.length}`],
     ['rooms', '🛋', 'Theo phòng', ps.pending + ps.review ? `${ps.pending + ps.review} chờ` : undefined],
     ['materials', '🧱', 'Theo vật liệu', `${ps.total} mã`],
@@ -56,7 +56,8 @@ export default function ProjectPage() {
       {!canEdit && <div className="note ro-note">👁 Bạn chỉ có quyền <b>xem</b> – không sửa được dữ liệu. Vẫn xuất file được ở bước “Xuất file”.</div>}
       {tab === 'overview' && <Overview d={data} />}
       {tab === 'upload' && <UploadTab d={data} />}
-      {tab === 'concept' && <ConceptSheet d={data} />}
+      {tab === 'concept' && isAdmin && <ConceptSheet d={data} />}
+      {tab === 'concept' && !isAdmin && <div className="card muted">Chức năng này chỉ dành cho quản trị viên.</div>}
       {tab === 'analyze' && <AnalyzeTab d={data} />}
       {tab === 'rooms' && <RoomView d={data} />}
       {tab === 'materials' && <MaterialView d={data} />}
