@@ -432,3 +432,7 @@ td.cmt-flash-cell{outline:3px solid #c0392b;outline-offset:-3px}
 .grp-item .grp-vn{font-size:12px;color:#777}
 .grp-item:hover{background:#fbeede}
 .grp-item.on{background:#f3dcc0}
+
+/* song ngữ: tiếng Anh in nghiêng; cặp ngắn (Tường / Wall) nằm trên một dòng */
+input[data-lang="en"], textarea[data-lang="en"] { font-style: italic }
+.sec-table .ed-line.bi { display: flex; align-items: center; gap: 4px } .sec-table .ed-line.bi input { flex: 1 1 0; min-width: 0; width: 100% } .sec-table .ed-line.bi .bi-sl { color: #999; flex: none }
