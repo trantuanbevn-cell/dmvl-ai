@@ -49,7 +49,7 @@ function arcPts(cx: number, cy: number, r: number, a0: number, a1: number): Pt[]
 type Path = { pts: Pt[]; layer: string; color?: number; lw?: number; closed?: boolean; fill?: boolean }
 type Txt = { t: string; x: number; y: number; h: number; rot: number; ly: string }
 /** layer nhiễu (đường ống, cơ điện, tâm…) – ẩn đi */
-const NOISE = /defpoints|xref- ?ps|(^|\$)(m|p)-|g-impt|a-genm|dwatcopi|fitting|pipe|(^|\$)center$|s-dim|淘宝/i
+const NOISE = /defpoints|xref- ?ps|(^|\$)(m|p)-|g-impt|a-genm|dwatcopi|fitting|pipe|(^|\$)center$|s-dim|淘宝|balloon|xr_[^$]*(plan|layout)|west?in layout|net.?khuat|net.?thay|(^|\$)i_thay|(^|\$)defpoints/i
 /** layer ranh giới không gian khép kín (có sẵn trong bản vẽ) */
 export const ZONE_LAYER = /(^|\$)area$|ranh.?gioi|dien.?tich|room.?bound|space.?bound/i
 
@@ -151,24 +151,39 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
   const zones: { layer: string; pts: number[] }[] = []
   const segs: number[] = [], segCls: number[] = [], fills: VecPage['fills'] = [], arcs: VecPage['arcs'] = [], runs: DrawRun[] = []
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString()
+  const seenP = new Set<string>(), seenS = new Set<string>()
+  const roleLw = (l: string) => (/tuong|wall|column|(^|[^a-z])cot([^a-z]|$)|be ?tong/i.test(l) ? 0.6 : /door|cua|window/i.test(l) ? 0.3 : 0.25)
+  const roleCol = (l: string) => (/tuong|wall|column|(^|[^a-z])cot([^a-z]|$)|be ?tong/i.test(l) ? '#1a1a1a' : /door|cua|window/i.test(l) ? '#4d4d4d' : '#6e6e6e')
   for (const p of paths) {
     if (/defpoints/i.test(p.layer) || p.pts.every(t => t[0] < x0 || t[0] > x1 || t[1] < y0 || t[1] > y1)) continue
-    const lwPt = Math.max(0.18, (p.lw ?? 0.25) / PT_MM * 0.7), pts: number[] = []
+    const pts: number[] = []
     for (const t of p.pts) pts.push(X(t[0]), Y(t[1]))
+    // bỏ nét trùng hệt (cùng một đường được vẽ nhiều lần / nhiều xref)
+    const pk = pts.length <= 40 ? Array.from(pts, v => Math.round(v * 20)).join(',') : ''
+    if (pk) { const rk = Array.from(pts.length > 4 ? [] : [pts[2], pts[3], pts[0], pts[1]], v => Math.round(v * 20)).join(','); if (seenP.has(pk) || (rk && seenP.has(rk))) continue; seenP.add(pk) }
+    const lwPt = roleLw(p.layer)
     const ci = clsOf(p.layer, lwPt, false), c = classes[ci]
-    if (p.closed && ZONE_LAYER.test(p.layer) && pts.length >= 6) zones.push({ layer: p.layer, pts })
+    const isZone = ZONE_LAYER.test(p.layer)
+    if (p.closed && isZone && pts.length >= 6) zones.push({ layer: p.layer, pts })
+    if (isZone) continue // ranh giới không gian chỉ để tính diện tích, không vẽ lên mặt bằng
     const arc = asArc(pts); if (arc && arcs.length < 20000) arcs.push(arc)
-    for (let i = 0; i + 3 < pts.length; i += 2) { const L = Math.hypot(pts[i + 2] - pts[i], pts[i + 3] - pts[i + 1]); if (L < 0.05) continue; segs.push(pts[i], pts[i + 1], pts[i + 2], pts[i + 3]); segCls.push(ci); c.len += L; c.n++ }
+    for (let i = 0; i + 3 < pts.length; i += 2) {
+      const L = Math.hypot(pts[i + 2] - pts[i], pts[i + 3] - pts[i + 1]); if (L < 0.05) continue
+      const a = Math.round(pts[i] * 20) + ',' + Math.round(pts[i + 1] * 20), b = Math.round(pts[i + 2] * 20) + ',' + Math.round(pts[i + 3] * 20), k2 = a < b ? a + '|' + b : b + '|' + a
+      if (seenS.has(k2)) continue; seenS.add(k2)
+      segs.push(pts[i], pts[i + 1], pts[i + 2], pts[i + 3]); segCls.push(ci); c.len += L; c.n++
+    }
     if (p.fill && pts.length >= 6) { const fi = clsOf(p.layer, 0, true); fills.push({ cls: fi, pts: new Float32Array(pts) }); classes[fi].n++; classes[fi].len += pts.length / 2 }
     if (opt.draw) {
-      const col = aciHex(p.color ?? layers[p.layer]?.color ?? 7)
+      const col = roleCol(p.layer)
       let d = 'M' + f2(pts[0]) + ' ' + f2(pts[1]); for (let i = 2; i < pts.length; i += 2) d += 'L' + f2(pts[i]) + ' ' + f2(pts[i + 1]); if (p.closed) d += 'Z'
       const last = runs[runs.length - 1]
       if (last && last.cls === ci && last.sc === col && last.fc === (p.fill ? col : undefined) && last.d.length < 150000) last.d += d
       else runs.push({ cls: ci, sc: col, fc: p.fill ? col : undefined, lw: lwPt, d })
     }
   }
-  const texts: VecText[] = rawT.filter(t => t.x >= x0 && t.x <= x1 && t.y >= y0 && t.y <= y1).map(t => ({ t: t.t, x: X(t.x), y: Y(t.y), h: Math.max(1, t.h / k), rot: Math.round(-t.rot * 10) / 10, ly: t.ly }))
+  const seenT = new Set<string>()
+  const texts: VecText[] = rawT.filter(t => { const tk = t.t + '|' + Math.round(t.x / (4 * k)) + '|' + Math.round(t.y / (4 * k)); if (seenT.has(tk)) return false; seenT.add(tk); return true }).filter(t => t.x >= x0 && t.x <= x1 && t.y >= y0 && t.y <= y1).map(t => ({ t: t.t, x: X(t.x), y: Y(t.y), h: Math.max(1, t.h / k), rot: Math.round(-t.rot * 10) / 10, ly: t.ly }))
   onLog?.(`  DXF: ${segs.length / 4} đoạn nét, ${classes.length} nhóm layer/nét, ${texts.length} chữ, đơn vị ${unit}, tỉ lệ 1:${den}`)
   return { ...(opt.draw ? { draw: runs } : {}), arcs, w: W, h: H, segs: new Float32Array(segs), cls: new Uint16Array(segCls), fills, classes, texts, nSeg: segs.length / 4, zones, dxf: { unit, mmPerUnit: mmU, den, extentM: [(x1 - x0) * mmU / 1000, (y1 - y0) * mmU / 1000] } }
 }
