@@ -296,6 +296,8 @@ export function fillDoorSwings(lab: Uint16Array, W: number, H: number, doors: nu
     const LS = top(S.core.size ? S.core : S.cnt); if (!LS) continue
     const LO = top(O.core.size ? O.core : O.cnt)
     for (const i of S.cells) { const l = lab[i]; if (l === 0 || (LO && l === LO && LO !== LS)) { lab[i] = LS; changed++ } }
+    // ranh giới đúng tại đường ngang khung cửa: phần phòng mở cửa lấn sang phía bên kia đường khung cửa (gần đường) trả lại phòng bên kia
+    if (LO && LO !== LS) for (const i of O.cells) { if (lab[i] !== LS) continue; const x = i % W, y = (i - x) / W; const b2 = -((x - hx) * (-uy * (si === 0 ? 1 : -1)) + (y - hy) * (ux * (si === 0 ? 1 : -1))); if (b2 >= 0 && b2 < 0.2 * r) { lab[i] = LO; changed++ } }
   }
   return changed
 }

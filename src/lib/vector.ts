@@ -76,7 +76,7 @@ export function detectDoors(v: VecPage, mPerPt: number): number[][] {
     if (!leafEnd) continue
     const other = leafEnd === 'a' ? ar.b : ar.a
     const k = `${Math.round(h[0])},${Math.round(h[1])},${Math.round(other[0])},${Math.round(other[1])}`; if (seen.has(k)) continue; seen.add(k)
-    doors.push([h[0], h[1], other[0], other[1]])
+    doors.push([h[0], h[1], other[0], other[1], ar.m[0], ar.m[1]]) // 2 số cuối: điểm giữa cung = phía cánh cửa quét (để biết phòng nào mở cửa)
   }
   return doors
 }

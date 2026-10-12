@@ -71,7 +71,7 @@ export async function analyzeFloor(fp: FloorPlan, opts: AnalyzeOpts, log: Log, b
   else if (!opts.preferDim && fp.geometry?.scale_src === 'user') { scaleSrc = 'user'; scaleNote = fp.geometry.scale_note ?? '' }
   else if (det && det.conf >= 0.6) { scaleDen = det.den; scaleSrc = 'dim'; scaleNote = `Tự đọc từ dim + lưới trục: ${det.note}.` }
   else if (opts.preferDim && fp.geometry?.scale_src === 'user') { scaleSrc = 'user'; scaleNote = fp.geometry.scale_note ?? '' }
-  log(det ? `Đọc dim/lưới trục: tỉ lệ 1:${det.den} (${det.note}, tin cậy ${Math.round(det.conf * 100)}%)${scaleSrc === 'dim' ? ' → dùng tỉ lệ này.' : ''}` : 'Không đọc được dim/lưới trục – dùng tỉ lệ đã nhập.')
+  log(dxfI ? `DXF: đơn vị ${dxfI.unit} → tỉ lệ 1:${scaleDen} chính xác.` : det ? `Đọc dim/lưới trục: tỉ lệ 1:${det.den} (${det.note}, tin cậy ${Math.round(det.conf * 100)}%)${scaleSrc === 'dim' ? ' → dùng tỉ lệ này.' : ''}` : 'Không đọc được dim/lưới trục – dùng tỉ lệ đã nhập.')
   const keys = opts.wallKeys ?? fp.geometry?.wall_keys
   let sel = keys ? new Set(v.classes.map((c, i) => (keys.includes(c.key) ? i : -1)).filter(i => i >= 0)) : guessWallClasses(v)
   if (!sel.size) sel = guessWallClasses(v)
@@ -86,7 +86,7 @@ export async function analyzeFloor(fp: FloorPlan, opts: AnalyzeOpts, log: Log, b
   const withDoors = new Set(sel); v.classes.forEach((c, i) => { if (/DOOR|CUA DI|CUA SO|WINDOW/i.test(c.layer) && !c.fill) withDoors.add(i) })
   const { mask, W, H } = rasterWalls(v, withDoors, ppp, doors, true, mpp)
   let res = findRooms(cv, v, mask, W, H, ppp, scaleDen, doorW)
-  const zr = dxfI ? zoneRooms(v as any, mpp) : null
+  const zr = null as FloorRoom[] | null // ranh $Area của bản vẽ chỉ là các khu lớn (gộp nhiều phòng) → không dùng làm không gian; dò phòng theo tường + khung cửa
   if (zr && zr.length >= 3) { res = { ...res, rooms: zr, leaked: false } as typeof res; log(`DXF: dùng ${zr.length} ranh giới không gian có sẵn trong bản vẽ (diện tích tính từ toạ độ).`) }
   log('Đang đếm đồ rời trong bản vẽ...')
   const furn = detectFurniture(v, mpp)
