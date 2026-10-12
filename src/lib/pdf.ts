@@ -78,6 +78,7 @@ export async function extractWords(data: ArrayBuffer): Promise<Record<number, Wo
 
 /** Vẽ một trang PDF thành ảnh JPEG (dùng cho bản xem trước mặt bằng gốc) */
 export async function renderPdfPage(data: ArrayBuffer, pageNo: number, longEdge = 2000): Promise<{ blob: Blob; width: number; height: number }> {
+  { const m = await import('./dxf'); if (!m.isPdfBuf(data)) return m.renderDxfPreview(data, longEdge) }
   const doc = await pdfjs.getDocument({ data: data.slice(0) }).promise
   const page = await doc.getPage(Math.min(pageNo, doc.numPages))
   const v1 = page.getViewport({ scale: 1 }), vp = page.getViewport({ scale: longEdge / Math.max(v1.width, v1.height) })

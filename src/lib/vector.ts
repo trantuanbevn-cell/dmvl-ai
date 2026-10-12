@@ -24,7 +24,7 @@ const mul = (a: M, b: M): M => [a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * 
 const ap = (m: M, x: number, y: number): [number, number] => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]]
 
 /** Đường con có phải một cung ~90° (bán kính hợp lý) không? Trả về hai đầu cung, điểm giữa và bán kính (pt) */
-function asArc(s: number[]): VecPage['arcs'][number] | null {
+export function asArc(s: number[]): VecPage['arcs'][number] | null {
   const n = s.length / 2; if (n < 4 || n > 40) return null
   const ax = s[0], ay = s[1], bx = s[s.length - 2], by = s[s.length - 1]
   const chord = Math.hypot(bx - ax, by - ay); if (chord < 3) return null
@@ -82,6 +82,7 @@ export function detectDoors(v: VecPage, mPerPt: number): number[][] {
 }
 
 export async function readVectorPage(data: ArrayBuffer, pageNo = 1, onLog?: (s: string) => void, opt: { draw?: boolean } = {}): Promise<VecPage> {
+  { const m = await import('./dxf'); if (!m.isPdfBuf(data)) return m.readDxfPage(data, onLog, opt) } // DXF (AutoCAD) → cùng cấu trúc
   const doc = await pdfjs.getDocument({ data: data.slice(0) }).promise
   const page = await doc.getPage(Math.min(pageNo, doc.numPages))
   const vp = page.getViewport({ scale: 1 })
@@ -211,7 +212,7 @@ export async function readVectorPage(data: ArrayBuffer, pageNo = 1, onLog?: (s: 
 /** Gợi ý nhóm nét là TƯỜNG: layer có tên giống "wall/tường" nếu có, ngược lại các nét dày nhất có số lượng đáng kể */
 export function guessWallClasses(v: VecPage): Set<number> {
   const out = new Set<number>()
-  const byName = v.classes.map((c, i) => (!c.fill && /wall|tuong|tường|a-wall|struct|column|cot|cột|vach|vách/i.test(c.layer) ? i : -1)).filter(i => i >= 0)
+  const byName = v.classes.map((c, i) => (!c.fill && !isAnnoLayer(c.layer) && /wall|tuong|tường|a-wall|struct|column|cot|cột|vach|vách/i.test(c.layer) ? i : -1)).filter(i => i >= 0)
   const glass = v.classes.map((c, i) => (!c.fill && /glass|kinh|kính|window|curtain|cua so|cửa sổ|vach kinh|vách kính|partition/i.test(c.layer) ? i : -1)).filter(i => i >= 0)
   if (byName.length) { byName.forEach(i => out.add(i)); glass.forEach(i => out.add(i)); return out }
   const stroke = v.classes.map((c, i) => ({ c, i })).filter(x => !x.c.fill && !isAnnoLayer(x.c.layer))

@@ -16,9 +16,10 @@ async function must<T>(p: PromiseLike<{ data: T; error: any }>): Promise<T> { co
 
 export async function addFloorPlan(project: Project, file: File, label: string, scaleDen: number, pageNo: number, log: Log) {
   const id = crypto.randomUUID()
-  const pdfPath = `${project.id}/floors/${id}.pdf`
+  const dxf = /\.dxf$/i.test(file.name)
+  const pdfPath = `${project.id}/floors/${id}.${dxf ? 'dxf' : 'pdf'}`
   log(`Đang tải ${file.name} lên...`)
-  await must(supabase.storage.from(BUCKET).upload(pdfPath, file, { upsert: true, contentType: 'application/pdf' }))
+  await must(supabase.storage.from(BUCKET).upload(pdfPath, file, { upsert: true, contentType: dxf ? 'application/octet-stream' : 'application/pdf' }))
   const buf = await file.arrayBuffer()
   log('Đang vẽ ảnh xem trước...')
   const pv = await renderPdfPage(buf, pageNo, 2000)
@@ -37,10 +38,12 @@ export async function analyzeFloor(fp: FloorPlan, opts: AnalyzeOpts, log: Log, b
   const v = await readVectorPage(buf, fp.page_no, log)
   if (v.nSeg < 20) throw new Error('File này gần như không có nét vector (có thể là PDF ảnh/scan). Hãy xuất PDF từ AutoCAD ở dạng vector.')
   // tỉ lệ: người dùng chỉnh tay > tự đọc từ dim + lưới trục > giá trị đã lưu
-  const det = detectScale(v)
-  const userSet = opts.scaleDen != null && opts.scaleDen !== fp.scale_den
+  const dxfI = (v as { dxf?: { den: number; unit: string } }).dxf
+  const det = dxfI ? null : detectScale(v)
+  const userSet = !dxfI && opts.scaleDen != null && opts.scaleDen !== fp.scale_den
   let scaleDen = fp.scale_den, scaleSrc: 'dim' | 'user' | 'default' = 'default', scaleNote = ''
-  if (userSet) { scaleDen = opts.scaleDen!; scaleSrc = 'user'; scaleNote = 'Tỉ lệ do bạn nhập/chỉnh theo diện tích thật.' }
+  if (dxfI) { scaleDen = dxfI.den; scaleSrc = 'dim'; scaleNote = `DXF: đơn vị ${dxfI.unit} – tỉ lệ chính xác theo file.` }
+  else if (userSet) { scaleDen = opts.scaleDen!; scaleSrc = 'user'; scaleNote = 'Tỉ lệ do bạn nhập/chỉnh theo diện tích thật.' }
   else if (!opts.preferDim && fp.geometry?.scale_src === 'user') { scaleSrc = 'user'; scaleNote = fp.geometry.scale_note ?? '' }
   else if (det && det.conf >= 0.6) { scaleDen = det.den; scaleSrc = 'dim'; scaleNote = `Tự đọc từ dim + lưới trục: ${det.note}.` }
   else if (opts.preferDim && fp.geometry?.scale_src === 'user') { scaleSrc = 'user'; scaleNote = fp.geometry.scale_note ?? '' }
@@ -119,9 +122,9 @@ export async function updateFloorPdf(fp: FloorPlan, file: File, log: Log): Promi
   log('Đang sao lưu dữ liệu dự án trước khi cập nhật...')
   await autoBackup({ id: fp.project_id }, `Trước khi cập nhật PDF mặt bằng "${fp.floor_label}"`)
   const stamp = Date.now()
-  const pdfPath = `${fp.project_id}/floors/${fp.id}-${stamp}.pdf`, prevPath = `${fp.project_id}/floors/${fp.id}-${stamp}.jpg`
+  const ext = /\.dxf$/i.test(file.name) ? 'dxf' : 'pdf', pdfPath = `${fp.project_id}/floors/${fp.id}-${stamp}.${ext}`, prevPath = `${fp.project_id}/floors/${fp.id}-${stamp}.jpg`
   log(`Đang tải ${file.name} lên (bản cũ vẫn được giữ)...`)
-  await must(supabase.storage.from(BUCKET).upload(pdfPath, file, { upsert: false, contentType: 'application/pdf' }))
+  await must(supabase.storage.from(BUCKET).upload(pdfPath, file, { upsert: false, contentType: ext === 'dxf' ? 'application/octet-stream' : 'application/pdf' }))
   const buf = await file.arrayBuffer()
   const pv = await renderPdfPage(buf, fp.page_no, 2000)
   await must(supabase.storage.from(BUCKET).upload(prevPath, pv.blob, { upsert: false, contentType: 'image/jpeg' }))

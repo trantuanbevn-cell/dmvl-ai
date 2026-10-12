@@ -42,7 +42,7 @@ export function FloorCard({ d, fp, run, busy, compact }: { d: ProjectData; fp: F
       {canEdit && g && <div className="small" style={{ margin: '8px 0' }}>
         <div className="row gap wrap">
           <label className="btn sm" title="Tải PDF mặt bằng mới (có dim/lưới trục) – tự đọc lại không gian, diện tích, đồ rời; dữ liệu vật liệu không bị động tới">⬆ Cập nhật bằng PDF mặt bằng mới
-            <input type="file" accept="application/pdf" hidden disabled={busy} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f && confirm(`Cập nhật mặt bằng "${fp.floor_label}" bằng file ${f.name}?\n\n• Hệ thống tự sao lưu dự án trước.\n• File và kết quả cũ vẫn được giữ, có nút "Quay lại bản trước".\n• Dữ liệu vật liệu hoàn thiện (phòng, mã, vị trí…) KHÔNG bị thay đổi.`)) run(async () => { toast(await updateFloorPdf(fp, f, log)) }) }} /></label>
+            <input type="file" accept="application/pdf,.dxf" hidden disabled={busy} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f && confirm(`Cập nhật mặt bằng "${fp.floor_label}" bằng file ${f.name}?\n\n• Hệ thống tự sao lưu dự án trước.\n• File và kết quả cũ vẫn được giữ, có nút "Quay lại bản trước".\n• Dữ liệu vật liệu hoàn thiện (phòng, mã, vị trí…) KHÔNG bị thay đổi.`)) run(async () => { toast(await updateFloorPdf(fp, f, log)) }) }} /></label>
           {!!g.history?.length && <button className="btn sm" disabled={busy} onClick={() => confirm('Quay lại bản mặt bằng trước đó? (bản hiện tại vẫn được giữ lại để đổi qua lại)') && run(async () => { await restoreFloorVersion(fp); toast('Đã quay lại bản mặt bằng trước.') })}>↩ Quay lại bản trước ({new Date(g.history[0].at).toLocaleString('vi-VN')})</button>}
         </div>
         <div className="muted">Cập nhật chỉ thay phần mặt bằng của tầng này: tên phòng/phép gộp được chuyển sang tự động nếu hình dáng toàn nhà khớp; dữ liệu vật liệu của dự án không bị đụng tới.</div>
@@ -100,7 +100,7 @@ export default function FloorPlans({ d, concept }: { d: ProjectData; concept?: b
   const run = async (fn: () => Promise<void>) => { setBusy(true); try { await fn() } catch (e) { log('LỖI: ' + String(e)) } setBusy(false); await d.reload() }
   const onFile = (f?: File) => {
     if (!f) return
-    const l = label.trim() || f.name.replace(/\.pdf$/i, '')
+    const l = label.trim() || f.name.replace(/\.(pdf|dxf)$/i, '')
     run(async () => { await addFloorPlan(p, f, l, den, pageNo, log); setLabel('') })
   }
   return (
@@ -111,7 +111,7 @@ export default function FloorPlans({ d, concept }: { d: ProjectData; concept?: b
         <input placeholder="Tên tầng, vd: Tầng 5" value={label} onChange={e => setLabel(e.target.value)} />
         <label className="small">Tỉ lệ 1:<input style={{ width: 70 }} type="number" value={den} onChange={e => setDen(+e.target.value)} /></label>
         <label className="small">Trang<input style={{ width: 55 }} type="number" min={1} value={pageNo} onChange={e => setPageNo(+e.target.value)} /></label>
-        <label className="btn primary">+ Tải PDF mặt bằng tầng<input type="file" accept="application/pdf" hidden disabled={busy} onChange={e => { onFile(e.target.files?.[0]); e.target.value = '' }} /></label>
+        <label className="btn primary">+ Tải PDF / DXF mặt bằng tầng<input type="file" accept="application/pdf,.dxf" hidden disabled={busy} onChange={e => { onFile(e.target.files?.[0]); e.target.value = '' }} /></label>
         {busy && <span className="spinner" />}
       </div>
       <LogBox lines={lines} />
