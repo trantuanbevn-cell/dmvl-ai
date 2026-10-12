@@ -125,7 +125,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
         arcDoors.push([hx, hy, o[0] * sx0, o[1] * sx0, e[0] * sx0, e[1] * sx0])
       }
       doorsPx.push(...arcDoors)
-      if (g.src !== 'zones') { // ranh giới lấy từ bản vẽ (DXF) đã chính xác: giữ nguyên, không tô/bẻ theo cung cửa
+      if (g.src !== 'zones' && !g.scale_note?.startsWith('DXF')) { // ranh giới lấy từ bản vẽ (DXF) đã chính xác: giữ nguyên, không tô/bẻ theo cung cửa
         fillDoorSwings(roomOf, W, H, doorsPx)
         straightenZones(roomOf, W, H, wall, wsegs, pxPerM, inkD)
         fillDoorSwings(roomOf, W, H, doorsPx)
