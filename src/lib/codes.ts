@@ -135,7 +135,7 @@ export const GROUPS: Group[] = [
  },
  {
   "code": "WD",
-  "vn": "Gỗ tự nhiên / veneer",
+  "vn": "Gỗ tự nhiên (gỗ thịt, veneer)",
   "en": "Wood Veneer / Solid Wood",
   "legacy": "GO",
   "csi": "06 40 00 Architectural Woodwork",
@@ -146,7 +146,7 @@ export const GROUPS: Group[] = [
  },
  {
   "code": "LM",
-  "vn": "Melamine / Laminate / Acrylic",
+  "vn": "Gỗ công nghiệp (MDF/MFC, melamine, laminate, acrylic)",
   "en": "Melamine / HPL / Acrylic Panels",
   "legacy": "GO",
   "csi": "06 41 00 / 12 36 00",

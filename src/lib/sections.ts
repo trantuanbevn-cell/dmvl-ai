@@ -14,7 +14,7 @@ export const BANDS: Record<string, { vn: string; en: string }> = {
 }
 export const SECTIONS: Section[] = [
   { key: 'tile', vn: 'GẠCH', en: 'TILE', band: 'A', groups: ['CT'] },
-  { key: 'stone', vn: 'ĐÁ', en: 'STONE', band: 'A', groups: ['ST', 'ES'] },
+  { key: 'stone', vn: 'ĐÁ (TỰ NHIÊN – NHÂN TẠO)', en: 'STONE (NATURAL – ENGINEERED)', band: 'A', groups: ['ST', 'ES'] },
   { key: 'floor', vn: 'SÀN GỖ – SÀN NHỰA', en: 'WOOD & RESILIENT FLOORING', band: 'A', groups: ['LVT'] },
   { key: 'carpet', vn: 'THẢM SÀN', en: 'CARPET', band: 'A', groups: ['CPT'] },
   { key: 'paint', vn: 'SƠN NƯỚC', en: 'PAINT', band: 'A', groups: ['PT', 'SP'] },
@@ -22,7 +22,7 @@ export const SECTIONS: Section[] = [
   { key: 'panel', vn: 'ỐP TƯỜNG (GỖ, LAM, TIÊU ÂM)', en: 'WALL PANELLING', band: 'A', groups: ['WP'] },
   { key: 'ceiling', vn: 'TRẦN THẠCH CAO & TRẦN ĐẶC BIỆT', en: 'GYPSUM & SPECIALTY CEILING', band: 'A', groups: ['GWB', 'ACT'] },
   { key: 'skirting', vn: 'LEN CHÂN TƯỜNG – PHÀO CHỈ', en: 'SKIRTING & MOULDING', band: 'A', groups: ['BS'] },
-  { key: 'wood', vn: 'GỖ – MELAMINE – LAMINATE', en: 'WOOD & LAMINATE', band: 'B', groups: ['WD', 'LM'] },
+  { key: 'wood', vn: 'GỖ (TỰ NHIÊN – CÔNG NGHIỆP)', en: 'WOOD (NATURAL – ENGINEERED)', band: 'B', groups: ['WD', 'LM'] },
   { key: 'metal', vn: 'KIM LOẠI', en: 'METAL', band: 'B', groups: ['MT'] },
   { key: 'glass', vn: 'KÍNH', en: 'GLASS', band: 'B', groups: ['GL'] },
   { key: 'mirror', vn: 'GƯƠNG', en: 'MIRROR', band: 'B', groups: ['MR'] },
@@ -208,13 +208,15 @@ export function legacyCodes(entries: Entry[]): Map<string, string> {
   for (const e of sorted) { const p = legacyPrefix(e.group_code); const k = (n.get(p) ?? 0) + 1; n.set(p, k); out.set(e.id, `${p}${k}`) }
   return out
 }
-/** Bảng tiền tố ký hiệu: MỘT họ vật liệu = MỘT tiền tố (viết tắt tiếng Anh của tên chung); loại con (gỗ tự nhiên, gỗ công nghiệp…) ghi ở tên hạng mục, không đổi tiền tố.
+/** Bảng tiền tố ký hiệu: MỘT họ vật liệu = MỘT tiền tố (viết tắt tiếng Anh của tên chung); riêng GỖ và ĐÁ tách tự nhiên / công nghiệp (nhân tạo) thành 2 tiền tố (WD – EWD, ST – EST) nhưng vẫn nằm chung một hạng mục, tự nhiên xếp trước.
  *  Tham chiếu: danh mục viết tắt bản vẽ nội thất (CT, WD, LAM, CPT, MTL, GL, MIR, MWK, PLUMB…) và bảng vật liệu hoàn thiện VA 09 06 00 (WD, CPT, GWB, ACT…). Không có chuẩn quốc tế duy nhất. */
 export type Prefix = { prefix: string; en: string; vn: string; includes_en: string; includes_vn: string; groups: string[] }
 export const PREFIXES: Prefix[] = [
   { prefix: 'CT', en: 'Ceramic / Porcelain Tile', vn: 'Gạch ốp lát', includes_en: 'ceramic, porcelain, mosaic tile', includes_vn: 'gạch gốm, porcelain, mosaic', groups: ['CT'] },
-  { prefix: 'ST', en: 'Stone', vn: 'Đá (tự nhiên, nhân tạo)', includes_en: 'natural stone (marble, granite…), engineered stone, quartz, terrazzo, solid surface', includes_vn: 'đá tự nhiên (marble, granite…), đá nhân tạo, quartz, terrazzo, solid surface', groups: ['ST', 'ES'] },
-  { prefix: 'WD', en: 'Wood', vn: 'Gỗ (tự nhiên, công nghiệp)', includes_en: 'solid wood, veneer, engineered wood (MDF/MFC), melamine, laminate, acrylic panels', includes_vn: 'gỗ tự nhiên, veneer, gỗ công nghiệp (MDF/MFC), melamine, laminate, acrylic', groups: ['WD', 'LM'] },
+  { prefix: 'ST', en: 'Natural Stone', vn: 'Đá tự nhiên', includes_en: 'marble, granite, limestone, travertine, slate', includes_vn: 'marble, granite, đá vôi, travertine, đá slate', groups: ['ST'] },
+  { prefix: 'EST', en: 'Engineered Stone', vn: 'Đá nhân tạo', includes_en: 'quartz, terrazzo, solid surface, sintered stone', includes_vn: 'quartz, terrazzo, solid surface, đá nung kết', groups: ['ES'] },
+  { prefix: 'WD', en: 'Natural Wood', vn: 'Gỗ tự nhiên', includes_en: 'solid wood, timber, veneer', includes_vn: 'gỗ thịt, veneer', groups: ['WD'] },
+  { prefix: 'EWD', en: 'Engineered Wood', vn: 'Gỗ công nghiệp', includes_en: 'MDF, MFC, plywood, melamine, laminate, acrylic panels', includes_vn: 'MDF, MFC, ván ép, melamine, laminate, acrylic', groups: ['LM'] },
   { prefix: 'LVT', en: 'Resilient Flooring', vn: 'Sàn nhựa', includes_en: 'luxury vinyl tile, vinyl sheet', includes_vn: 'sàn vinyl, sàn nhựa', groups: ['LVT'] },
   { prefix: 'CPT', en: 'Carpet', vn: 'Thảm', includes_en: 'broadloom, carpet tile', includes_vn: 'thảm cuộn, thảm tấm', groups: ['CPT'] },
   { prefix: 'PNT', en: 'Paint', vn: 'Sơn', includes_en: 'emulsion paint, special / epoxy coatings', includes_vn: 'sơn nước, sơn đặc biệt, epoxy', groups: ['PT', 'SP'] },
@@ -245,7 +247,7 @@ export const PREFIXES: Prefix[] = [
 ]
 /** Ký hiệu viết tắt từ cụm tiếng Anh đầy đủ nào (để người xem bản vẽ biết chữ cái nghĩa là gì) */
 export const PREFIX_FULL: Record<string, string> = {
-  CT: 'Ceramic Tile', ST: 'Stone', WD: 'Wood', LVT: 'Luxury Vinyl Tile', CPT: 'Carpet', PNT: 'Paint', WC: 'Wall Covering', WP: 'Wall Panelling', GWB: 'Gypsum Wall Board',
+  CT: 'Ceramic Tile', ST: 'Natural Stone', EST: 'Engineered Stone', WD: 'Natural Wood', EWD: 'Engineered Wood', LVT: 'Luxury Vinyl Tile', CPT: 'Carpet', PNT: 'Paint', WC: 'Wall Covering', WP: 'Wall Panelling', GWB: 'Gypsum Wall Board',
   ACT: 'Acoustic Ceiling Tile', SKT: 'Skirting', MTL: 'Metal', GL: 'Glass', MIR: 'Mirror', FAB: 'Fabric', LTH: 'Leather', DR: 'Door', HW: 'Hardware', MWK: 'Millwork',
   FHW: 'Furniture Hardware', FUR: 'Furniture', LGT: 'Lighting', PLB: 'Plumbing', WRA: 'Washroom Accessories', EQP: 'Equipment', ART: 'Artwork', DEC: 'Decorative',
   WT: 'Window Treatment', SGN: 'Signage', MEP: 'Mechanical, Electrical & Plumbing',
