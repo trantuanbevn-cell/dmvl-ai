@@ -67,6 +67,7 @@ function rawHatches(txt: string): { model: any[]; blocks: Record<string, any[]> 
       const cc = +L[j], vv = L[j + 1].trim()
       if (cc === 0) break
       if (cc === 8) layer = vv; else if (cc === 70 && !pat) solid = +vv; else if (cc === 2) pat = vv
+      else if (cc === 75 || cc === 98) { flush(); mode = '' } // hết phần đường biên (sau đó là điểm hạt/mẫu – không phải đỉnh)
       else if (cc === 92) { flush(); cur = []; mode = (+vv & 2) ? 'poly' : 'edge'; edge = 0; nv = 0; pts.length = 0 }
       else if (cur && mode === 'poly') {
         if (cc === 72) bul = +vv
@@ -132,7 +133,7 @@ function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>): { paths: Pa
           const lps = (e.loops as HatchLoop[]).filter(lp => lp.length >= 3).map(lp => [...lp, lp[0]].map(p => apT(m, p)))
           // cột (hatch BTCT): các đường biên con chỉ là nét của mẫu hatch → chỉ lấy biên ngoài; tường/sàn: giữ lỗ (even-odd)
           const ar = (lp: Pt[]) => { let a = 0; for (let i = 0; i + 1 < lp.length; i++) a += lp[i][0] * lp[i + 1][1] - lp[i + 1][0] * lp[i][1]; return Math.abs(a) }
-          if (lps.length) { const use = /column|btct/i.test(layer + ' ' + (e.pat ?? '')) ? [lps.reduce((b, l) => (ar(l) > ar(b) ? l : b))] : lps; paths.push({ pts: use[0], layer, closed: true, fill: true, hatch: true, loops: use }) }
+          if (lps.length) { const big = lps.reduce((b, l) => (ar(l) > ar(b) ? l : b)), use = /column|btct/i.test(layer + ' ' + (e.pat ?? '')) ? lps.filter(l => l === big || ar(l) > ar(big) * 0.4) : lps; /* cột: bỏ nét nhỏ của mẫu; vòng tường BTCT (có lỗ lớn) giữ cả lỗ */ paths.push({ pts: use[0], layer, closed: true, fill: true, hatch: true, loops: use }) }
           break
         }
         case 'LINE': if (e.vertices?.length >= 2) add([[e.vertices[0].x, e.vertices[0].y], [e.vertices[1].x, e.vertices[1].y]]); break
