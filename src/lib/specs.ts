@@ -8,7 +8,9 @@ const T: Record<string, [string, string]> = {
   ST: ['Đá dày 18–20mm, mài/ vát cạnh, phủ chống thấm (sealer) 2 lớp.', 'Stone 18–20mm thick, eased/chamfered edges, 2 coats penetrating sealer.'],
   ES: ['Dày 12–20mm, cạnh vê, khoét lỗ theo thiết bị, phủ chống ố.', '12–20mm thick, eased edge, cut-outs to suit fittings, stain-proof finish.'],
   LVT: ['Tổng dày ≥ 4mm, lớp chịu mài mòn ≥ 0,3mm; lắp hèm khóa hoặc dán keo chuyên dụng trên nền phẳng.', 'Overall ≥ 4mm, wear layer ≥ 0.3mm; click or glue-down on levelled screed.'],
-  CPT: ['Thảm tấm 500x500mm sợi nylon, đế chống tĩnh điện, dán keo cố định.', '500x500mm nylon carpet tile, antistatic backing, tackifier fixed.'],
+  CPT: ['Thảm trải kín (broadloom) sợi nylon/len, lớp đế, trải trên lớp lót thảm, căng khung hoặc dán keo, xử lý mối nối.', 'Broadloom carpet, nylon/wool fibre, backing, laid over underlay, stretched or glued, seams treated.'],
+  CTL: ['Thảm tấm 500x500mm sợi nylon, đế chống tĩnh điện, dán keo cố định.', '500x500mm nylon carpet tile, antistatic backing, tackifier fixed.'],
+  RUG: ['Thảm rời, không dán sàn; đế chống trượt, kích thước theo bản vẽ.', 'Loose area rug, not fixed to floor; non-slip backing, size as drawing.'],
   BS: ['Len cao 80–100mm, cùng vật liệu/ màu sàn hoặc theo chỉ định; mối nối và góc gia công kín.', '80–100mm high skirting, to match floor or as specified; mitred corners, tight joints.'],
   PT: ['Hệ sơn: bả 2 lớp, 1 lớp lót kháng kiềm, 2 lớp phủ hoàn thiện.', 'System: 2 skim coats, 1 alkali-resistant primer, 2 finish coats.'],
   SP: ['Hệ sơn đặc biệt: 1 lớp lót, 2 lớp phủ theo hướng dẫn hãng.', 'Special coating: 1 primer + 2 finish coats per manufacturer.'],
@@ -64,7 +66,7 @@ export function perfFor(e: Pick<Entry, 'group_code' | 'category'>, roomTypes: st
   if ((g === 'FB' || g === 'LE') && pub) add('Vải contract: ≥ 30.000 double rubs (Wyzenbeek), bền màu ≥ 4, chống cháy', 'Contract grade: ≥ 30,000 double rubs, colourfastness ≥ 4, flame-retardant')
   if (g === 'FF' && pub) add('Đồ dùng khu công cộng: kết cấu chắc chắn, bề mặt dễ vệ sinh', 'Contract-grade construction, cleanable surfaces')
   if (g === 'GL') add('Kính an toàn (cường lực/ dán)', 'Safety glass (toughened/laminated)')
-  if (['WC', 'WP', 'CPT', 'LVT'].includes(g) && roomTypes.includes('corridor')) add('Nhóm cháy vật liệu theo QCVN 06:2022/BXD', 'Reaction to fire per QCVN 06:2022/BXD')
+  if (['WC', 'WP', 'CPT', 'CTL', 'LVT'].includes(g) && roomTypes.includes('corridor')) add('Nhóm cháy vật liệu theo QCVN 06:2022/BXD', 'Reaction to fire per QCVN 06:2022/BXD')
   if (g === 'MT' && (wet || fnb)) add('Inox 304 chống gỉ khu ẩm', 'SS304 in wet/F&B areas')
   if (g === 'SF') add('Tiết kiệm nước (vòi ≤ 6 l/phút)', 'Water-efficient (taps ≤ 6 L/min)')
   return [vn.join('; '), en.join('; ')]

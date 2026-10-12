@@ -4,7 +4,7 @@ import { useAuth } from '../lib/auth'
 
 declare const __BUILD_ID__: string
 const CUR = typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev'
-type Info = { id: string; time?: string; note?: string; scope?: string }
+type Info = { id: string; time?: string; note?: string; scope?: string; silent?: boolean }
 
 /** Chuông thông báo: khi có bản cập nhật mới (version.json trên máy chủ khác bản đang chạy) → hiện chấm đỏ + nút “Tải lại”. */
 export default function UpdateBell() {
@@ -21,7 +21,7 @@ export default function UpdateBell() {
         const r = await fetch(`./version.json?t=${Date.now()}`, { cache: 'no-store' })
         if (!r.ok) return
         const j = (await r.json()) as Info
-        if (j.id && j.id !== CUR && (!j.scope || canRef.current(j.scope))) {   // bản cập nhật riêng một tính năng chỉ báo cho người có quyền tính năng đó
+        if (j.id && j.id !== CUR && !j.silent && (!j.scope || canRef.current(j.scope))) {   // bản cập nhật riêng một tính năng chỉ báo cho người có quyền tính năng đó
            setInfo(j); let seen = ''; try { seen = sessionStorage.getItem('dmvl-upd-seen') ?? '' } catch { /* */ } if (seen !== j.id) setPop(true) }
       } catch { /* mất mạng: bỏ qua */ }
     }

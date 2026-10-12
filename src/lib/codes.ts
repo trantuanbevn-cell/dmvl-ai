@@ -47,14 +47,36 @@ export const GROUPS: Group[] = [
  },
  {
   "code": "CPT",
-  "vn": "Thảm",
-  "en": "Carpet",
+  "vn": "Thảm trải kín (broadloom)",
+  "en": "Carpet Broadloom",
   "legacy": "TH",
   "csi": "09 68 00 Carpeting",
   "attrs_vn": "Loại (tấm/cuộn), sợi, chiều cao/khối lượng sợi, lớp đế, màu, chống cháy",
   "attrs_en": "Construction (tile/broadloom), fibre, pile height/weight, backing, colour, fire rating",
   "std_vn": "QCVN 06:2022/BXD",
   "std_intl": "ASTM E648; ASTM D2859; ISO 9239-1"
+ },
+ {
+  "code": "CTL",
+  "vn": "Thảm tấm (carpet tile)",
+  "en": "Carpet Tile",
+  "legacy": "TH",
+  "csi": "09 68 00 Carpeting",
+  "attrs_vn": "Kích thước tấm (500x500 / 600x600), sợi (nylon, PET…), kiểu dệt (tufted/loop), lớp đế, màu, kiểu lắp (dán/keo cố định), chống cháy",
+  "attrs_en": "Tile size (500x500 / 600x600), fibre, construction, backing, colour, installation (tackifier/adhesive), fire rating",
+  "std_vn": "QCVN 06:2022/BXD",
+  "std_intl": "ASTM E648; ASTM D2859; ISO 9239-1"
+ },
+ {
+  "code": "RUG",
+  "vn": "Thảm rời (area rug)",
+  "en": "Area Rug",
+  "legacy": "TH",
+  "csi": "12 68 00 Area Rugs",
+  "attrs_vn": "Kích thước, chất liệu (len, nylon, viscose…), kiểu dệt (tay/máy, tufted), họa tiết, đế chống trượt, chống cháy",
+  "attrs_en": "Size, material (wool, nylon, viscose…), construction (hand-made/machine, tufted), pattern, non-slip backing, fire rating",
+  "std_vn": "—",
+  "std_intl": "ASTM E648 (nếu yêu cầu)"
  },
  {
   "code": "BS",
