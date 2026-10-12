@@ -108,6 +108,8 @@ type Txt = { t: string; x: number; y: number; h: number; rot: number; ly: string
 /** layer nhiễu (đường ống, cơ điện, tâm…) – ẩn đi */
 const NOISE = /defpoints|xref- ?ps|(^|\$)(m|p)-|g-impt|a-genm|dwatcopi|fitting|pipe|(^|\$)center$|s-dim|淘宝|balloon|xr_(?!b2)[^$]*plan|net.?khuat|net.?thay|(^|\$)i_thay|(^|\$)defpoints/i
 /** layer ranh giới không gian khép kín (có sẵn trong bản vẽ) */
+/** layer của cửa đi/cửa sổ – chỉ cung ở các layer này mới được coi là cung quét cánh cửa (không lẫn với ghế, bàn, thiết bị) */
+export const DOOR_LAYER = /door|(^|\$)cua|cua ?di|cua ?so|(^|\$)dr[_ -]|window/i
 export const ZONE_LAYER = /(^|\$)area$|ranh.?gioi|dien.?tich|room.?bound|space.?bound/i
 
 /** DXF → các đường (toạ độ bản vẽ, đơn vị gốc) + chữ */
@@ -220,6 +222,8 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
   const segs: number[] = [], segCls: number[] = [], fills: VecPage['fills'] = [], arcs: VecPage['arcs'] = [], runs: DrawRun[] = []
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString()
   const seenP = new Set<string>(), seenS = new Set<string>(), hatchRuns: DrawRun[] = []
+  let nCol = 0, nWall = 0
+  const allArcs: VecPage['arcs'] = []
   // cung cửa vẽ chồng nhiều lớp (đồng tâm, cùng góc quét): chỉ giữ cung lớn nhất của mỗi cánh cửa
   const dropArc = new Set<Path>()
   {
@@ -252,7 +256,12 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
         let tot = 0; for (const lp of p.loops) { let a = 0; for (let i = 0; i + 1 < lp.length; i++) a += X(lp[i][0]) * Y(lp[i + 1][1]) - X(lp[i + 1][0]) * Y(lp[i][1]); tot += Math.abs(a) / 2 }
         if (tot > 0.04 * W * H) continue
       }
-      if (opt.draw) { let d = ''; for (const lp of p.loops) { lp.forEach((t, i) => { d += (i ? 'L' : 'M') + f2(X(t[0])) + ' ' + f2(Y(t[1])) }); d += 'Z' } hatchRuns.push({ cls: clsOf(p.layer, 0, true), fc: '#d0d0d0', lw: 0, d, eo: true, hp: true }) }
+      if (opt.draw) { let d = ''; for (const lp of p.loops) { lp.forEach((t, i) => { d += (i ? 'L' : 'M') + f2(X(t[0])) + ' ' + f2(Y(t[1])) }); d += 'Z' } // phân loại: cột = một vòng đơn, cạnh 0,15–1,6 m, gần vuông/tròn; còn lại (dải dài, vòng tường, lõi) = tường
+        let bx0 = 1e18, by0 = 1e18, bx1 = -1e18, by1 = -1e18; for (const t of p.loops[0]) { bx0 = Math.min(bx0, X(t[0])); bx1 = Math.max(bx1, X(t[0])); by0 = Math.min(by0, Y(t[1])); by1 = Math.max(by1, Y(t[1])) }
+        const mPt = (PT_MM * den) / 1000, wm = (bx1 - bx0) * mPt, hm = (by1 - by0) * mPt
+        const isCol = p.loops.length <= 2 && Math.min(wm, hm) >= 0.15 && Math.max(wm, hm) <= 1.6 && Math.max(wm, hm) / Math.max(0.01, Math.min(wm, hm)) <= 2.6
+        if (isCol) nCol++; else nWall++
+        hatchRuns.push({ cls: clsOf(p.layer, 0, true), fc: '#d0d0d0', lw: 0, d, eo: true, hp: true, rl: isCol ? 'col' : 'wall' }) }
       continue
     }
     // bỏ nét trùng hệt (cùng một đường được vẽ nhiều lần / nhiều xref)
@@ -265,7 +274,7 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
     const isZone = ZONE_LAYER.test(p.layer)
     if (p.closed && isZone && pts.length >= 6) zones.push({ layer: p.layer, pts })
     if (isZone) continue // ranh giới không gian chỉ để tính diện tích, không vẽ lên mặt bằng
-    const arc = asArc(pts); if (arc && arcs.length < 20000) arcs.push(arc)
+    const arc = asArc(pts); if (arc && arcs.length < 20000) { allArcs.push(arc); if (DOOR_LAYER.test(p.layer)) arcs.push(arc) }
     for (let i = 0; i + 3 < pts.length; i += 2) {
       const L = Math.hypot(pts[i + 2] - pts[i], pts[i + 3] - pts[i + 1]); if (L < 0.05) continue
       const a = Math.round(pts[i] * 20) + ',' + Math.round(pts[i + 1] * 20), b = Math.round(pts[i + 2] * 20) + ',' + Math.round(pts[i + 3] * 20), k2 = a < b ? a + '|' + b : b + '|' + a
@@ -283,7 +292,8 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
   }
   const seenT = new Set<string>()
   const texts: VecText[] = rawT.filter(t => { const tk = t.t + '|' + Math.round(t.x / (4 * k)) + '|' + Math.round(t.y / (4 * k)); if (seenT.has(tk)) return false; seenT.add(tk); return true }).filter(t => t.x >= x0 && t.x <= x1 && t.y >= y0 && t.y <= y1).map(t => ({ t: t.t, x: X(t.x), y: Y(t.y), h: Math.max(1, t.h / k), rot: Math.round(-t.rot * 10) / 10, ly: t.ly }))
-  onLog?.(`  DXF: ${segs.length / 4} đoạn nét, ${classes.length} nhóm layer/nét, ${texts.length} chữ, đơn vị ${unit}, tỉ lệ 1:${den}`)
+  if (arcs.length < 8) arcs.splice(0, arcs.length, ...allArcs) // file không đặt layer cửa rõ ràng → dò theo hình học như PDF
+  onLog?.(`  DXF: ${nWall} khối tường + ${nCol} cột (hatch), ${arcs.length} cung cửa; ${segs.length / 4} đoạn nét, ${classes.length} nhóm layer/nét, ${texts.length} chữ, đơn vị ${unit}, tỉ lệ 1:${den}`)
   return { ...(opt.draw ? { draw: [...hatchRuns, ...runs] } : {}), arcs, w: W, h: H, segs: new Float32Array(segs), cls: new Uint16Array(segCls), fills, classes, texts, nSeg: segs.length / 4, zones, dxf: { unit, mmPerUnit: mmU, den, extentM: [(x1 - x0) * mmU / 1000, (y1 - y0) * mmU / 1000] } }
 }
 

@@ -20,6 +20,10 @@ export type PlanPaint = {
   /** mặt bằng dạng VECTOR (SVG, toạ độ theo khung cắt `crop`): sàn tô màu liền khít + nét bản vẽ gốc. null nếu không dựng được */
   svg: ((colorOfRaw: (rawId: number) => string) => string) | null
 }
+/** kiểu hiển thị mặt bằng (nhớ trên máy): tường/cột đặc xám thay vì hatch; hiện cửa đã nhận diện */
+const LS = (k: string, d: boolean) => { try { const v = localStorage.getItem('dmvl.plan.' + k); return v === null ? d : v === '1' } catch { return d } }
+export const planStyle = { solid: LS('solid', true), doors: LS('doors', false) }
+export const setPlanStyle = (k: 'solid' | 'doors', v: boolean) => { planStyle[k] = v; try { localStorage.setItem('dmvl.plan.' + k, v ? '1' : '0') } catch { /* bỏ qua */ } }
 /** hatch chéo 45° (như ANSI31 của CAD): ô lặp 2,6 pt, nét 0,2 pt */
 function hatchPat(cx: CanvasRenderingContext2D): CanvasPattern | null {
   const N = 26, t = document.createElement('canvas'); t.width = N; t.height = N
@@ -96,7 +100,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
   }
   const pxPerM = (W / g.w) / g.m_per_pt
   // tường vector thật (kể cả ô cửa, vách) để bắt cạnh viền vào đúng mép tường; hình bao đồ rời/cột đứng lẻ để tô trắng
-  let sel = new Set<number>(), wsegs: number[] = [], nearWall: Uint8Array | null = null
+  let sel = new Set<number>(), wsegs: number[] = [], nearWall: Uint8Array | null = null, doorsOv = ''
   if (vv?.draw?.length) {
     try {
       const sx0 = W / vv.w, wkeys = new Set(g.wall_keys); vv.classes.forEach((c, i) => { if (wkeys.has(c.key)) sel.add(i) })
@@ -125,6 +129,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
         arcDoors.push([hx, hy, o[0] * sx0, o[1] * sx0, e[0] * sx0, e[1] * sx0])
       }
       doorsPx.push(...arcDoors)
+      doorsOv = doorsPx.map(d => `<line x1="${d[0].toFixed(1)}" y1="${d[1].toFixed(1)}" x2="${d[2].toFixed(1)}" y2="${d[3].toFixed(1)}" stroke="#d81b60" stroke-width="2.4"/>${d[4] !== undefined ? `<line x1="${d[0].toFixed(1)}" y1="${d[1].toFixed(1)}" x2="${d[4].toFixed(1)}" y2="${d[5].toFixed(1)}" stroke="#1e88e5" stroke-width="1" stroke-dasharray="3 2"/>` : ''}<circle cx="${d[0].toFixed(1)}" cy="${d[1].toFixed(1)}" r="2.6" fill="#d81b60"/>`).join('')
       if (g.src !== 'zones') { // ranh giới lấy từ bản vẽ (DXF) đã chính xác: giữ nguyên, không tô/bẻ theo cung cửa
         fillDoorSwings(roomOf, W, H, doorsPx)
         straightenZones(roomOf, W, H, wall, wsegs, pxPerM, inkD)
@@ -225,19 +230,20 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
         cs.delete(); hi.delete(); sub.delete(); floorD[k - 1] = d
       }
       const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      let lines = ''
+      let lines = '', linesSolid = ''
       for (const r of vv.draw) {
         if (isAnnoLayer(vv.classes[r.cls]?.layer ?? '')) continue
-        const w = Math.max(r.lw, 0.1)
-        lines += `<path d="${r.d}" fill="${r.hp ? 'url(#dxfh)' : r.fc ?? 'none'}"${r.eo ? ' fill-rule="evenodd"' : ''} stroke="${r.sc ?? 'none'}"${r.sc ? ` stroke-width="${+w.toFixed(3)}"` : ''}/>`
+        const w = Math.max(r.lw, 0.1), stroke = `stroke="${r.sc ?? 'none'}"${r.sc ? ` stroke-width="${+w.toFixed(3)}"` : ''}`, eo = r.eo ? ' fill-rule="evenodd"' : ''
+        lines += `<path d="${r.d}" fill="${r.hp ? 'url(#dxfh)' : r.fc ?? 'none'}"${eo} ${stroke}/>`
+        linesSolid += r.hp ? `<path d="${r.d}" fill="${r.rl === 'col' ? '#7d7d7d' : '#b4b4b4'}" fill-rule="evenodd" stroke="#000" stroke-width="0.1"/>` : `<path d="${r.d}" fill="${r.fc ?? 'none'}"${eo} ${stroke}/>`
       }
       let txt = ''
       for (const t of vv.texts) { if (t.t.length < 2 || /^[\d.,\s]+$/.test(t.t)) continue; txt += `<text transform="translate(${+t.x.toFixed(2)} ${+t.y.toFixed(2)})${t.rot ? ` rotate(${t.rot})` : ''}" font-size="${+t.h.toFixed(2)}" font-family="Arial,sans-serif" fill="#000" stroke="none">${esc(t.t)}</text>` }
-      const lineLayer = `<g style="mix-blend-mode:multiply;isolation:isolate" transform="translate(${-crop.x} ${-crop.y}) scale(${sx})" stroke-linejoin="round" stroke-linecap="round"><defs><pattern id="dxfh" width="2.6" height="2.6" patternUnits="userSpaceOnUse"><path d="M0 2.6L2.6 0M-0.65 0.65L0.65 -0.65M1.95 3.25L3.25 1.95" stroke="#000" stroke-width="0.12" fill="none"/></pattern></defs><rect x="0" y="0" width="${vv.w}" height="${vv.h}" fill="#fff" stroke="none"/>${lines}${txt}</g>`
+      const lineLayerOf = (LINES: string) => `<g style="mix-blend-mode:multiply;isolation:isolate" transform="translate(${-crop.x} ${-crop.y}) scale(${sx})" stroke-linejoin="round" stroke-linecap="round"><defs><pattern id="dxfh" width="2.6" height="2.6" patternUnits="userSpaceOnUse"><path d="M0 2.6L2.6 0M-0.65 0.65L0.65 -0.65M1.95 3.25L3.25 1.95" stroke="#000" stroke-width="0.12" fill="none"/></pattern></defs><rect x="0" y="0" width="${vv.w}" height="${vv.h}" fill="#fff" stroke="none"/>${LINES}${txt}</g>`
       svg = (colorOfRaw: (rawId: number) => string) => {
         let f = ''
         raw.forEach((r, k) => { if (floorD[k]) { const c = colorOfRaw(r.id); f += `<path d="${floorD[k]}" fill="${c}" stroke="${c}" stroke-width="2.2"/>` } })
-        return `<g transform="translate(${-crop.x} ${-crop.y})" fill-rule="evenodd" stroke-linejoin="round">${f}</g><g transform="translate(${-crop.x} ${-crop.y}) scale(${sx})"><path d="${hullD}" fill="#fff" stroke="none"/></g>${lineLayer}`
+        return `<g transform="translate(${-crop.x} ${-crop.y})" fill-rule="evenodd" stroke-linejoin="round">${f}</g><g transform="translate(${-crop.x} ${-crop.y}) scale(${sx})"><path d="${hullD}" fill="#fff" stroke="none"/></g>${lineLayerOf(planStyle.solid ? linesSolid : lines)}${planStyle.doors ? `<g transform="translate(${-crop.x} ${-crop.y})">${doorsOv}</g>` : ''}`
       }
     }
   } catch (e) { console.warn('Không dựng được bản vector, dùng ảnh', e) }

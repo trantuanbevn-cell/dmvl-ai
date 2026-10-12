@@ -11,6 +11,7 @@ import { computeFloor } from '../lib/floorPlans'
 import { roomKey, pole } from '../lib/sheetLayout'
 import { useVecMode } from '../lib/planSheet'
 import { PALETTE, NEUTRAL, autoRoomColor } from '../lib/palette'
+import { planStyle, setPlanStyle } from '../lib/planPaint'
 
 type VB = { x: number; y: number; w: number; h: number }
 
@@ -48,7 +49,8 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
     return m
   }, [g, sheet]) // eslint-disable-line
   const colorSig = useMemo(() => [...colorMap].map(([k, v]) => k + v).join(','), [colorMap])
-  const svgMarkup = useMemo(() => (vec && pp?.svg ? pp.svg(id => colorMap.get(id) ?? NEUTRAL) : ''), [pp, colorSig, vec]) // eslint-disable-line
+  const [sty, setSty] = useState({ ...planStyle })
+  const svgMarkup = useMemo(() => (vec && pp?.svg ? pp.svg(id => colorMap.get(id) ?? NEUTRAL) : ''), [pp, colorSig, vec, sty]) // eslint-disable-line
   useEffect(() => {
     if (!pp || svgMarkup) return
     const t = window.setTimeout(() => setPlanUrl(pp.paint(id => colorMap.get(id) ?? NEUTRAL).toDataURL('image/jpeg', 0.9)), 100)
@@ -161,6 +163,8 @@ export default function PlanPainter({ d, fp, sheet, commit, pp, busy }: { d: Pro
         {canEdit && <button className={'btn sm' + (mode === 'cut' ? ' primary' : '')} onClick={() => { setMode(mode === 'cut' ? 'pick' : 'cut'); setCutPts([]); setCursor(null) }}>{mode === 'cut' ? '✓ Đang chia phòng – bấm 2 điểm' : '✂ Chia 1 phòng thành 2'}</button>}
         {canEdit && unnamedBig > 0 && <button className="btn sm" disabled={!!work} onClick={autoName} title="Phòng nào có chữ tên ghi trong bản vẽ thì tự đặt tên + tô màu">⚡ Tự nhận tên từ chữ trong bản vẽ ({unnamedBig})</button>}
         <span style={{ flex: 1 }} />
+        {pp?.svg && vec && <button className="btn sm" onClick={() => { setPlanStyle('solid', !planStyle.solid); setSty({ ...planStyle }) }} title="Tường + cột: tô đặc màu xám (cột đậm hơn) hoặc hatch chéo như CAD">{sty.solid ? 'Tường/cột: đặc xám' : 'Tường/cột: hatch'}</button>}
+        {pp?.svg && vec && <button className={'btn sm' + (sty.doors ? ' primary' : '')} onClick={() => { setPlanStyle('doors', !planStyle.doors); setSty({ ...planStyle }) }} title="Hiện các cửa phần mềm đã nhận diện: đường hồng = khung cửa (bản lề → mép kia), nét xanh = hướng cánh mở">{sty.doors ? '✓ Hiện cửa nhận diện' : 'Hiện cửa nhận diện'}</button>}
         {pp?.svg && <button className="btn sm" onClick={() => setVec(!vec)} title="Vector: nét sắc ở mọi mức phóng to. Ảnh: kéo/thu phóng mượt hơn trên máy yếu">{vec ? 'Nét: vector' : 'Nét: ảnh'}</button>}
         <button className="btn sm" onClick={() => zoom(1 / 1.3)}>＋</button><button className="btn sm" onClick={() => zoom(1.3)}>－</button><button className="btn sm" onClick={fit}>⤢ Vừa khung</button>
       </div>
