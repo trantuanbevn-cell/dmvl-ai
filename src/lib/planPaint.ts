@@ -11,7 +11,7 @@ import { regularize } from './shape'
 import { makeWallSnap } from './wallsnap'
 import { islandHulls } from './furniture'
 import { wallSegments } from './cad'
-import { straightenZones, dilate, fillDoorSwings } from './zoneSnap'
+import { straightenZones, dilate, fillDoorSwings, dropDoorSwingSegs } from './zoneSnap'
 
 export type PlanPaint = {
   W: number; H: number; crop: { x: number; y: number; w: number; h: number }
@@ -92,7 +92,9 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
     try {
       const sx0 = W / vv.w, wkeys = new Set(g.wall_keys); vv.classes.forEach((c, i) => { if (wkeys.has(c.key)) sel.add(i) })
       const withDoors = new Set(sel); vv.classes.forEach((c, i) => { if (/DOOR|CUA DI|CUA SO|WINDOW/i.test(c.layer) && !c.fill) withDoors.add(i) })
-      wsegs = wallSegments(vv, withDoors, detectDoors(vv, g.m_per_pt), g.m_per_pt).map(v => v * sx0)
+      const doorsPx = detectDoors(vv, g.m_per_pt).map(d => d.map(v => v * sx0))
+      // nét tường bắt điểm: bỏ cung quét + cánh cửa (ranh giới phòng chạy theo đường ngang cửa, không theo cung)
+      wsegs = dropDoorSwingSegs(wallSegments(vv, withDoors, detectDoors(vv, g.m_per_pt), g.m_per_pt).map(v => v * sx0), doorsPx)
       // "bắt điểm": ranh giới ảo giữa hai không gian thông nhau → đoạn thẳng nối hai điểm tường
       const wall = new Uint8Array(N)
       for (let s2 = 0; s2 < wsegs.length; s2 += 4) {
@@ -100,8 +102,23 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
         for (let t = 0; t <= n; t++) { const x = Math.round(ax + ((bx - ax) * t) / n), y = Math.round(ay + ((by - ay) * t) / n); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < W && yy < H) wall[yy * W + xx] = 1 } }
       }
       nearWall = dilate(wall, W, H, 4)
+      // cửa dò theo CUNG quét ~90° (không cần thấy nét cánh): bản lề, đầu cung nằm dọc tường = đầu khung cửa, đầu kia = đầu cánh
+      const wallNear = dilate(wall, W, H, 2)
+      const arcDoors: number[][] = []
+      for (const ar of vv.arcs) {
+        const rm = ar.r * g.m_per_pt, ch = Math.hypot(ar.b[0] - ar.a[0], ar.b[1] - ar.a[1]); if (rm < 0.55 || rm > 1.3 || Math.abs(ch / ar.r - Math.SQRT2) > 0.2) continue
+        const mx = (ar.a[0] + ar.b[0]) / 2, my = (ar.a[1] + ar.b[1]) / 2; let nx = -(ar.b[1] - ar.a[1]), ny = ar.b[0] - ar.a[0]; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl
+        if ((ar.m[0] - mx) * nx + (ar.m[1] - my) * ny > 0) { nx = -nx; ny = -ny }
+        const hx = (mx + nx * ch / 2) * sx0, hy = (my + ny * ch / 2) * sx0
+        const cover = (q: number[]) => { let c = 0; for (let k = 1; k <= 10; k++) { const x = Math.round(hx + ((q[0] * sx0 - hx) * k) / 10), y = Math.round(hy + ((q[1] * sx0 - hy) * k) / 10); if (x >= 0 && y >= 0 && x < W && y < H && wallNear[y * W + x]) c++ } return c }
+        const ca = cover(ar.a), cb = cover(ar.b); if (Math.max(ca, cb) < 6) continue
+        const o = ca >= cb ? ar.a : ar.b, e = ca >= cb ? ar.b : ar.a
+        arcDoors.push([hx, hy, o[0] * sx0, o[1] * sx0, e[0] * sx0, e[1] * sx0])
+      }
+      doorsPx.push(...arcDoors)
+      fillDoorSwings(roomOf, W, H, doorsPx)
       straightenZones(roomOf, W, H, wall, wsegs, pxPerM, inkD)
-      fillDoorSwings(roomOf, W, H, detectDoors(vv, g.m_per_pt).map(d => d.map(v => v * sx0)))
+      fillDoorSwings(roomOf, W, H, doorsPx)
     } catch (e) { console.warn('bắt điểm ranh giới lỗi', e) }
   }
   // thành phần liên thông của vùng "không nét" trong từng phòng
@@ -161,6 +178,8 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       const snap = makeWallSnap(wsegs, 1.4 * sx)
       // vùng quét của cánh cửa (cung + cánh) không phải đồ rời → không tô trắng
       const doors = detectDoors(vv, g.m_per_pt)
+      // cung ~90° bán kính 0,55–1,3 m = cung quét cánh cửa (kể cả cửa không dò ra cánh): hình bao dính cung này không phải đồ nội thất
+      const swings = vv.arcs.filter(ar => { const rm = ar.r * g.m_per_pt, ch = Math.hypot(ar.b[0] - ar.a[0], ar.b[1] - ar.a[1]); return rm >= 0.55 && rm <= 1.3 && Math.abs(ch / ar.r - Math.SQRT2) < 0.2 })
       const hulls = islandHulls(vv, g.m_per_pt, sel).filter(h => {
         let cx = 0, cy = 0; const n = h.length / 2; for (let i = 0; i < h.length; i += 2) { cx += h[i]; cy += h[i + 1] } cx /= n; cy /= n
         // hình bao mà phần lớn bên trong là sàn thông thoáng (không bị nét bao kín, vd. tam giác nối lệch các nét rời) → không phải đồ nội thất, bỏ
@@ -173,6 +192,8 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
           if (inside) { tot++; if (!ink[y * W + x]) { nonInk++; if (keep[y * W + x]) floorN++ } }
         }
         if (tot > 0.5 * pxPerM * pxPerM && floorN > 0.5 * nonInk) return false
+        { let hx0 = 1e9, hy0 = 1e9, hx1 = -1e9, hy1 = -1e9; for (let i = 0; i < h.length; i += 2) { hx0 = Math.min(hx0, h[i]); hx1 = Math.max(hx1, h[i]); hy0 = Math.min(hy0, h[i + 1]); hy1 = Math.max(hy1, h[i + 1]) }
+          if (swings.some(ar => ar.m[0] >= hx0 - 1 && ar.m[0] <= hx1 + 1 && ar.m[1] >= hy0 - 1 && ar.m[1] <= hy1 + 1)) return false }
         return !doors.some(d => { const r = Math.hypot(d[2] - d[0], d[3] - d[1]); return Math.hypot(cx - d[0], cy - d[1]) < 0.95 * r })
       })
       const hullD = hulls.map(h => { let d = ''; for (let i = 0; i < h.length; i += 2) d += (i ? 'L' : 'M') + +h[i].toFixed(2) + ' ' + +h[i + 1].toFixed(2); return d + 'Z' }).join('')
@@ -204,7 +225,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       const lineLayer = `<g style="mix-blend-mode:multiply;isolation:isolate" transform="translate(${-crop.x} ${-crop.y}) scale(${sx})" stroke-linejoin="round" stroke-linecap="round"><rect x="0" y="0" width="${vv.w}" height="${vv.h}" fill="#fff" stroke="none"/>${lines}${txt}</g>`
       svg = (colorOfRaw: (rawId: number) => string) => {
         let f = ''
-        raw.forEach((r, k) => { if (floorD[k]) { const c = colorOfRaw(r.id); f += `<path d="${floorD[k]}" fill="${c}" stroke="${c}" stroke-width="1.4"/>` } })
+        raw.forEach((r, k) => { if (floorD[k]) { const c = colorOfRaw(r.id); f += `<path d="${floorD[k]}" fill="${c}" stroke="${c}" stroke-width="2.2"/>` } })
         return `<g transform="translate(${-crop.x} ${-crop.y})" fill-rule="evenodd" stroke-linejoin="round">${f}</g><g transform="translate(${-crop.x} ${-crop.y}) scale(${sx})"><path d="${hullD}" fill="#fff" stroke="none"/></g>${lineLayer}`
       }
     }

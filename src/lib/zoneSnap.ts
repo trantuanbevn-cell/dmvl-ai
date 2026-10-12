@@ -264,39 +264,59 @@ export function absorbSmall(lab: Uint16Array, W: number, H: number, wm1: Uint8Ar
   return { absorbed, pockets }
 }
 
-/** Ô quạt quét của cánh cửa: phần chưa có nhãn nằm trong 1/4 hình tròn (tâm = bản lề) về phía phòng → tô cùng màu phòng đó.
- *  doors: [hx,hy,ox,oy] theo px – bản lề và đầu kia của khung cửa (dọc tường). */
+/**
+ * Cửa đi quay: ranh giới giữa hai phòng PHẢI nằm đúng trên đoạn "ngang cửa" (bản lề → mép kia của khung cửa), không chạy theo cung quét.
+ * Ô quạt quét (1/4 hình tròn tâm = bản lề, nằm về phía phòng mà cửa mở vào) được gán trọn cho phòng đó; phần của phòng bên kia lấn vào ô quạt
+ * và các điểm chưa có nhãn đều trả lại cho phòng mở cửa.
+ * doors: [hx,hy,ox,oy] theo px – bản lề và đầu kia của khung cửa (dọc tường).
+ */
 export function fillDoorSwings(lab: Uint16Array, W: number, H: number, doors: number[][]): number {
-  let filled = 0
-  const area = new Map<number, number>(); for (let i = 0; i < lab.length; i++) if (lab[i]) area.set(lab[i], (area.get(lab[i]) ?? 0) + 1)
-  for (const [hx, hy, ox, oy] of doors) {
+  let changed = 0
+  for (const [hx, hy, ox, oy, ex, ey] of doors) {
     const r = Math.hypot(ox - hx, oy - hy); if (r < 4) continue
     const ux = (ox - hx) / r, uy = (oy - hy) / r
-    let best: { cnt: Map<number, number>; zero: number[]; nz: number } | null = null
+    type Side = { cnt: Map<number, number>; core: Map<number, number>; cells: number[]; nz: number }
+    const sides: Side[] = []
     for (const sg of [1, -1]) {
-      const vx = -uy * sg, vy = ux * sg, cnt = new Map<number, number>(), zero: number[] = []; let nz = 0
+      const vx = -uy * sg, vy = ux * sg, cnt = new Map<number, number>(), core = new Map<number, number>(), cells: number[] = []; let nz = 0
       for (let y = Math.max(0, Math.floor(hy - r)); y <= Math.min(H - 1, Math.ceil(hy + r)); y++) for (let x = Math.max(0, Math.floor(hx - r)); x <= Math.min(W - 1, Math.ceil(hx + r)); x++) {
-        const px = x - hx, py = y - hy
-        if (px * px + py * py > r * r) continue
-        if (px * ux + py * uy < 0 || px * vx + py * vy < 0) continue
-        const l = lab[y * W + x]; if (l) { nz++; cnt.set(l, (cnt.get(l) ?? 0) + 1) } else zero.push(y * W + x)
+        const px = x - hx, py = y - hy, d2 = px * px + py * py
+        if (d2 > r * r) continue
+        const a = px * ux + py * uy, b = px * vx + py * vy
+        if (a < 0 || a > r || b < 0) continue
+        const i = y * W + x, l = lab[i]; cells.push(i)
+        if (l) { nz++; cnt.set(l, (cnt.get(l) ?? 0) + 1); if (d2 < 0.36 * r * r && b > 0.15 * r) core.set(l, (core.get(l) ?? 0) + 1) }
       }
-      if (!best || nz > best.nz) best = { cnt, zero, nz }
+      sides.push({ cnt, core, cells, nz })
     }
-    // vùng kín nhỏ nằm trọn trong ô quạt (bị cung cửa tách thành "phòng" riêng) → nhập vào phòng chính của ô quạt
-    if (best) {
-      const sorted = [...best.cnt].sort((p, q) => p[1] - q[1]), main = sorted.length ? sorted[sorted.length - 1][0] : 0
-      for (const [l, c] of sorted) {
-        if (l === main || !main) continue
-        const A = area.get(l) ?? 0, AM = area.get(main) ?? 0
-        if (A <= 1.5 * Math.PI * r * r / 4 && c >= 0.6 * A && AM > A) { for (let i = 0; i < lab.length; i++) if (lab[i] === l) lab[i] = main; area.set(main, AM + A); area.delete(l); best.cnt.set(main, (best.cnt.get(main) ?? 0) + c); best.cnt.delete(l); filled++ }
-      }
-    }
-    if (!best || !best.zero.length || best.nz < 0.2 * (best.nz + best.zero.length)) continue
-    let l = 0, bc = 0; for (const [k, c] of best.cnt) if (c > bc) { bc = c; l = k }
-    if (!l) continue
-    for (const i of best.zero) lab[i] = l
-    filled++
+    const top = (m: Map<number, number>) => { let l = 0, c = 0; for (const [k, v] of m) if (v > c) { c = v; l = k } return l }
+    // phía mở cửa = phía có nhiều điểm đã gán nhãn hơn (phía kia là tường dày/ phòng bên cạnh)
+    // đã biết đầu cánh (ex,ey) → phía mở cửa chính xác; chưa biết thì lấy phía có nhiều điểm đã gán nhãn hơn
+    const si = ex !== undefined && ey !== undefined ? ((ex - hx) * -uy + (ey - hy) * ux >= 0 ? 0 : 1) : sides[0].nz >= sides[1].nz ? 0 : 1, S = sides[si], O = sides[1 - si]
+    const LS = top(S.core.size ? S.core : S.cnt); if (!LS) continue
+    const LO = top(O.core.size ? O.core : O.cnt)
+    for (const i of S.cells) { const l = lab[i]; if (l === 0 || (LO && l === LO && LO !== LS)) { lab[i] = LS; changed++ } }
   }
-  return filled
+  return changed
+}
+
+/** bỏ các nét thuộc cung quét + cánh cửa (nằm trong ô quạt của cửa) khỏi tập nét tường dùng để bắt điểm; giữ nét song song/trùng đường khung cửa */
+export function dropDoorSwingSegs(segs: ArrayLike<number>, doors: number[][]): number[] {
+  const out: number[] = []
+  for (let s = 0; s < segs.length; s += 4) {
+    const ax = segs[s], ay = segs[s + 1], bx = segs[s + 2], by = segs[s + 3]
+    let drop = false
+    for (const [hx, hy, ox, oy] of doors) {
+      const r = Math.hypot(ox - hx, oy - hy); if (r < 1e-6) continue
+      const ux = (ox - hx) / r, uy = (oy - hy) / r, vx = -uy, vy = ux
+      const R = 1.08 * r
+      if (Math.hypot(ax - hx, ay - hy) > R || Math.hypot(bx - hx, by - hy) > R) continue
+      const a1 = (ax - hx) * ux + (ay - hy) * uy, b1 = (ax - hx) * vx + (ay - hy) * vy, a2 = (bx - hx) * ux + (by - hy) * uy, b2 = (bx - hx) * vx + (by - hy) * vy
+      if (Math.abs(b1) < 0.08 * r && Math.abs(b2) < 0.08 * r) continue   // nằm trên đường khung cửa/tường: giữ
+      if (Math.min(a1, a2) < -0.1 * r) continue
+      drop = true; break
+    }
+    if (!drop) out.push(ax, ay, bx, by)
+  }
+  return out
 }

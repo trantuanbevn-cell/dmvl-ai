@@ -11,3 +11,6 @@ Kỹ thuật: `projects.kind` = 'catalog' | 'concept' (cùng bảng để dữ l
 
 ## Phân quyền tính năng lớn (quy ước bắt buộc)
 Mọi tính năng lớn mới **mặc định chỉ admin (chủ dự án) thấy/dùng**. Thêm vào `src/lib/features.ts` (FEATURES), ẩn menu + route bằng `useAuth().can('key')`. Admin cấp cho từng thành viên bằng ô tích ở trang Thành viên (lưu `profiles.features text[]`, mặc định rỗng).
+
+## Thông báo cập nhật (🔔)
+`release.json` ở gốc repo quyết định ai nhận thông báo "có bản cập nhật": `{"scope":"concept"}` = chỉ người có quyền tính năng đó (admin luôn có); xoá file / bỏ scope = báo mọi người. Push chỉ sửa tính năng admin-only thì để scope tương ứng; push ảnh hưởng mọi người thì bỏ scope.
