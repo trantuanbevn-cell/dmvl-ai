@@ -18,7 +18,7 @@ export default function AddShot({ d, entry, roomId, onClose }: { d: ProjectData;
   const drag = useRef<{ x: number; y: number } | null>(null)
   const wrap = useRef<HTMLDivElement>(null)
   const pages = useMemo(() => roomPages(d.pages, rid).filter(p => p.kind === 'render' || p.kind === 'plan'), [d.pages, rid])
-  const page = d.pages.find(p => p.id === pageId)
+  const page = d.pages.find(p => p.id === (pageId || (pages.find(x => x.kind === 'render') ?? pages[0])?.id))
   const rel = (e: React.PointerEvent) => { const r = wrap.current!.getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))] }
   const down = (e: React.PointerEvent) => { e.preventDefault(); (e.target as Element).setPointerCapture?.(e.pointerId); const [x, y] = rel(e); drag.current = { x, y }; setBox([x, y, 0, 0]) }
   const move = (e: React.PointerEvent) => { if (!drag.current) return; const [x, y] = rel(e), s = drag.current; setBox([Math.min(s.x, x), Math.min(s.y, y), Math.abs(x - s.x), Math.abs(y - s.y)]) }
@@ -52,7 +52,7 @@ export default function AddShot({ d, entry, roomId, onClose }: { d: ProjectData;
         </div>
         {tab === 'page' ? <>
           <div className="small muted">Chọn trang của phòng, rồi kéo chuột khoanh vùng có vật liệu này.</div>
-          <div className="row gap sm-gap" style={{ flexWrap: 'wrap' }}>{pages.map(p => <img key={p.id} src={d.urls[p.thumb_path ?? p.image_path]} alt="" onClick={() => { setPageId(p.id); setBox(null) }} style={{ height: 70, borderRadius: 6, cursor: 'pointer', outline: p.id === pageId ? '3px solid #c57542' : '1px solid #ddd' }} />)}{!pages.length && <span className="muted small">Phòng này chưa có trang concept.</span>}</div>
+          <div className="row gap sm-gap" style={{ flexWrap: 'wrap' }}>{pages.map(p => <img key={p.id} src={d.urls[p.thumb_path ?? p.image_path]} alt="" onClick={() => { setPageId(p.id); setBox(null) }} style={{ height: 70, borderRadius: 6, cursor: 'pointer', outline: p.id === page?.id ? '3px solid #c57542' : '1px solid #ddd' }} />)}{!pages.length && <span className="muted small">Phòng này chưa có trang concept.</span>}</div>
           {page && <div ref={wrap} className="img-wrap drawing" style={{ touchAction: 'none' }} onPointerDown={down} onPointerMove={move} onPointerUp={up}>
             <img src={d.urls[page.image_path]} alt="" draggable={false} />
             {box && <div style={{ position: 'absolute', left: box[0] * 100 + '%', top: box[1] * 100 + '%', width: box[2] * 100 + '%', height: box[3] * 100 + '%', border: '2px solid #e5322d', background: 'rgba(229,50,45,.12)', pointerEvents: 'none' }} />}

@@ -10,6 +10,7 @@ import { librarySuggestions, saveToLibrary, searchLinks, LibProduct } from '../l
 import type { Entry } from '../lib/types'
 import type { ProjectData } from '../lib/useProject'
 import RoomShotFallback from './RoomShotFallback'
+import AddShot from './AddShot'
 import { locationsOf } from '../lib/locations'
 import OccCrop from './OccCrop'
 import { useAuth } from '../lib/auth'
@@ -38,6 +39,7 @@ function Field({ e, k, label, area, onSaved, type = 'text', bad }: { e: Entry; k
 export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectData; entry: Entry; onClose: () => void; issues?: Issue[] }) {
   const { canEdit } = useAuth()
   const [busy, setBusy] = useState('')
+  const [shotRoom, setShotRoom] = useState<string | null>(null)
   const flagKeys = new Set((issues ?? []).flatMap(i => i.keys))
   const B = (k: string) => flagKeys.has(k)
   const [lang, setLang] = useState<'vn' | 'en'>(() => ([...flagKeys].some(k => k.endsWith('_en')) && ![...flagKeys].some(k => k.endsWith('_vn')) ? 'en' : 'vn'))
@@ -91,7 +93,7 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
           const pg = o.page_id ? pageById.get(o.page_id) : undefined
           return (
             <div key={o.id} className="occ">
-              {o.bbox ? <OccCrop d={d} o={o} height={84} maxWidth={118} /> : o.room_id ? <RoomShotFallback d={d} roomId={o.room_id} height={84} width={118} /> : <OccCrop d={d} o={o} height={84} maxWidth={118} />}
+              {o.bbox ? <OccCrop d={d} o={o} height={84} maxWidth={118} /> : o.room_id ? <RoomShotFallback d={d} roomId={o.room_id} height={84} width={118} onClick={canEdit ? () => setShotRoom(o.room_id!) : undefined} /> : <OccCrop d={d} o={o} height={84} maxWidth={118} />}
               <div className="small muted">{o.room_id ? roomById.get(o.room_id)?.code : ''}{pg ? ` · tr.${pg.page_no}` : ''}{o.note ? ` · ${o.note}` : ''}</div>
             </div>)
         })}
@@ -174,6 +176,7 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
       <Field bad={B('qty_note') || ('qty_note'.startsWith('qty') && B('qty'))} e={entry} k="qty_note" label="Ghi chú số lượng" onSaved={saved} />
       <button className="btn ghost sm danger" onClick={del}>Xoá mã này</button>
       </fieldset>
+    {shotRoom && <AddShot d={d} entry={entry} roomId={shotRoom} onClose={() => setShotRoom(null)} />}
     </aside>
   )
 }
