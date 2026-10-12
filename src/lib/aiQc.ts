@@ -1,6 +1,7 @@
 // QC cuối bằng AI (chỉ admin chạy): đối chiếu danh mục ↔ phân tích phối cảnh ↔ quy định vận hành, trả về gợi ý để mọi người xác nhận.
 import { supabase, FUNCTIONS_URL } from './supabase'
 import { rulesFor, EL_VN } from './opRules'
+import { symbolMap } from './sections'
 import type { ProjectData } from './useProject'
 import type { Entry } from './types'
 
@@ -25,16 +26,18 @@ export async function loadFindings(projectId: string): Promise<Finding[]> {
 /** Chạy AI theo từng lô; kết quả được kiểm lại bằng phần mềm (mã có thật, đoạn trích có thật trong ô, độ tin cậy ≥ 0.85) rồi lưu */
 export async function runAiQc(d: ProjectData, onProgress: (msg: string) => void): Promise<number> {
   const live = d.entries.filter(e => e.status !== 'rejected')
-  const byCode = new Map(live.map(e => [e.code, e]))
+  /* AI nhìn thấy KÝ HIỆU trên bản vẽ (vd PNT-02, MTL-07) – cũng là ký hiệu được nhắc trong các ô – nên dùng ký hiệu làm mã */
+  const sym = symbolMap(d.entries), S = (e: Entry) => sym.get(e.id) ?? e.code
+  const byCode = new Map(live.map(e => [S(e), e]))
   const rooms = d.rooms.map(r => `${r.code}|${r.name_vn}|${r.name_en ?? ''}|${r.room_type}`)
   const rules = d.rules.map(r => `${r.id.slice(0, 6)}|${r.room_ids.map(id => d.rooms.find(x => x.id === id)?.code).filter(Boolean).join(',')}|${r.elements.map(e => EL_VN[e] ?? e).join(',')}|${cut(r.title_vn || r.title_en, 120)}: ${cut(r.body_vn || r.body_en, 500)}`)
-  const index = live.map(e => `${e.code}|${e.group_code}|${cut(e.name_vn, 60)}|${cut(e.material_vn, 70)}`)
+  const index = live.map(e => `${S(e)}|${e.group_code}|${cut(e.name_vn, 60)}|${cut(e.material_vn, 70)}`)
   const rowOf = (e: Entry) => {
     const occ = d.occ.filter(o => o.entry_id === e.id)
     const rm = [...new Set(occ.filter(o => o.room_id).map(o => d.rooms.find(r => r.id === o.room_id)?.code).filter(Boolean))]
     const notes = [...new Set(occ.map(o => cut(o.note, 160)).filter(Boolean))].slice(0, 3)
     const rl = rulesFor(d, e.id).map(h => h.rule.id.slice(0, 6))
-    const o: Record<string, unknown> = { code: e.code, group: e.group_code, rooms: rm.join(','), source: e.source }
+    const o: Record<string, unknown> = { code: S(e), group: e.group_code, rooms: rm.join(','), source: e.source }
     for (const f of FIELDS) { const v = (e as any)[f]; if (v && String(v).trim()) o[f] = cut(v, 600) }
     if (notes.length) o.render_note = notes.join(' / ')
     if (rl.length) o.rule_ids = rl.join(',')
@@ -57,10 +60,10 @@ export async function runAiQc(d: ProjectData, onProgress: (msg: string) => void)
       if (cur && (FIELDS as readonly string[]).includes(field)) { const v = String((e as any)[field] ?? ''); if (!v.includes(cur)) continue }
       const sug = it.suggestion ? String(it.suggestion) : null
       if (sug && cur && sug.trim() === cur.trim()) continue
-      const related = ((it.related ?? []) as string[]).filter(c => byCode.has(c) && c !== e.code)
+      const related = ((it.related ?? []) as string[]).filter(c => byCode.has(c) && c !== S(e))
       if (it.kind === 'duplicate' && !related.length) continue
-      const key = [e.code, it.kind, field, cur ?? cut(it.message, 40)].join('|'); if (seen.has(key)) continue; seen.add(key)
-      found.push({ project_id: e.project_id, entry_id: e.id, code: e.code, kind: String(it.kind), field, current_text: cur, suggestion: sug, message: String(it.message), confidence: Number(it.confidence), related, status: 'open', run_id: runId })
+      const key = [S(e), it.kind, field, cur ?? cut(it.message, 40)].join('|'); if (seen.has(key)) continue; seen.add(key)
+      found.push({ project_id: e.project_id, entry_id: e.id, code: S(e), kind: String(it.kind), field, current_text: cur, suggestion: sug, message: String(it.message), confidence: Number(it.confidence), related, status: 'open', run_id: runId })
     }
   }
   // Giữ lại các gợi ý đã xử lý (để không báo lại); thay thế các gợi ý còn mở bằng lần chạy mới

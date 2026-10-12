@@ -1,12 +1,14 @@
 // Tiện ích cho QC cuối: làm sạch dữ liệu để so khớp chính xác (không nhầm mã vật liệu nội bộ với mã sản phẩm thật).
 import type { Entry } from './types'
+import { symbolMap } from './sections'
 
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase()
 
 /** Ô “Mã SP / Hãng” của đồ rời hay chứa mã vật liệu nội bộ (EWD-06, MTL-07…) để chỉ thành phần cấu tạo – không phải mã sản phẩm thật */
 export function internalSet(entries: Entry[]) {
   const codes = new Set<string>(), pre = new Set<string>()
-  for (const e of entries) { codes.add(norm(e.code)); pre.add(norm(e.group_code)); const p = e.code.split('-')[0]; if (p) pre.add(norm(p)) }
+  const sym = symbolMap(entries)
+  for (const e of entries) { codes.add(norm(e.code)); const sy = sym.get(e.id); if (sy) { codes.add(norm(sy)); pre.add(norm(sy.split('-')[0])) }; pre.add(norm(e.group_code)); const p = e.code.split('-')[0]; if (p) pre.add(norm(p)) }
   return { codes, pre }
 }
 export const isInternalCode = (c: string, s: ReturnType<typeof internalSet>) => {

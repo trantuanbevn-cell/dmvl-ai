@@ -35,8 +35,6 @@ export function checkEntries(d: ProjectData, lang: Lang): EntryIssues[] {
     if (m.length) issues.push({ kind: 'miss', text: 'Thiếu: ' + missText(m), keys: m.map(x => String(x.key)) })
     const occ = d.occ.filter(o => o.entry_id === e.id)
     if (!occ.some(o => o.room_id)) issues.push({ kind: 'err', text: 'Chưa gán vào phòng nào – thêm phòng ở ô “Vị trí”', keys: ['loc'] })
-    // Mã gốc phải khớp nhóm (ký hiệu hiển thị trên bản vẽ có thể khác mã gốc – không so ký hiệu)
-    if (e.code.split('-')[0] !== e.group_code) issues.push({ kind: 'err', text: `Mã ${e.code} không khớp ô “Nhóm” (${e.group_code}) – sửa lại mã hoặc nhóm`, keys: ['group', 'code'] })
     const mine = realCodes(e, sets)
     const same = [...new Set(mine.flatMap(c => byCode.get(norm(c)) ?? []))].filter(x => x.id !== e.id)
     const diff = same.filter(x => norm(x.brand) && norm(e.brand) && norm(x.brand) !== norm(e.brand) && !norm(x.brand).includes(norm(e.brand)) && !norm(e.brand).includes(norm(x.brand)))
