@@ -6,6 +6,8 @@ import './styles.css'
 
 import { installSpellGlobal } from './lib/spellGlobal'
 installSpellGlobal()
+import { reloadOnce } from './lib/staleChunk'
+window.addEventListener('vite:preloadError', e => { e.preventDefault(); reloadOnce() })
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
