@@ -20,6 +20,14 @@ export type PlanPaint = {
   /** mặt bằng dạng VECTOR (SVG, toạ độ theo khung cắt `crop`): sàn tô màu liền khít + nét bản vẽ gốc. null nếu không dựng được */
   svg: ((colorOfRaw: (rawId: number) => string) => string) | null
 }
+/** hatch chéo 45° (như ANSI31 của CAD): ô lặp 2,6 pt, nét 0,2 pt */
+function hatchPat(cx: CanvasRenderingContext2D): CanvasPattern | null {
+  const N = 26, t = document.createElement('canvas'); t.width = N; t.height = N
+  const g = t.getContext('2d'); if (!g) return null
+  g.strokeStyle = '#000'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, N); g.lineTo(N, 0); g.moveTo(-N / 4, N / 4); g.lineTo(N / 4, -N / 4); g.moveTo(N * 0.75, N * 1.25); g.lineTo(N * 1.25, N * 0.75); g.stroke()
+  const pt = cx.createPattern(t, 'repeat'); if (pt && (pt as any).setTransform) pt.setTransform(new DOMMatrix().scale(2.6 / N))
+  return pt
+}
 const hex = (s: string): [number, number, number] => { const n = parseInt(s.replace('#', '').padEnd(6, '0'), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255] }
 
 export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorGeom, longEdge = 3400): Promise<PlanPaint> {
@@ -35,7 +43,8 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
     for (const r of vv.draw) {
       if (isAnnoLayer(vv.classes[r.cls]?.layer ?? '')) continue
       const p = new Path2D(r.d)
-      if (r.fc) { cx.fillStyle = r.fc; cx.fill(p, r.eo ? 'evenodd' : 'nonzero') }
+      if (r.hp) { const hp = hatchPat(cx); if (hp) { cx.fillStyle = hp; cx.fill(p, 'evenodd') } }
+      else if (r.fc) { cx.fillStyle = r.fc; cx.fill(p, r.eo ? 'evenodd' : 'nonzero') }
       if (r.sc) { cx.strokeStyle = r.sc; cx.lineWidth = Math.max(r.lw, 0.18); cx.stroke(p) }
     }
     cx.fillStyle = '#000'
@@ -116,9 +125,11 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
         arcDoors.push([hx, hy, o[0] * sx0, o[1] * sx0, e[0] * sx0, e[1] * sx0])
       }
       doorsPx.push(...arcDoors)
-      fillDoorSwings(roomOf, W, H, doorsPx)
-      straightenZones(roomOf, W, H, wall, wsegs, pxPerM, inkD)
-      fillDoorSwings(roomOf, W, H, doorsPx)
+      if (g.src !== 'zones') { // ranh giới lấy từ bản vẽ (DXF) đã chính xác: giữ nguyên, không tô/bẻ theo cung cửa
+        fillDoorSwings(roomOf, W, H, doorsPx)
+        straightenZones(roomOf, W, H, wall, wsegs, pxPerM, inkD)
+        fillDoorSwings(roomOf, W, H, doorsPx)
+      }
     } catch (e) { console.warn('bắt điểm ranh giới lỗi', e) }
   }
   // thành phần liên thông của vùng "không nét" trong từng phòng
@@ -218,11 +229,11 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       for (const r of vv.draw) {
         if (isAnnoLayer(vv.classes[r.cls]?.layer ?? '')) continue
         const w = Math.max(r.lw, 0.18)
-        lines += `<path d="${r.d}" fill="${r.fc ?? 'none'}"${r.eo ? ' fill-rule="evenodd"' : ''} stroke="${r.sc ?? 'none'}"${r.sc ? ` stroke-width="${+w.toFixed(3)}"` : ''}/>`
+        lines += `<path d="${r.d}" fill="${r.hp ? 'url(#dxfh)' : r.fc ?? 'none'}"${r.eo ? ' fill-rule="evenodd"' : ''} stroke="${r.sc ?? 'none'}"${r.sc ? ` stroke-width="${+w.toFixed(3)}"` : ''}/>`
       }
       let txt = ''
       for (const t of vv.texts) { if (t.t.length < 2 || /^[\d.,\s]+$/.test(t.t)) continue; txt += `<text transform="translate(${+t.x.toFixed(2)} ${+t.y.toFixed(2)})${t.rot ? ` rotate(${t.rot})` : ''}" font-size="${+t.h.toFixed(2)}" font-family="Arial,sans-serif" fill="#000" stroke="none">${esc(t.t)}</text>` }
-      const lineLayer = `<g style="mix-blend-mode:multiply;isolation:isolate" transform="translate(${-crop.x} ${-crop.y}) scale(${sx})" stroke-linejoin="round" stroke-linecap="round"><rect x="0" y="0" width="${vv.w}" height="${vv.h}" fill="#fff" stroke="none"/>${lines}${txt}</g>`
+      const lineLayer = `<g style="mix-blend-mode:multiply;isolation:isolate" transform="translate(${-crop.x} ${-crop.y}) scale(${sx})" stroke-linejoin="round" stroke-linecap="round"><defs><pattern id="dxfh" width="2.6" height="2.6" patternUnits="userSpaceOnUse"><path d="M0 2.6L2.6 0M-0.65 0.65L0.65 -0.65M1.95 3.25L3.25 1.95" stroke="#000" stroke-width="0.2" fill="none"/></pattern></defs><rect x="0" y="0" width="${vv.w}" height="${vv.h}" fill="#fff" stroke="none"/>${lines}${txt}</g>`
       svg = (colorOfRaw: (rawId: number) => string) => {
         let f = ''
         raw.forEach((r, k) => { if (floorD[k]) { const c = colorOfRaw(r.id); f += `<path d="${floorD[k]}" fill="${c}" stroke="${c}" stroke-width="2.2"/>` } })

@@ -220,21 +220,25 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
   const segs: number[] = [], segCls: number[] = [], fills: VecPage['fills'] = [], arcs: VecPage['arcs'] = [], runs: DrawRun[] = []
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString()
   const seenP = new Set<string>(), seenS = new Set<string>(), hatchRuns: DrawRun[] = []
-  const roleCol = (l: string) => (/tuong|wall|column|(^|[^a-z])cot([^a-z]|$)|be ?tong/i.test(l) ? '#1a1a1a' : /door|cua|window/i.test(l) ? '#4d4d4d' : '#6e6e6e')
+  const roleCol = (_l: string) => '#000000' // bản in của công ty: nét đen
   for (const p of paths) {
     if (/defpoints/i.test(p.layer) || p.pts.every(t => t[0] < x0 || t[0] > x1 || t[1] < y0 || t[1] > y1)) continue
     const pts: number[] = []
     for (const t of p.pts) pts.push(X(t[0]), Y(t[1]))
     if (p.hatch && p.loops) {
-      if (opt.draw) { let d = ''; for (const lp of p.loops) { lp.forEach((t, i) => { d += (i ? 'L' : 'M') + f2(X(t[0])) + ' ' + f2(Y(t[1])) }); d += 'Z' } hatchRuns.push({ cls: clsOf(p.layer, 0, true), fc: '#c4c4c4', lw: 0, d, eo: true }) }
+      { // hatch phủ gần cả bản vẽ (vùng nền/ranh giới lớn) không phải thân tường → bỏ
+        let tot = 0; for (const lp of p.loops) { let a = 0; for (let i = 0; i + 1 < lp.length; i++) a += X(lp[i][0]) * Y(lp[i + 1][1]) - X(lp[i + 1][0]) * Y(lp[i][1]); tot += Math.abs(a) / 2 }
+        if (tot > 0.04 * W * H) continue
+      }
+      if (opt.draw) { let d = ''; for (const lp of p.loops) { lp.forEach((t, i) => { d += (i ? 'L' : 'M') + f2(X(t[0])) + ' ' + f2(Y(t[1])) }); d += 'Z' } hatchRuns.push({ cls: clsOf(p.layer, 0, true), fc: '#d0d0d0', lw: 0, d, eo: true, hp: true }) }
       continue
     }
     // bỏ nét trùng hệt (cùng một đường được vẽ nhiều lần / nhiều xref)
     const pk = pts.length <= 40 ? Array.from(pts, v => Math.round(v * 20)).join(',') : ''
     if (pk) { const rk = Array.from(pts.length > 4 ? [] : [pts[2], pts[3], pts[0], pts[1]], v => Math.round(v * 20)).join(','); if (seenP.has(pk) || (rk && seenP.has(rk))) continue; seenP.add(pk) }
-    // độ dày nét in theo bảng nét in của công ty (theo màu AutoCAD hiệu lực); tường tối thiểu 0,35 mm để dễ nhìn
-    const aci = p.color ?? layers[p.layer]?.color ?? 7, wall = /tuong|wall|column|(^|[^a-z])cot([^a-z]|$)|be ?tong/i.test(p.layer)
-    const lwPt = Math.max(0.2, ((CTB_LW[aci - 1] ?? 0.09) * (wall ? 0 : 1) + (wall ? Math.max(0.35, CTB_LW[aci - 1] ?? 0.09) : 0)) / PT_MM)
+    // độ dày nét in đúng theo bảng nét in của công ty (theo màu AutoCAD hiệu lực)
+    const aci = p.color ?? layers[p.layer]?.color ?? 7
+    const lwPt = Math.max(0.2, (CTB_LW[aci - 1] ?? 0.09) / PT_MM)
     const ci = clsOf(p.layer, lwPt, false), c = classes[ci]
     const isZone = ZONE_LAYER.test(p.layer)
     if (p.closed && isZone && pts.length >= 6) zones.push({ layer: p.layer, pts })
