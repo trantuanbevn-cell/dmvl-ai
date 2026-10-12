@@ -1,3 +1,4 @@
+import { prefixLabel } from '../lib/sections'
 import { useEffect, useState } from 'react'
 import { loadSettings, saveSetting } from '../lib/settings'
 import { DEFAULT_CHECKLIST, DEFAULT_RULES, DEFAULT_PERF } from '../lib/rules'
@@ -55,6 +56,6 @@ function PrefixLib() {
     <p className="muted small">{library().length} tiền tố ký hiệu vật liệu, chia theo loại. Khi tạo nhóm vật liệu mới, bạn chọn trong thư viện này (hoặc tự tạo tiền tố riêng). Nguồn tham khảo: bảng ký hiệu hoàn thiện VA 09 06 00, danh mục viết tắt nội thất, thông lệ bản vẽ khách sạn/FF&amp;E. Không có chuẩn quốc tế duy nhất – các mã được chọn để không trùng nhau.</p>
     <input data-lang="none" placeholder="Tìm: mã, tên Việt hoặc English…" value={q} onChange={e => setQ(e.target.value)} style={{ width: 320, marginBottom: 8 }} />
     <table className="tbl"><thead><tr><th>Tiền tố</th><th>Tên tiếng Việt</th><th>English</th><th>Loại</th><th>Ghi chú</th></tr></thead>
-      <tbody>{LIB_CATS.flatMap(c => items.filter(x => x.cat === c)).map(x => <tr key={x.prefix}><td><b>{x.prefix}</b></td><td>{x.vn}</td><td>{x.en}</td><td className="small">{x.cat}</td><td className="small">{x.group ? 'nhóm mã ' + x.group + ' · ' : ''}{x.note}</td></tr>)}</tbody></table>
+      <tbody>{LIB_CATS.flatMap(c => items.filter(x => x.cat === c)).map(x => <tr key={x.prefix}><td><b>{prefixLabel(x.prefix)}</b></td><td>{x.vn}</td><td>{x.en}</td><td className="small">{x.cat}</td><td className="small">{x.group ? 'nhóm mã ' + x.group + ' · ' : ''}{x.note}</td></tr>)}</tbody></table>
   </div>
 }

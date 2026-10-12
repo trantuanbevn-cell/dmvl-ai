@@ -243,6 +243,15 @@ export const PREFIXES: Prefix[] = [
   { prefix: 'SGN', en: 'Signage', vn: 'Biển báo', includes_en: 'room signs, wayfinding', includes_vn: 'biển tên phòng, chỉ dẫn', groups: ['SN'] },
   { prefix: 'MEP', en: 'MEP Interface', vn: 'Đầu chờ MEP', includes_en: 'exposed MEP items for coordination', includes_vn: 'đầu chờ MEP lộ ra không gian', groups: ['ME'] },
 ]
+/** Ký hiệu viết tắt từ cụm tiếng Anh đầy đủ nào (để người xem bản vẽ biết chữ cái nghĩa là gì) */
+export const PREFIX_FULL: Record<string, string> = {
+  CT: 'Ceramic Tile', ST: 'Stone', WD: 'Wood', LVT: 'Luxury Vinyl Tile', CPT: 'Carpet', PNT: 'Paint', WC: 'Wall Covering', WP: 'Wall Panelling', GWB: 'Gypsum Wall Board',
+  ACT: 'Acoustic Ceiling Tile', SKT: 'Skirting', MTL: 'Metal', GL: 'Glass', MIR: 'Mirror', FAB: 'Fabric', LTH: 'Leather', DR: 'Door', HW: 'Hardware', MWK: 'Millwork',
+  FHW: 'Furniture Hardware', FUR: 'Furniture', LGT: 'Lighting', PLB: 'Plumbing', WRA: 'Washroom Accessories', EQP: 'Equipment', ART: 'Artwork', DEC: 'Decorative',
+  WT: 'Window Treatment', SGN: 'Signage', MEP: 'Mechanical, Electrical & Plumbing',
+}
+/** "CT (Ceramic Tile)" – tiền tố kèm chữ đầy đủ */
+export const prefixLabel = (prefix: string) => PREFIX_FULL[prefix] ? `${prefix} (${PREFIX_FULL[prefix]})` : prefix
 export const INTL: Record<string, string> = Object.fromEntries(PREFIXES.flatMap(p => p.groups.map(g => [g, p.prefix])))
 export const intlPrefix = (group: string) => INTL[group] ?? group
 const intlCode = (e: Entry) => { const m = /^[A-Z]+-(\d+)/.exec(e.code); return m ? `${effPrefix(e)}-${m[1]}` : e.code }

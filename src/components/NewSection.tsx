@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { bandKeys, bandTitle, customGroups, newPrefixError } from '../lib/sections'
+import { bandKeys, bandTitle, customGroups, newPrefixError, prefixLabel } from '../lib/sections'
 import { library, searchLib, groupOfItem, LIB_CATS, type LibItem } from '../lib/prefixLibrary'
 import type { ProjectData } from '../lib/useProject'
 import { toast } from '../lib/toast'
@@ -25,7 +25,7 @@ export function PrefixPick({ value, onChange, onPick, ownKey }: { value: string;
       <div className="pfx-list">
         {cats.map(c => <div key={c}><div className="pfx-cat">{c}</div>{items.filter(x => x.cat === c).map(x => (
           <div key={x.prefix} className={'pfx-row' + (groupOfItem(x) === value ? ' on' : '')} onClick={() => { setMk(false); onChange(groupOfItem(x)); onPick?.(x); setOpen(false) }}>
-            <b>{x.prefix}</b><span>{x.vn}<span className="muted small"> · {x.en}</span></span></div>))}</div>)}
+            <b>{prefixLabel(x.prefix)}</b><span>{x.vn}<span className="muted small"> · {x.en}</span></span></div>))}</div>)}
         {own.filter(g => !q || (g.code + g.vn).toLowerCase().includes(q.toLowerCase())).map(g => <div key={g.code} className={'pfx-row' + (g.code === value ? ' on' : '')} onClick={() => { setMk(false); onChange(g.code); setOpen(false) }}><b>{g.code}</b><span>{g.vn}<span className="muted small"> · tự tạo</span></span></div>)}
         {!items.length && <div className="muted small" style={{ padding: 8 }}>Không thấy trong thư viện – dùng “Tạo tiền tố mới”.</div>}
       </div>
