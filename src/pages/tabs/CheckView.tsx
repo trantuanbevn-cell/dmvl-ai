@@ -14,6 +14,9 @@ import { symbolMap, symbolOf } from '../../lib/sections'
 import SpellReview from '../../components/SpellReview'
 import { spellScan } from '../../lib/spellScan'
 import { loadEnglish } from '../../lib/spell'
+import { cleanEntries, sameNumbers } from '../../lib/qc'
+import { runAiQc, loadFindings, resolveFinding, KIND_LABEL, type Finding } from '../../lib/aiQc'
+import { saveEntry } from '../../lib/entryLink'
 
 function Side({ d, e, tag, onKeep, busy, label }: { d: ProjectData; e: Entry; tag: string; onKeep?: () => void; busy: boolean; label?: string }) {
   const shots = d.occ.filter(o => o.entry_id === e.id && o.bbox && o.page_id)
@@ -33,7 +36,7 @@ function Side({ d, e, tag, onKeep, busy, label }: { d: ProjectData; e: Entry; ta
 }
 
 export default function CheckView({ d }: { d: ProjectData }) {
-  const { canEdit } = useAuth()
+  const { canEdit, isAdmin } = useAuth()
   const [skip, setSkip] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('dmvl-dup-skip') ?? '[]') } catch { return [] } })
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState<string | null>(null) // khoá cặp đang xem chi tiết
@@ -43,11 +46,16 @@ export default function CheckView({ d }: { d: ProjectData }) {
   const [lskip, setLskip] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('dmvl-link-skip') ?? '[]') } catch { return [] } })
   const issues = useMemo(() => checkEntries(d, lang), [d.entries, d.occ, lang])
   const nErr = issues.filter(r => r.issues.some(i => i.kind === 'err')).length
-  const sugg = useMemo(() => linkSuggestions(d.entries).filter(x => !lskip.includes(x.a.id + x.b.id)), [d.entries, lskip])
+  /* So trùng/liên kết trên bản đã bỏ mã vật liệu nội bộ khỏi ô mã SP (tránh báo “trùng mã” giả), rồi map về dòng gốc */
+  const clean = useMemo(() => cleanEntries(d.entries), [d.entries])
+  const orig = useMemo(() => new Map(d.entries.map(e => [e.id, e])), [d.entries])
+  const sugg = useMemo(() => linkSuggestions(clean).map(x => ({ ...x, a: orig.get(x.a.id)!, b: orig.get(x.b.id)! })).filter(x => !lskip.includes(x.a.id + x.b.id)), [clean, orig, lskip])
   const conflicts = useMemo(() => linkConflicts(d.entries), [d.entries])
   const selEntry = d.entries.find(e => e.id === sel)
   const keyOf = (p: DupPair) => p.keep.id + p.dup.id
-  const dups = useMemo(() => findDuplicates(d.entries).filter(p => !skip.includes(keyOf(p))), [d.entries, skip])
+  const txt = (e: Entry) => `${e.name_vn} ${e.material_vn ?? ''} ${e.desc_vn ?? ''}`
+  // Chỉ coi là trùng khi thông số (kích thước, số hộc…) giống nhau – khác số là hai món khác nhau
+  const dups = useMemo(() => findDuplicates(clean).filter(p => sameNumbers(txt(p.keep), txt(p.dup))).map(p => ({ ...p, keep: orig.get(p.keep.id)!, dup: orig.get(p.dup.id)! })).filter(p => !skip.includes(keyOf(p))), [clean, orig, skip])
   const cur = dups.findIndex(p => keyOf(p) === open), pair = cur >= 0 ? dups[cur] : null
   const dismiss = (p: DupPair) => { const n = [...skip, keyOf(p)]; setSkip(n); try { localStorage.setItem('dmvl-dup-skip', JSON.stringify(n)) } catch { /* */ } }
   const merge = async (keep: Entry, dup: Entry) => {
@@ -55,7 +63,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
     try { await mergeEntries(keep, dup, d.entries); toast(`Đã gộp ${dup.code} vào ${keep.code}`, 'ok'); setOpen(null) } catch (e) { toast(String(e)) }
     setBusy(false)
   }
-  type CK = 'issues' | 'link' | 'dup' | 'spell'
+  type CK = 'issues' | 'link' | 'dup' | 'spell' | 'ai'
   const [modal, setModal] = useState<CK | null>(null)
   const [busyCard, setBusyCard] = useState<CK | 'all' | null>(null)
   const [pending, setPending] = useState<CK | 'all' | null>(null)
@@ -64,7 +72,25 @@ export default function CheckView({ d }: { d: ProjectData }) {
   useEffect(() => { loadEnglish().then(() => setTick(t => t + 1)) }, [])
   const spellItems = useMemo(() => spellScan(d), [d.entries, d.rooms, tick]) // eslint-disable-line
   const spellAuto = spellItems.filter(i => i.after !== i.before).length
-  const cnt = { issues: issues.length, link: sugg.length + conflicts.length, dup: dups.length, spell: spellItems.length }
+  const [finds, setFinds] = useState<Finding[]>([])
+  const [aiMsg, setAiMsg] = useState<string | null>(null)
+  const pid = d.project?.id
+  useEffect(() => { if (pid) loadFindings(pid).then(setFinds) }, [pid, tick])
+  const openFinds = finds.filter(f => f.status === 'open')
+  const runAi = async () => {
+    if (aiMsg) return
+    setAiMsg('Đang chuẩn bị…')
+    try { await d.reload(); const n = await runAiQc(d, setAiMsg); toast(n ? `AI tìm được ${n} điểm cần xem` : '✓ AI không thấy điểm sai chắc chắn nào', n ? 'info' : 'ok'); setTick(t => t + 1); if (n) setModal('ai') } catch (e) { toast(String((e as Error).message ?? e)) }
+    setAiMsg(null)
+  }
+  const doFind = async (f: Finding, st: 'accepted' | 'dismissed') => { try { await resolveFinding(f.id, st); setFinds(x => x.map(y => (y.id === f.id ? { ...y, status: st } : y))) } catch (e) { toast(String(e)) } }
+  const applyFind = async (f: Finding) => {
+    const e = f.entry_id ? orig.get(f.entry_id) : null; if (!e || !f.field || !f.current_text || f.suggestion == null) return
+    const v = String((e as any)[f.field] ?? ''); if (!v.includes(f.current_text)) { toast('Nội dung ô đã đổi, không áp dụng được – hãy mở & sửa tay'); return }
+    const err = await saveEntry(e, { [f.field]: v.replace(f.current_text, f.suggestion) }); if (err) { toast(err.message); return }
+    await doFind(f, 'accepted'); d.reload(); toast(`Đã sửa ${e.code}`, 'ok')
+  }
+  const cnt = { issues: issues.length, link: sugg.length + conflicts.length, dup: dups.length, spell: spellItems.length, ai: openFinds.length }
   const allOk = Object.values(cnt).every(n => n === 0)
   const openCard = (k: CK) => {
     if (k === 'dup') { if (dups[0]) setOpen(keyOf(dups[0])) }
@@ -95,13 +121,14 @@ export default function CheckView({ d }: { d: ProjectData }) {
     { k: 'link', ic: '🔗', t: 'Vật liệu liên kết', sub: `${sugg.length} gợi ý · ${conflicts.length} nhóm đang lệch`, tone: conflicts.length ? 'err' : 'bad' },
     { k: 'dup', ic: '🧩', t: 'Mã trùng', sub: 'Cùng một vật liệu thật nhưng nhiều mã', tone: 'bad' },
     { k: 'spell', ic: '✍️', t: 'Chính tả & dấu câu', sub: `${spellAuto} tự sửa được · ${spellItems.length - spellAuto} nghi sai`, tone: 'bad' },
+    { k: 'ai', ic: '🤖', t: 'AI soát toàn bộ', sub: `${openFinds.length} gợi ý chờ xác nhận · AI đối chiếu danh mục ↔ phối cảnh ↔ quy định`, tone: 'bad' },
   ]
   return (
     <div className="stack">
       <div className="card">
         <div className="qc-head">
           <div><h3 style={{ margin: 0 }}>QC cuối – kiểm soát chất lượng trước khi xuất file</h3>
-            <div className="small muted">{stamp ? `Đã check lúc ${stamp.toLocaleTimeString('vi-VN')} theo dữ liệu mới nhất · ` : ''}Bấm <b>Check</b> ở từng mục (hoặc Check toàn bộ): phần mềm tải lại dữ liệu mới nhất, kiểm lại, nếu có điểm sai khác sẽ mở to giữa màn hình để xem và xử lý.</div></div>
+            <div className="small muted">{stamp ? `Đã check lúc ${stamp.toLocaleTimeString('vi-VN')} theo dữ liệu mới nhất · ` : ''}Bấm <b>Check</b> ở từng mục (hoặc Check toàn bộ; mục 🤖 AI do admin chạy): phần mềm tải lại dữ liệu mới nhất, kiểm lại, nếu có điểm sai khác sẽ mở to giữa màn hình để xem và xử lý.</div></div>
           <div className="row gap">
             <select value={lang} onChange={e => setLang(e.target.value as Lang)} title="Ngôn ngữ dùng để kiểm ô thiếu"><option value="vn">Kiểm tiếng Việt</option><option value="both">Kiểm song ngữ</option></select>
             <button className="btn primary" disabled={!!busyCard} onClick={() => runCheck('all')}>{busyCard === 'all' ? 'Đang check…' : '▶ Check toàn bộ'}</button>
@@ -115,7 +142,9 @@ export default function CheckView({ d }: { d: ProjectData }) {
           <div className="qc-num">{n ? n : '✓'}</div>
           <div className="qc-tit">{c.t}</div>
           <div className="qc-sub">{n ? c.sub : 'Đạt – không có điểm sai khác'}</div>
-          <button className="btn primary" disabled={!!busyCard} onClick={e => { e.stopPropagation(); runCheck(c.k) }}>{busyCard === c.k || busyCard === 'all' ? 'Đang check…' : '▶ Check'}</button>
+          {c.k === 'ai'
+            ? (isAdmin ? <button className="btn primary" disabled={!!aiMsg} onClick={e => { e.stopPropagation(); runAi() }}>{aiMsg ? '⏳ ' + aiMsg : '▶ Chạy AI soát'}</button> : <button className="btn" disabled title="Chỉ quản trị viên chạy AI">Admin chạy AI</button>)
+            : <button className="btn primary" disabled={!!busyCard} onClick={e => { e.stopPropagation(); runCheck(c.k) }}>{busyCard === c.k || busyCard === 'all' ? 'Đang check…' : '▶ Check'}</button>}
         </div>) })}</div>
       {modal === 'issues' && (
         <div className="modal-bg center" onMouseDown={() => setModal(null)}>
@@ -152,6 +181,28 @@ export default function CheckView({ d }: { d: ProjectData }) {
             {canEdit && <><button className="btn primary sm" onClick={async () => { try { await linkEntries(a, b, d.entries); d.reload() } catch (e) { toast(String(e)) } }}>🔗 Liên kết (theo {a.code})</button>
               <button className="btn ghost sm" onClick={() => linkSkip(a, b)}>Không liên quan</button></>}
           </div>))}
+          </div>
+        </div>)}
+      {modal === 'ai' && (
+        <div className="modal-bg center" onMouseDown={() => setModal(null)}>
+          <div className="modal qc-modal" onMouseDown={e => e.stopPropagation()}>
+            <div className="row between"><h3 style={{ margin: 0 }}>🤖 AI soát toàn bộ ({openFinds.length} gợi ý)</h3><button className="btn ghost sm" onClick={() => setModal(null)}>✕</button></div>
+            <p className="small muted">AI đọc danh mục, ghi chú phân tích phối cảnh và quy định vận hành rồi chỉ báo những điểm nó chắc ≥ 85%. Phần mềm đã kiểm lại (mã và đoạn trích có thật). AI chỉ gợi ý – bạn xem ảnh/dữ liệu rồi bấm xác nhận hoặc bỏ qua.</p>
+            {!openFinds.length ? <div className="ok-text">✓ Không còn gợi ý nào chờ xác nhận.</div> : <div style={{ overflowX: 'auto' }}><table className="tbl small" style={{ width: '100%' }}>
+              <thead><tr><th>Mã</th><th>Loại</th><th>Điểm nghi sai</th><th /></tr></thead>
+              <tbody>{openFinds.map(f => { const e = f.entry_id ? orig.get(f.entry_id) : undefined; const canApply = !!(e && f.field && f.current_text && f.suggestion != null && String((e as any)[f.field] ?? '').includes(f.current_text)); return (
+                <tr key={f.id}>
+                  <td><b className="code">{e ? symbolOf(e, undefined, undefined, symbolMap(d.entries)) : f.code}</b><div className="muted">{e?.name_vn}</div></td>
+                  <td><span className="chk-tag chk-err">{KIND_LABEL[f.kind] ?? f.kind}</span><div className="muted">{f.field}{f.confidence ? ` · ${Math.round(f.confidence * 100)}%` : ''}</div></td>
+                  <td>{f.message}{f.current_text && <div className="muted">“{f.current_text}”{f.suggestion ? <> → <b>“{f.suggestion}”</b></> : null}</div>}{f.related?.length ? <div className="muted">Liên quan: {f.related.join(', ')}</div> : null}</td>
+                  <td className="row gap sm-gap" style={{ flexWrap: 'wrap' }}>
+                    {canEdit && canApply && <button className="btn sm primary" onClick={() => applyFind(f)}>✓ Áp dụng</button>}
+                    {e && <button className="btn sm" onClick={() => setSel(e.id)}>Mở & sửa</button>}
+                    {canEdit && <button className="btn sm" title="Đã tự sửa/đã xử lý xong" onClick={() => doFind(f, 'accepted')}>Đã xử lý</button>}
+                    {canEdit && <button className="btn ghost sm" title="AI nhận định sai" onClick={() => doFind(f, 'dismissed')}>AI sai – bỏ</button>}
+                  </td>
+                </tr>) })}</tbody>
+            </table></div>}
           </div>
         </div>)}
       {modal === 'spell' && <SpellReview d={d} items={spellItems} onClose={() => { setModal(null); setTick(t => t + 1) }} onOpenEntry={setSel} />}

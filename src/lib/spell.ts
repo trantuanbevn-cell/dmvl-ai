@@ -21,7 +21,7 @@ const DOMAIN = `décor decor inox melamine laminate mdf mfc hdf hpl pu led gypsu
   headboard nightstand armchair banquette bolster cushion drapery sheer blackout curtain valance tieback anodized anodised brushed powdercoated galvanised
   sanitary lavatory basin faucet shower bidet cistern urinal vanity countertop backsplash splashback tempered laminated frosted opaque translucent
   hinge handle pull knob latch deadbolt cabinet wardrobe closet drawer shelving shelf bracket cornice coving architrave plinth threshold
-  vietnam vietnamese hanoi danang indonesia malaysia thailand italy italian china chinese korea korean japan japanese germany german spain spanish`.split(/\s+/)
+  mitred mitered grey colour colours coloured colourless cementitious flohydric niken crom crôm inox sus polymer polymeric bevelled chamfered rebated rebate toughened epoxy bullnose tongue groove flush recessed concealed hairline satin sandblasted bush-hammered honed flamed lappato tumbled vietnam vietnamese hanoi danang indonesia malaysia thailand italy italian china chinese korea korean japan japanese germany german spain spanish`.split(/\s+/)
 export function loadEnglish(): Promise<void> {
   if (en) return Promise.resolve()
   return (enLoading ??= (async () => {
@@ -86,6 +86,13 @@ const lev1 = (a: string, b: string) => {
   const [s, l] = a.length < b.length ? [a, b] : [b, a]
   return s.slice(i) === l.slice(i + 1)
 }
+/** Chính tả Anh–Anh hợp lệ (colour, grey, centre, metre, finalise, cancelled…) – không phải lỗi */
+const britishOk = (w: string) => {
+  if (!en) return false
+  const l = w.toLowerCase()
+  const c = [l.replace(/our(s|ed|ing|less)?$/, 'or$1'), l.replace(/ise(s|d)?$/, 'ize$1'), l.replace(/isation/, 'ization'), l.replace(/(tre|tres)$/, m => (m === 'tre' ? 'ter' : 'ters')), l.replace(/(ll)(ed|ing|er)$/, 'l$2'), l.replace(/ae/, 'e'), l.replace(/ogue$/, 'og'), l.replace(/grey/, 'gray')]
+  return c.some(x => x !== l && en!.correct(x))
+}
 const matchCase = (src: string, rep: string) => (src[0] !== src[0].toLowerCase() ? rep[0].toUpperCase() + rep.slice(1) : rep)
 
 function spellWords(text: string, lang: SpellLang, fixes: Fix[], flags: Flag[]) {
@@ -103,16 +110,16 @@ function spellWords(text: string, lang: SpellLang, fixes: Fix[], flags: Flag[]) 
       if (lang === 'vi') {
         const r = checkVi(w)
         if (r.ok) { if (r.fixed !== w) { fixes.push({ from: w, to: r.fixed, kind: 'tone' }); rep = r.fixed } }
-        else if (!proper && !(en && (en.correct(w) || en.correct(w.toLowerCase())))) {
+        else if (!proper && !(en && (en.correct(w) || en.correct(w.toLowerCase()) || britishOk(w)))) {
           const s = suggestVi(w)
           if (r.hasVi && s.sure) { fixes.push({ from: w, to: s.sure, kind: 'spell' }); rep = s.sure }
-          else if (r.hasVi || (en && w.length >= 4)) flags.push({ word: w, suggestions: s.list.slice(0, 5) })
+          else if (r.hasVi && s.list.length) flags.push({ word: w, suggestions: s.list.slice(0, 5) })   // chỉ báo từ có dấu tiếng Việt sai VÀ có gợi ý sửa; từ không dấu lạ (thuật ngữ, từ mượn) bỏ qua
         }
       } else if (en && !w.includes("'") && w.length >= 3 && !proper) {
-        if (!en.correct(w) && !en.correct(w.toLowerCase())) {
+        if (!en.correct(w) && !en.correct(w.toLowerCase()) && !britishOk(w)) {
           const sg = en.suggest(w).slice(0, 5), near = sg.filter(x => lev1(w.toLowerCase(), x.toLowerCase()))
           if (near.length === 1 && w.length >= 5 && !VI_CH.test(w)) { rep = matchCase(w, near[0]); fixes.push({ from: w, to: rep, kind: 'spell' }) }
-          else flags.push({ word: w, suggestions: sg })
+          else if (near.length) flags.push({ word: w, suggestions: sg })   // không có gợi ý gần giống ⇒ nhiều khả năng là thuật ngữ/tên riêng, không báo
         }
       }
     }
