@@ -45,7 +45,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       const p = new Path2D(r.d)
       if (r.hp) { const hp = hatchPat(cx); if (hp) { cx.fillStyle = hp; cx.fill(p, 'evenodd') } }
       else if (r.fc) { cx.fillStyle = r.fc; cx.fill(p, r.eo ? 'evenodd' : 'nonzero') }
-      if (r.sc) { cx.strokeStyle = r.sc; cx.lineWidth = Math.max(r.lw, 0.18); cx.stroke(p) }
+      if (r.sc) { cx.strokeStyle = r.sc; cx.lineWidth = Math.max(r.lw, 0.1); cx.stroke(p) }
     }
     cx.fillStyle = '#000'
     for (const t of vv.texts) { if (t.t.length < 2 || /^[\d.,\s]+$/.test(t.t)) continue; cx.save(); cx.translate(t.x, t.y); if (t.rot) cx.rotate((t.rot * Math.PI) / 180); cx.font = `${t.h}px Arial, sans-serif`; cx.fillText(t.t, 0, 0); cx.restore() }
@@ -228,12 +228,12 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       let lines = ''
       for (const r of vv.draw) {
         if (isAnnoLayer(vv.classes[r.cls]?.layer ?? '')) continue
-        const w = Math.max(r.lw, 0.18)
+        const w = Math.max(r.lw, 0.1)
         lines += `<path d="${r.d}" fill="${r.hp ? 'url(#dxfh)' : r.fc ?? 'none'}"${r.eo ? ' fill-rule="evenodd"' : ''} stroke="${r.sc ?? 'none'}"${r.sc ? ` stroke-width="${+w.toFixed(3)}"` : ''}/>`
       }
       let txt = ''
       for (const t of vv.texts) { if (t.t.length < 2 || /^[\d.,\s]+$/.test(t.t)) continue; txt += `<text transform="translate(${+t.x.toFixed(2)} ${+t.y.toFixed(2)})${t.rot ? ` rotate(${t.rot})` : ''}" font-size="${+t.h.toFixed(2)}" font-family="Arial,sans-serif" fill="#000" stroke="none">${esc(t.t)}</text>` }
-      const lineLayer = `<g style="mix-blend-mode:multiply;isolation:isolate" transform="translate(${-crop.x} ${-crop.y}) scale(${sx})" stroke-linejoin="round" stroke-linecap="round"><defs><pattern id="dxfh" width="2.6" height="2.6" patternUnits="userSpaceOnUse"><path d="M0 2.6L2.6 0M-0.65 0.65L0.65 -0.65M1.95 3.25L3.25 1.95" stroke="#000" stroke-width="0.2" fill="none"/></pattern></defs><rect x="0" y="0" width="${vv.w}" height="${vv.h}" fill="#fff" stroke="none"/>${lines}${txt}</g>`
+      const lineLayer = `<g style="mix-blend-mode:multiply;isolation:isolate" transform="translate(${-crop.x} ${-crop.y}) scale(${sx})" stroke-linejoin="round" stroke-linecap="round"><defs><pattern id="dxfh" width="2.6" height="2.6" patternUnits="userSpaceOnUse"><path d="M0 2.6L2.6 0M-0.65 0.65L0.65 -0.65M1.95 3.25L3.25 1.95" stroke="#000" stroke-width="0.12" fill="none"/></pattern></defs><rect x="0" y="0" width="${vv.w}" height="${vv.h}" fill="#fff" stroke="none"/>${lines}${txt}</g>`
       svg = (colorOfRaw: (rawId: number) => string) => {
         let f = ''
         raw.forEach((r, k) => { if (floorD[k]) { const c = colorOfRaw(r.id); f += `<path d="${floorD[k]}" fill="${c}" stroke="${c}" stroke-width="2.2"/>` } })

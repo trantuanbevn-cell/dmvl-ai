@@ -220,9 +220,31 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
   const segs: number[] = [], segCls: number[] = [], fills: VecPage['fills'] = [], arcs: VecPage['arcs'] = [], runs: DrawRun[] = []
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString()
   const seenP = new Set<string>(), seenS = new Set<string>(), hatchRuns: DrawRun[] = []
+  // cung cửa vẽ chồng nhiều lớp (đồng tâm, cùng góc quét): chỉ giữ cung lớn nhất của mỗi cánh cửa
+  const dropArc = new Set<Path>()
+  {
+    const maxR = 1500 / (PT_MM * den), cand: { p: Path; cx: number; cy: number; R: number; a0: number; a1: number }[] = []
+    for (const p of paths) {
+      const n = p.pts.length; if (p.closed || n < 4 || n > 40 || /defpoints/i.test(p.layer)) continue
+      const A = p.pts[0], B = p.pts[n - 1], M = p.pts[n >> 1]
+      const ax = X(A[0]), ay = Y(A[1]), bx = X(B[0]), by = Y(B[1]), mx = X(M[0]), my = Y(M[1])
+      const d = 2 * (ax * (by - my) + bx * (my - ay) + mx * (ay - by)); if (Math.abs(d) < 1e-6) continue
+      const cx = ((ax * ax + ay * ay) * (by - my) + (bx * bx + by * by) * (my - ay) + (mx * mx + my * my) * (ay - by)) / d
+      const cy = ((ax * ax + ay * ay) * (mx - bx) + (bx * bx + by * by) * (ax - mx) + (mx * mx + my * my) * (bx - ax)) / d
+      const R = Math.hypot(ax - cx, ay - cy); if (!(R > 2 && R < maxR)) continue
+      const a0 = Math.atan2(ay - cy, ax - cx), a1 = Math.atan2(by - cy, bx - cx)
+      cand.push({ p, cx, cy, R, a0: Math.min(a0, a1) === a0 ? a0 : a1, a1: Math.min(a0, a1) === a0 ? a1 : a0 })
+    }
+    cand.sort((u, v) => v.R - u.R)
+    const kept: typeof cand = [], da = (u: number, v: number) => { let t = Math.abs(u - v) % (Math.PI * 2); if (t > Math.PI) t = Math.PI * 2 - t; return t }
+    for (const c of cand) {
+      if (kept.some(o => Math.hypot(o.cx - c.cx, o.cy - c.cy) < 1.5 && ((da(o.a0, c.a0) < 0.15 && da(o.a1, c.a1) < 0.15) || (da(o.a0, c.a1) < 0.15 && da(o.a1, c.a0) < 0.15)))) dropArc.add(c.p)
+      else kept.push(c)
+    }
+  }
   const roleCol = (_l: string) => '#000000' // bản in của công ty: nét đen
   for (const p of paths) {
-    if (/defpoints/i.test(p.layer) || p.pts.every(t => t[0] < x0 || t[0] > x1 || t[1] < y0 || t[1] > y1)) continue
+    if (dropArc.has(p) || /defpoints/i.test(p.layer) || p.pts.every(t => t[0] < x0 || t[0] > x1 || t[1] < y0 || t[1] > y1)) continue
     const pts: number[] = []
     for (const t of p.pts) pts.push(X(t[0]), Y(t[1]))
     if (p.hatch && p.loops) {
@@ -238,7 +260,7 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
     if (pk) { const rk = Array.from(pts.length > 4 ? [] : [pts[2], pts[3], pts[0], pts[1]], v => Math.round(v * 20)).join(','); if (seenP.has(pk) || (rk && seenP.has(rk))) continue; seenP.add(pk) }
     // độ dày nét in đúng theo bảng nét in của công ty (theo màu AutoCAD hiệu lực)
     const aci = p.color ?? layers[p.layer]?.color ?? 7
-    const lwPt = Math.max(0.2, (CTB_LW[aci - 1] ?? 0.09) / PT_MM)
+    const lwPt = Math.max(0.1, ((CTB_LW[aci - 1] ?? 0.09) / PT_MM) * 0.5)
     const ci = clsOf(p.layer, lwPt, false), c = classes[ci]
     const isZone = ZONE_LAYER.test(p.layer)
     if (p.closed && isZone && pts.length >= 6) zones.push({ layer: p.layer, pts })
