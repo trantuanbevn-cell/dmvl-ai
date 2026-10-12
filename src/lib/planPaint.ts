@@ -35,7 +35,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
     for (const r of vv.draw) {
       if (isAnnoLayer(vv.classes[r.cls]?.layer ?? '')) continue
       const p = new Path2D(r.d)
-      if (r.fc) { cx.fillStyle = r.fc; cx.fill(p) }
+      if (r.fc) { cx.fillStyle = r.fc; cx.fill(p, r.eo ? 'evenodd' : 'nonzero') }
       if (r.sc) { cx.strokeStyle = r.sc; cx.lineWidth = Math.max(r.lw, 0.18); cx.stroke(p) }
     }
     cx.fillStyle = '#000'
@@ -218,7 +218,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       for (const r of vv.draw) {
         if (isAnnoLayer(vv.classes[r.cls]?.layer ?? '')) continue
         const w = Math.max(r.lw, 0.18)
-        lines += `<path d="${r.d}" fill="${r.fc ?? 'none'}" stroke="${r.sc ?? 'none'}"${r.sc ? ` stroke-width="${+w.toFixed(3)}"` : ''}/>`
+        lines += `<path d="${r.d}" fill="${r.fc ?? 'none'}"${r.eo ? ' fill-rule="evenodd"' : ''} stroke="${r.sc ?? 'none'}"${r.sc ? ` stroke-width="${+w.toFixed(3)}"` : ''}/>`
       }
       let txt = ''
       for (const t of vv.texts) { if (t.t.length < 2 || /^[\d.,\s]+$/.test(t.t)) continue; txt += `<text transform="translate(${+t.x.toFixed(2)} ${+t.y.toFixed(2)})${t.rot ? ` rotate(${t.rot})` : ''}" font-size="${+t.h.toFixed(2)}" font-family="Arial,sans-serif" fill="#000" stroke="none">${esc(t.t)}</text>` }
