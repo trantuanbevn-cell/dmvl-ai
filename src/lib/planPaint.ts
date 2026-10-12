@@ -145,7 +145,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
     for (let it = 0; it < kk; it++) {
       const out = roomOf.slice()
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        const i = y * W + x; if (roomOf[i]) continue
+        const i = y * W + x; if (roomOf[i] || (nearWall && !nearWall[i])) continue // chỉ lan vào vùng sát nét tường, không tràn ra sàn phòng bên cạnh
         const l = x > 0 ? roomOf[i - 1] : 0, r = x < W - 1 ? roomOf[i + 1] : 0, u = y > 0 ? roomOf[i - W] : 0, dn = y < H - 1 ? roomOf[i + W] : 0
         const v = l || r || u || dn; if (v) out[i] = v
       }
