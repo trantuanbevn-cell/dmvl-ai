@@ -84,7 +84,8 @@ export async function analyzeFloor(fp: FloorPlan, opts: AnalyzeOpts, log: Log, b
   log(`Đang tìm tường và phòng kín (${sel.size} nhóm nét tường)...`)
   await new Promise(r => setTimeout(r, 20))
   const withDoors = new Set(sel); v.classes.forEach((c, i) => { if (/DOOR|CUA DI|CUA SO|WINDOW/i.test(c.layer) && !c.fill) withDoors.add(i) })
-  const { mask, W, H } = rasterWalls(v, withDoors, ppp, doors, true, mpp)
+  const doorOnly = new Set<number>(); withDoors.forEach(i => { if (!sel.has(i)) doorOnly.add(i) })
+  const { mask, W, H } = rasterWalls(v, withDoors, ppp, doors, !dxfI, mpp, doorOnly)
   let res = findRooms(cv, v, mask, W, H, ppp, scaleDen, doorW)
   const zr = null as FloorRoom[] | null // ranh $Area của bản vẽ chỉ là các khu lớn (gộp nhiều phòng) → không dùng làm không gian; dò phòng theo tường + khung cửa
   if (zr && zr.length >= 3) { res = { ...res, rooms: zr, leaked: false } as typeof res; log(`DXF: dùng ${zr.length} ranh giới không gian có sẵn trong bản vẽ (diện tích tính từ toạ độ).`) }
@@ -97,7 +98,7 @@ export async function analyzeFloor(fp: FloorPlan, opts: AnalyzeOpts, log: Log, b
     w: v.w, h: v.h, m_per_pt: mpp, door_w: doorW, leaked: res.leaked,
     wall_keys: [...sel].map(i => v.classes[i].key),
     classes: v.classes.map(c => ({ ...c })).sort((a, b) => b.len - a.len).slice(0, 60),
-    algo: 5, ...(zr && zr.length >= 3 ? { src: 'zones' as const } : {}), scale_src: scaleSrc, scale_note: scaleNote, doors: doors.length, rooms: res.rooms, raw_rooms: res.rooms, uncut_rooms: res.rooms, cuts, merges,
+    algo: 6, ...(zr && zr.length >= 3 ? { src: 'zones' as const } : {}), scale_src: scaleSrc, scale_note: scaleNote, doors: doors.length, rooms: res.rooms, raw_rooms: res.rooms, uncut_rooms: res.rooms, cuts, merges,
     furn: { ...furn, names: fp.geometry?.furn?.names ?? {} }, labels, history: fp.geometry?.history,
   }
   if (geom.cuts?.length) geom.raw_rooms = applyCuts(res.rooms, geom.cuts)

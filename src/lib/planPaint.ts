@@ -22,6 +22,8 @@ export type PlanPaint = {
 }
 /** kiểu hiển thị mặt bằng (nhớ trên máy): tường/cột đặc xám thay vì hatch; hiện cửa đã nhận diện */
 const LS = (k: string, d: boolean) => { try { const v = localStorage.getItem('dmvl.plan.' + k); return v === null ? d : v === '1' } catch { return d } }
+/** tô trắng hình bao đồ nội thất trên sàn – tạm tắt (diện tích thông thủy gồm cả đồ nội thất) */
+const FURN_WHITE = false
 export const planStyle = { solid: LS('solid', true), doors: LS('doors', false) }
 export const setPlanStyle = (k: 'solid' | 'doors', v: boolean) => { planStyle[k] = v; try { localStorage.setItem('dmvl.plan.' + k, v ? '1' : '0') } catch { /* bỏ qua */ } }
 /** hatch chéo 45° (như ANSI31 của CAD): ô lặp 2,6 pt, nét 0,2 pt */
@@ -196,7 +198,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       const doors = detectDoors(vv, g.m_per_pt)
       // cung ~90° bán kính 0,55–1,3 m = cung quét cánh cửa (kể cả cửa không dò ra cánh): hình bao dính cung này không phải đồ nội thất
       const swings = vv.arcs.filter(ar => { const rm = ar.r * g.m_per_pt, ch = Math.hypot(ar.b[0] - ar.a[0], ar.b[1] - ar.a[1]); return rm >= 0.55 && rm <= 1.3 && Math.abs(ch / ar.r - Math.SQRT2) < 0.2 })
-      const hulls = islandHulls(vv, g.m_per_pt, sel).filter(h => {
+      const hulls = (FURN_WHITE ? islandHulls(vv, g.m_per_pt, sel) : []).filter(h => {
         let cx = 0, cy = 0; const n = h.length / 2; for (let i = 0; i < h.length; i += 2) { cx += h[i]; cy += h[i + 1] } cx /= n; cy /= n
         // hình bao mà phần lớn bên trong là sàn thông thoáng (không bị nét bao kín, vd. tam giác nối lệch các nét rời) → không phải đồ nội thất, bỏ
         const sx0 = W / vv.w, P: number[] = h.map(v => v * sx0); let bx0 = 1e9, by0 = 1e9, bx1 = -1e9, by1 = -1e9

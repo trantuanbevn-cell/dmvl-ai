@@ -1,6 +1,7 @@
 // Từ nét vẽ vector → mặt nạ tường → các phòng kín (diện tích thật). Không dùng AI.
 import type { VecPage } from './vector'
 import { isAnnoLayer } from './dims'
+import { dropDoorSwingSegs } from './zoneSnap'
 
 export type CadRoom = {
   id: number; area_m2: number; poly: number[][] // chuẩn hoá 0..1 theo trang
@@ -12,7 +13,7 @@ export type CadResult = { rooms: CadRoom[]; m_per_pt: number; px_per_pt: number;
 export const mPerPt = (scaleDen: number) => (25.4 / 72 / 1000) * scaleDen
 
 /** Vẽ các nhóm nét được chọn thành mặt nạ tường (canvas → Uint8Array 0/255) */
-export function rasterWalls(v: VecPage, selected: Set<number>, pxPerPt: number, doors: number[][] = [], partitions = false, mpp = 0.03528): { mask: Uint8Array; W: number; H: number } {
+export function rasterWalls(v: VecPage, selected: Set<number>, pxPerPt: number, doors: number[][] = [], partitions = false, mpp = 0.03528, doorOnly?: Set<number>): { mask: Uint8Array; W: number; H: number } {
   const W = Math.ceil(v.w * pxPerPt), H = Math.ceil(v.h * pxPerPt)
   const c = document.createElement('canvas'); c.width = W; c.height = H
   const g = c.getContext('2d', { willReadFrequently: true })!
@@ -23,7 +24,11 @@ export function rasterWalls(v: VecPage, selected: Set<number>, pxPerPt: number, 
   for (const [ci, idx] of byCls) {
     g.lineWidth = Math.max(1.6, v.classes[ci].lw * pxPerPt)
     g.beginPath()
-    for (const i of idx) { g.moveTo(v.segs[i * 4] * pxPerPt, v.segs[i * 4 + 1] * pxPerPt); g.lineTo(v.segs[i * 4 + 2] * pxPerPt, v.segs[i * 4 + 3] * pxPerPt) }
+    if (doorOnly?.has(ci) && doors.length) { // nét cửa (cánh + cung quét) KHÔNG phải tường: bỏ, chỉ giữ nét khung cửa nằm dọc tường; ranh phòng tại cửa là đường ngang khung cửa (vẽ bên dưới)
+      const flat: number[] = []; for (const i of idx) flat.push(v.segs[i * 4], v.segs[i * 4 + 1], v.segs[i * 4 + 2], v.segs[i * 4 + 3])
+      const keep = dropDoorSwingSegs(flat, doors)
+      for (let k = 0; k + 3 < keep.length; k += 4) { g.moveTo(keep[k] * pxPerPt, keep[k + 1] * pxPerPt); g.lineTo(keep[k + 2] * pxPerPt, keep[k + 3] * pxPerPt) }
+    } else for (const i of idx) { g.moveTo(v.segs[i * 4] * pxPerPt, v.segs[i * 4 + 1] * pxPerPt); g.lineTo(v.segs[i * 4 + 2] * pxPerPt, v.segs[i * 4 + 3] * pxPerPt) }
     g.stroke()
   }
   for (const f of v.fills) {
@@ -36,7 +41,9 @@ export function rasterWalls(v: VecPage, selected: Set<number>, pxPerPt: number, 
     g.closePath(); g.fill()
   }
   // ô cửa đi: nối bản lề → mép đối diện để phòng khép kín đúng tại cửa
-  if (doors.length) { g.lineWidth = Math.max(2, 0.6 * pxPerPt); g.beginPath(); for (const d of doors) { g.moveTo(d[0] * pxPerPt, d[1] * pxPerPt); g.lineTo(d[2] * pxPerPt, d[3] * pxPerPt) } g.stroke() }
+  if (doors.length) { g.lineWidth = Math.max(2, 0.6 * pxPerPt); g.beginPath(); for (const d of doors) { // kéo dài mỗi đầu 0,15 m vào tường để khép kín dù khung cửa có bậc
+    const L = Math.hypot(d[2] - d[0], d[3] - d[1]) || 1, e = 0.15 / mpp, ux = ((d[2] - d[0]) / L) * e, uy = ((d[3] - d[1]) / L) * e
+    g.moveTo((d[0] - ux) * pxPerPt, (d[1] - uy) * pxPerPt); g.lineTo((d[2] + ux) * pxPerPt, (d[3] + uy) * pxPerPt) } g.stroke() }
   let d = g.getImageData(0, 0, W, H).data
   if (partitions) {
     // đường dài ở layer khác (vách WC, kệ...) có 1 đầu chạm tường → coi là vách ngăn
@@ -126,9 +133,29 @@ export function findRooms(cv: any, v: VecPage, mask: Uint8Array, W: number, H: n
       const apx = new cv.Mat(); cv.approxPolyDP(cs.get(bi), apx, Math.max(1.5, 0.05 / mPerPx), true)
       for (let p = 0; p < apx.rows; p++) poly.push([(apx.data32S[p * 2] + bx) / W, (apx.data32S[p * 2 + 1] + by) / H]); apx.delete()
     }
+    // Diện tích THÔNG THỦY: toàn bộ phần bên trong chu vi tường + khung cửa – gồm cả đồ nội thất, cột lẻ đứng trong phòng (các "lỗ" không chứa không gian khác)
+    let areaFill = area
+    if (bi >= 0) {
+      const F = cv.Mat.zeros(bh, bw, cv.CV_8UC1); cv.drawContours(F, cs, bi, new cv.Scalar(255), -1)
+      const seen = new Uint8Array(bw * bh), stack: number[] = []; let add = 0
+      for (let s0 = 0; s0 < bw * bh; s0++) {
+        if (seen[s0] || !F.data[s0] || sub.data[s0]) continue
+        let cnt = 0, other = false; stack.length = 0; stack.push(s0); seen[s0] = 1
+        while (stack.length) {
+          const q = stack.pop()!, x = q % bw, y = (q - x) / bw; cnt++
+          if (L[(by + y) * W + bx + x] > 0) other = true
+          if (x > 0 && !seen[q - 1] && F.data[q - 1] && !sub.data[q - 1]) { seen[q - 1] = 1; stack.push(q - 1) }
+          if (x < bw - 1 && !seen[q + 1] && F.data[q + 1] && !sub.data[q + 1]) { seen[q + 1] = 1; stack.push(q + 1) }
+          if (y > 0 && !seen[q - bw] && F.data[q - bw] && !sub.data[q - bw]) { seen[q - bw] = 1; stack.push(q - bw) }
+          if (y < bh - 1 && !seen[q + bw] && F.data[q + bw] && !sub.data[q + bw]) { seen[q + bw] = 1; stack.push(q + bw) }
+        }
+        if (!other) add += cnt
+      }
+      F.delete(); areaFill = (px + add) * mPerPx * mPerPx
+    }
     cs.delete(); hi.delete(); sub.delete()
     if (poly.length < 3) continue
-    rooms.push({ id: rooms.length + 1, area_m2: +area.toFixed(2), poly, cx: ce.data64F[i * 2] / W, cy: ce.data64F[i * 2 + 1] / H, names: [] })
+    rooms.push({ id: rooms.length + 1, area_m2: +areaFill.toFixed(2), poly, cx: ce.data64F[i * 2] / W, cy: ce.data64F[i * 2 + 1] / H, names: [] })
   }
   wall.delete(); closed.delete(); free.delete()
   // bỏ các ô rời xa công trình (ô trong khung tên/bảng chú thích, ký hiệu...): giữ cụm phòng lớn nhất, các cụm nhỏ (<8% diện tích) cách xa > 6 m bị loại
