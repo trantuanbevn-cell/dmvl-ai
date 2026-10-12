@@ -1,6 +1,6 @@
 // Viết thông số kỹ thuật, tính chất theo không gian và tiêu chuẩn tham chiếu – KHÔNG dùng AI.
 // Dựa trên: nhóm mã + mô tả vật liệu AI đã nhận ra + loại phòng. Người dùng sửa lại được.
-import { groupOf } from './codes'
+import { groupOf, baseGroup } from './codes'
 import type { Entry, Room } from './types'
 
 const T: Record<string, [string, string]> = {
@@ -14,6 +14,8 @@ const T: Record<string, [string, string]> = {
   SP: ['Hệ sơn đặc biệt: 1 lớp lót, 2 lớp phủ theo hướng dẫn hãng.', 'Special coating: 1 primer + 2 finish coats per manufacturer.'],
   WC: ['Giấy/ vải dán tường dán giáp mí bằng keo chuyên dụng trên nền đã bả phẳng, lót chống kiềm.', 'Butt-jointed with recommended adhesive on skimmed, primed substrate.'],
   WP: ['Tấm ốp trên hệ khung xương/ keo chuyên dụng; ron, nẹp góc theo thiết kế.', 'Panels on concealed framing/adhesive; joints and trims as detailed.'],
+  FGWB: ['Hệ thạch cao chống cháy: tấm chống cháy dày ≥ 12,5mm (≥ 2 lớp tùy yêu cầu), khung xương mạ kẽm; giới hạn chịu lửa của cả hệ (EI) theo yêu cầu PCCC, có biên bản thử nghiệm của hãng.', 'Fire-rated gypsum system: Type X / EN 520-F board ≥ 12.5mm (≥ 2 layers as required), galvanised framing; fire resistance (EI) of the whole assembly as required, manufacturer test report to be provided.'],
+  MGWB: ['Tấm thạch cao chịu ẩm (lõi chống thấm), khung xương chìm mạ kẽm, xử lý mối nối băng keo lưới, bả 2 lớp, sơn chống nấm mốc.', 'Moisture-resistant gypsum board, galvanised concealed framing, taped joints, 2-coat skim, anti-mould paint.'],
   GWB: ['Khung xương chìm mạ kẽm (xương chính a ≤ 1200, xương phụ a ≤ 406), tấm thạch cao dày 9–12mm, xử lý mối nối băng keo lưới, bả 2 lớp, sơn 1 lót 2 phủ.', 'Galvanised concealed grid (main ≤ 1200 c/c, furring ≤ 406 c/c), 9–12mm gypsum board, taped joints, 2 skim coats, 1 primer + 2 finish coats.'],
   ACT: ['Tấm tiêu âm 600x600 trên khung nổi/ chìm sơn tĩnh điện, NRC ≥ 0,6.', '600x600 acoustic tiles on exposed/concealed grid, NRC ≥ 0.6.'],
   WD: ['Gỗ tự nhiên/ veneer, sơn PU hoặc lau dầu, độ bóng theo mẫu duyệt.', 'Solid timber/veneer, PU lacquer or oil finish, sheen to approved sample.'],
@@ -48,7 +50,7 @@ export function perfFor(e: Pick<Entry, 'group_code' | 'category'>, roomTypes: st
   const vn: string[] = [], en: string[] = []
   const add = (a: string, b: string) => { if (!vn.includes(a)) { vn.push(a); en.push(b) } }
   const wet = roomTypes.some(t => WET.includes(t)), fnb = roomTypes.some(t => FNB.includes(t)), pub = roomTypes.some(t => PUBLIC.includes(t))
-  const g = e.group_code, c = e.category
+  const g = baseGroup(e.group_code), c = e.category
   if (c === 'floor' || g === 'CT' && c !== 'wall' && c !== 'feature_wall') {
     if (wet) add('Chống trượt R10–R11 (DIN 51130) hoặc DCOF ướt ≥ 0,42; độ hút nước ≤ 0,5%', 'Slip R10–R11 (DIN 51130) or wet DCOF ≥ 0.42; absorption ≤ 0.5%')
     else if (fnb) add('Chống trượt R10 / DCOF ướt ≥ 0,42; kháng dầu mỡ, dễ vệ sinh', 'Slip R10 / wet DCOF ≥ 0.42; grease-resistant, cleanable')
@@ -70,7 +72,7 @@ export function perfFor(e: Pick<Entry, 'group_code' | 'category'>, roomTypes: st
 
 /** Mô tả & thông số (VN, EN) */
 export function descFor(e: Pick<Entry, 'group_code' | 'name_vn' | 'name_en' | 'material_vn' | 'material_en' | 'composition'>): [string, string] {
-  const [tv, te] = T[e.group_code] ?? ['', '']
+  const [tv, te] = T[e.group_code] ?? T[baseGroup(e.group_code)] ?? ['', '']
   const vn = [e.material_vn ? `${e.material_vn.replace(/\.$/, '')}.` : `${e.name_vn}.`, tv, e.composition ? `Cấu tạo: ${e.composition}.` : ''].filter(Boolean).join(' ')
   const en = [e.material_en ? `${e.material_en.replace(/\.$/, '')}.` : e.name_en ? `${e.name_en}.` : '', te, e.composition ? `Composition: ${e.composition}.` : ''].filter(Boolean).join(' ')
   return [vn, en]

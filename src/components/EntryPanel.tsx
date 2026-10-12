@@ -13,6 +13,7 @@ import RoomShotFallback from './RoomShotFallback'
 import AddShot from './AddShot'
 import GroupPicker from './GroupPicker'
 import { changeGroup } from '../lib/entryGroup'
+import { compDefault } from '../lib/compDefault'
 import { locationsOf } from '../lib/locations'
 import OccCrop from './OccCrop'
 import { useAuth } from '../lib/auth'
@@ -143,6 +144,7 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
       </>}
       <Field bad={B('standards') || ('standards'.startsWith('qty') && B('qty'))} e={entry} k="standards" label="Tiêu chuẩn tham chiếu (chỉ để kiểm tra, không xuất file)" onSaved={saved} />
       <Field bad={B('composition') || ('composition'.startsWith('qty') && B('qty'))} e={entry} k="composition" label="Cấu tạo (vật liệu thành phần theo mã)" onSaved={saved} />
+        {canEdit && compDefault(entry.group_code) && !(entry.composition ?? '').trim() && <button type="button" className="btn sm" style={{ marginTop: -4 }} onClick={async () => { await saveEntry(entry, { composition: compDefault(entry.group_code) }); d.reload() }}>↻ Điền cấu tạo theo nhóm: {compDefault(entry.group_code)}</button>}
       {(children.length > 0 || parent) && <div className="small muted">
         {parent && <>Thuộc: <b>{parent.code}</b> {parent.name_vn}. </>}
         {children.length > 0 && <>Thành phần: {children.map(c => c.code).join(', ')}</>}

@@ -1,3 +1,4 @@
+import { baseGroup } from './codes'
 // Suy luận hạng mục không thể hiện trong phối cảnh – BỘ QUY TẮC, KHÔNG dùng AI.
 // Mỗi quy tắc xem các mã đã nhận diện trong phòng và đề xuất hạng mục logic bắt buộc phải có.
 import type { Entry, Room } from './types'
@@ -9,7 +10,7 @@ const has = (es: Entry[], re: RegExp, groups?: string[]) => es.some(e => (!group
 
 export const RULES: { id: string; label: string; run: (room: Room, es: Entry[]) => Inferred | null }[] = [
   { id: 'access_panel', label: 'Trần thạch cao kín → nắp thăm trần', run: (_r, es) =>
-    (es.some(e => e.group_code === 'GWB') || has(es, /thach cao|gypsum/)) && !has(es, /tham tran|access panel/)
+    (es.some(e => baseGroup(e.group_code) === 'GWB') || has(es, /thach cao|gypsum/)) && !has(es, /tham tran|access panel/)
       ? { group: 'GWB', category: 'ceiling', name_vn: 'Nắp thăm trần 600x600', name_en: 'Ceiling access panel 600x600', material_vn: 'Khung nhôm âm, mặt tấm thạch cao, sơn trùng màu trần', reason: 'Trần thạch cao kín có thiết bị kỹ thuật phía trên → cần nắp thăm để bảo trì', unit: 'bộ' } : null },
   { id: 'door_hw', label: 'Có cửa → bộ phụ kiện cửa', run: (_r, es) => {
     const doors = es.filter(e => e.group_code === 'DR' || (e.category === 'door' && e.group_code !== 'HW'))

@@ -1,3 +1,4 @@
+import { compDefault } from './compDefault'
 import { supabase, BUCKET, signedUrl, signedUrls } from './supabase'
 import { renderPdf, cleanText } from './pdf'
 import { callAI } from './ai'
@@ -447,7 +448,7 @@ export async function addManualEntry(project: Project, room: Room | null, group:
     const entries = await must(supabase.from('entries').select('code').eq('project_id', project.id)) as Entry[]
     const book = new CodeBook(entries as Entry[])
     const { data, error } = await supabase.from('entries').insert({
-      project_id: project.id, code: book.next(group), group_code: group, category, name_vn: name, source: 'manual', status: 'pending', qty_flag: 'warn', qty_note: 'Nhập tay', ...extra,
+      project_id: project.id, code: book.next(group), group_code: group, category, name_vn: name, source: 'manual', status: 'pending', qty_flag: 'warn', qty_note: 'Nhập tay', composition: compDefault(group), ...extra,
     }).select().single()
     if (error) { if (error.code === '23505' && attempt < 4) continue; throw new Error(error.message) }
     const e = data as Entry

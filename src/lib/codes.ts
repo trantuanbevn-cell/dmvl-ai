@@ -113,7 +113,7 @@ export const GROUPS: Group[] = [
  },
  {
   "code": "GWB",
-  "vn": "Trần / vách thạch cao",
+  "vn": "Thạch cao thường (trần / vách)",
   "en": "Gypsum Board Ceiling / Partition",
   "legacy": "TR",
   "csi": "09 21 00 / 09 29 00 Gypsum Board",
@@ -121,6 +121,28 @@ export const GROUPS: Group[] = [
   "attrs_en": "Board type, thickness, suspension system, ceiling height, finish (PT code)",
   "std_vn": "TCVN 8256:2009; TCVN 8257 (phương pháp thử)",
   "std_intl": "ASTM C1396; EN 520"
+ },
+ {
+  "code": "FGWB",
+  "vn": "Thạch cao chống cháy",
+  "en": "Fire-rated Gypsum Board",
+  "legacy": "TR",
+  "csi": "09 21 00 / 09 29 00 Gypsum Board",
+  "attrs_vn": "Loại tấm chống cháy (Type X / EN 520 loại F), độ dày, số lớp, hệ khung, giới hạn chịu lửa của hệ (EI), hoàn thiện",
+  "attrs_en": "Fire-rated board type (Type X / EN 520 F), thickness, layers, framing, system fire resistance (EI), finish",
+  "std_vn": "QCVN 06:2022/BXD (giới hạn chịu lửa EI); TCVN 8256:2009",
+  "std_intl": "ASTM C1396 Type X; EN 520 type F; EN 13501-2"
+ },
+ {
+  "code": "MGWB",
+  "vn": "Thạch cao chịu ẩm",
+  "en": "Moisture-resistant Gypsum Board",
+  "legacy": "TR",
+  "csi": "09 21 00 / 09 29 00 Gypsum Board",
+  "attrs_vn": "Loại tấm chịu ẩm (lõi chống thấm, giấy mặt xanh), độ dày, hệ khung mạ kẽm, hoàn thiện sơn chống nấm mốc",
+  "attrs_en": "Moisture-resistant board (water-repellent core), thickness, galvanised framing, anti-mould finish",
+  "std_vn": "TCVN 8256:2009",
+  "std_intl": "ASTM C1396 (water-resistant); EN 520 type H"
  },
  {
   "code": "ACT",
@@ -388,3 +410,6 @@ export const CATEGORY_GROUPS: Record<string, string[]> = {
   artwork: ['AW'], signage: ['SN'], decor: ['DC'], lighting: ['LT'], loose: ['FF'], joinery: ['JN', 'FH'],
   sanitary: ['SF', 'BA'], equipment: ['EQ'], mep: ['ME'], door: ['DR', 'HW'], window: ['WT'],
 }
+
+/** Nhóm cho cùng bộ thông số/quy tắc với nhóm gốc (thạch cao chống cháy / chịu ẩm dùng chung bộ với thạch cao thường) */
+export const baseGroup = (g: string): string => (g === 'FGWB' || g === 'MGWB' ? 'GWB' : g)
