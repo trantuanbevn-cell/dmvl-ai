@@ -7,7 +7,7 @@ import { isAnnoLayer } from './dims'
 const OPS = pdfjs.OPS as Record<string, number>
 
 export type VecClass = { key: string; layer: string; lw: number; fill: boolean; len: number; n: number }
-export type VecText = { t: string; x: number; y: number; h: number; rot?: number } // pt, gốc trên-trái; rot: độ (theo chiều kim đồng hồ)
+export type VecText = { t: string; x: number; y: number; h: number; rot?: number; ly?: string } // pt, gốc trên-trái; rot: độ (theo chiều kim đồng hồ)
 /** một đoạn vẽ liên tiếp cùng kiểu (giữ nguyên thứ tự vẽ của PDF) – để dựng lại mặt bằng dạng vector */
 export type DrawRun = { cls: number; sc?: string; fc?: string; lw: number; d: string }
 export type VecPage = {

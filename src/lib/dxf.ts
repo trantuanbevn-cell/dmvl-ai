@@ -47,7 +47,11 @@ function arcPts(cx: number, cy: number, r: number, a0: number, a1: number): Pt[]
 }
 
 type Path = { pts: Pt[]; layer: string; color?: number; lw?: number; closed?: boolean; fill?: boolean }
-type Txt = { t: string; x: number; y: number; h: number; rot: number }
+type Txt = { t: string; x: number; y: number; h: number; rot: number; ly: string }
+/** layer nhiễu (đường ống, cơ điện, tâm…) – ẩn đi */
+const NOISE = /defpoints|xref- ?ps|(^|\$)(m|p)-|g-impt|a-genm|dwatcopi|fitting|pipe|(^|\$)center$|s-dim|淘宝/i
+/** layer ranh giới không gian khép kín (có sẵn trong bản vẽ) */
+export const ZONE_LAYER = /(^|\$)area$|ranh.?gioi|dien.?tich|room.?bound|space.?bound/i
 
 /** DXF → các đường (toạ độ bản vẽ, đơn vị gốc) + chữ */
 function collect(dxf: any): { paths: Path[]; texts: Txt[]; layers: Record<string, { color: number; off: boolean }> } {
@@ -60,7 +64,7 @@ function collect(dxf: any): { paths: Path[]; texts: Txt[]; layers: Record<string
     for (const e of ents) {
       if (!e || (paper !== !!e.inPaperSpace && depth === 0)) continue
       const own = e.layer ?? '0', layer = own === '0' && inherit.layer ? inherit.layer : own
-      if (layers[layer]?.off) continue
+      if (layers[layer]?.off || NOISE.test(layer)) continue
       let color: number | undefined = typeof e.colorIndex === 'number' && e.colorIndex > 0 && e.colorIndex < 256 ? e.colorIndex : undefined
       if (color === undefined && inherit.color) color = inherit.color
       const lw = typeof e.lineweight === 'number' && e.lineweight > 0 ? e.lineweight / 100 : undefined
@@ -86,7 +90,7 @@ function collect(dxf: any): { paths: Path[]; texts: Txt[]; layers: Record<string
         case 'SOLID': { const v: any[] = e.points ?? []; if (v.length >= 3) { const q = v.map(p => [p.x, p.y] as Pt); if (v.length === 4) [q[2], q[3]] = [q[3], q[2]]; add([...q, q[0]], true, true) } break }
         case 'TEXT': case 'MTEXT': case 'ATTRIB': {
           const p = e.startPoint ?? e.position; const raw = String(e.text ?? ''); const t = cleanMtext(raw)
-          if (p && t) { const [x, y] = apT(m, [p.x, p.y]); texts.push({ t, x, y, h: (e.textHeight ?? e.height ?? 1) * Math.hypot(m[0], m[1]), rot: (e.rotation ?? 0) + (Math.atan2(m[1], m[0]) * 180) / Math.PI }) }
+          if (p && t) { const [x, y] = apT(m, [p.x, p.y]); texts.push({ t, x, y, h: (e.textHeight ?? e.height ?? 1) * Math.hypot(m[0], m[1]), rot: (e.rotation ?? 0) + (Math.atan2(m[1], m[0]) * 180) / Math.PI, ly: layer }) }
           break
         }
         case 'INSERT': {
@@ -112,7 +116,7 @@ const q = (a: number[], p: number) => { const s = a.slice().sort((x, y) => x - y
 export type DxfInfo = { unit: string; mmPerUnit: number; den: number; extentM: [number, number] }
 
 /** DXF → VecPage. Tỉ lệ (den) được chọn theo kích thước bản vẽ thật nên m/pt chính xác tuyệt đối theo đơn vị của file. */
-export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void, opt: { draw?: boolean } = {}): Promise<VecPage & { dxf: DxfInfo }> {
+export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void, opt: { draw?: boolean } = {}): Promise<VecPage & { dxf: DxfInfo; zones: { layer: string; pts: number[] }[] }> {
   onLog?.('Đang đọc DXF...')
   const head = new Uint8Array(data, 0, Math.min(22, data.byteLength)); if (String.fromCharCode(...head).startsWith('AutoCAD Binary DXF')) throw new Error('DXF dạng nhị phân – hãy lưu lại ở dạng DXF ASCII (SAVEAS → DXF → "AutoCAD 2018 DXF").')
   let dxf: any
@@ -144,6 +148,7 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
     const w = fill ? -1 : Math.round(lw * 20) / 20, key = `${layer}|${fill ? 'fill' : w}`
     let i = classIdx.get(key); if (i === undefined) { i = classes.length; classIdx.set(key, i); classes.push({ key, layer, lw: w, fill, len: 0, n: 0 }) } return i
   }
+  const zones: { layer: string; pts: number[] }[] = []
   const segs: number[] = [], segCls: number[] = [], fills: VecPage['fills'] = [], arcs: VecPage['arcs'] = [], runs: DrawRun[] = []
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString()
   for (const p of paths) {
@@ -151,6 +156,7 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
     const lwPt = Math.max(0.18, (p.lw ?? 0.25) / PT_MM * 0.7), pts: number[] = []
     for (const t of p.pts) pts.push(X(t[0]), Y(t[1]))
     const ci = clsOf(p.layer, lwPt, false), c = classes[ci]
+    if (p.closed && ZONE_LAYER.test(p.layer) && pts.length >= 6) zones.push({ layer: p.layer, pts })
     const arc = asArc(pts); if (arc && arcs.length < 20000) arcs.push(arc)
     for (let i = 0; i + 3 < pts.length; i += 2) { const L = Math.hypot(pts[i + 2] - pts[i], pts[i + 3] - pts[i + 1]); if (L < 0.05) continue; segs.push(pts[i], pts[i + 1], pts[i + 2], pts[i + 3]); segCls.push(ci); c.len += L; c.n++ }
     if (p.fill && pts.length >= 6) { const fi = clsOf(p.layer, 0, true); fills.push({ cls: fi, pts: new Float32Array(pts) }); classes[fi].n++; classes[fi].len += pts.length / 2 }
@@ -162,9 +168,9 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
       else runs.push({ cls: ci, sc: col, fc: p.fill ? col : undefined, lw: lwPt, d })
     }
   }
-  const texts: VecText[] = rawT.filter(t => t.x >= x0 && t.x <= x1 && t.y >= y0 && t.y <= y1).map(t => ({ t: t.t, x: X(t.x), y: Y(t.y), h: Math.max(1, t.h / k), rot: Math.round(-t.rot * 10) / 10 }))
+  const texts: VecText[] = rawT.filter(t => t.x >= x0 && t.x <= x1 && t.y >= y0 && t.y <= y1).map(t => ({ t: t.t, x: X(t.x), y: Y(t.y), h: Math.max(1, t.h / k), rot: Math.round(-t.rot * 10) / 10, ly: t.ly }))
   onLog?.(`  DXF: ${segs.length / 4} đoạn nét, ${classes.length} nhóm layer/nét, ${texts.length} chữ, đơn vị ${unit}, tỉ lệ 1:${den}`)
-  return { ...(opt.draw ? { draw: runs } : {}), arcs, w: W, h: H, segs: new Float32Array(segs), cls: new Uint16Array(segCls), fills, classes, texts, nSeg: segs.length / 4, dxf: { unit, mmPerUnit: mmU, den, extentM: [(x1 - x0) * mmU / 1000, (y1 - y0) * mmU / 1000] } }
+  return { ...(opt.draw ? { draw: runs } : {}), arcs, w: W, h: H, segs: new Float32Array(segs), cls: new Uint16Array(segCls), fills, classes, texts, nSeg: segs.length / 4, zones, dxf: { unit, mmPerUnit: mmU, den, extentM: [(x1 - x0) * mmU / 1000, (y1 - y0) * mmU / 1000] } }
 }
 
 /** Ảnh xem trước từ DXF (JPEG) */

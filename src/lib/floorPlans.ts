@@ -1,7 +1,7 @@
 // Mặt bằng GỐC theo tầng (PDF vector xuất từ AutoCAD): tải lên, đọc nét vẽ, tìm phòng kín.
 import { supabase, BUCKET } from './supabase'
 import { loadCv } from './cv'
-import { readVectorPage, guessWallClasses, detectDoors } from './vector'
+import { readVectorPage, guessWallClasses, detectDoors, type VecPage } from './vector'
 import { applyMerges, applyCuts, roomPolys, inRoom } from './cadZones'
 import { autoBackup } from './backup'
 import { detectFurniture } from './furniture'
@@ -27,6 +27,30 @@ export async function addFloorPlan(project: Project, file: File, label: string, 
   await must(supabase.storage.from(BUCKET).upload(prevPath, pv.blob, { upsert: true, contentType: 'image/jpeg' }))
   const row = await must(supabase.from('floor_plans').insert({ id, project_id: project.id, floor_label: label, pdf_path: pdfPath, page_no: pageNo, scale_den: scaleDen, width: pv.width, height: pv.height, preview_path: prevPath }).select().single()) as FloorPlan
   await computeFloor(row, {}, log, buf)
+}
+
+/** Không gian từ đa giác khép kín có sẵn trong DXF: diện tích chính xác theo toạ độ, tên lấy từ chữ tên phòng nằm trong */
+function zoneRooms(v: VecPage & { zones?: { layer: string; pts: number[] }[] }, mpp: number): FloorRoom[] {
+  const out: FloorRoom[] = []
+  const inside = (p: number[], x: number, y: number) => { let c = false; for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) if ((p[i + 1] > y) !== (p[j + 1] > y) && x < ((p[j] - p[i]) * (y - p[i + 1])) / (p[j + 1] - p[i + 1]) + p[i]) c = !c; return c }
+  for (const z of v.zones ?? []) {
+    const P: number[] = []
+    for (let i = 0; i < z.pts.length; i += 2) { const n = P.length; if (n >= 2 && Math.hypot(z.pts[i] - P[n - 2], z.pts[i + 1] - P[n - 1]) < 1e-3) continue; P.push(z.pts[i], z.pts[i + 1]) }
+    if (P.length >= 4 && Math.hypot(P[0] - P[P.length - 2], P[1] - P[P.length - 1]) < 1e-3) P.length -= 2
+    if (P.length < 6) continue
+    let a2 = 0, cx = 0, cy = 0; const n = P.length / 2
+    for (let i = 0; i < n; i++) { const j = (i + 1) % n, f = P[i * 2] * P[j * 2 + 1] - P[j * 2] * P[i * 2 + 1]; a2 += f; cx += (P[i * 2] + P[j * 2]) * f; cy += (P[i * 2 + 1] + P[j * 2 + 1]) * f }
+    const area = Math.abs(a2) / 2 * mpp * mpp; if (area < 0.75 || area > 3000 || !a2) continue
+    const names = v.texts.filter(t => /ten.?phong/i.test(t.ly ?? '') && inside(P, t.x, t.y)).sort((p, q) => p.y - q.y || p.x - q.x).map(t => t.t.trim()).filter((t, i, a) => t && a.indexOf(t) === i)
+    let qx = cx / (3 * a2), qy = cy / (3 * a2)
+    if (!inside(P, qx, qy)) { // tâm nằm ngoài (đa giác lõm) → lấy điểm giữa đoạn cắt ngang dài nhất
+      let by0 = 1e9, by1 = -1e9; for (let i = 1; i < P.length; i += 2) { by0 = Math.min(by0, P[i]); by1 = Math.max(by1, P[i]) }
+      let best = 0
+      for (let k = 1; k < 8; k++) { const y = by0 + ((by1 - by0) * k) / 8, xs: number[] = []; for (let i = 0, j = P.length - 2; i < P.length; j = i, i += 2) if ((P[i + 1] > y) !== (P[j + 1] > y)) xs.push(P[i] + ((y - P[i + 1]) / (P[j + 1] - P[i + 1])) * (P[j] - P[i])); xs.sort((p, q) => p - q); for (let t = 0; t + 1 < xs.length; t += 2) if (xs[t + 1] - xs[t] > best) { best = xs[t + 1] - xs[t]; qx = (xs[t] + xs[t + 1]) / 2; qy = y } }
+    }
+    out.push({ id: out.length + 1, area_m2: +area.toFixed(2), poly: Array.from({ length: n }, (_, i) => [P[i * 2] / v.w, P[i * 2 + 1] / v.h]), cx: qx / v.w, cy: qy / v.h, names })
+  }
+  return out
 }
 
 type AnalyzeOpts = { wallKeys?: string[]; doorW?: number; scaleDen?: number; preferDim?: boolean; merges?: ZoneMerge[]; cuts?: ZoneCut[] }
@@ -61,7 +85,9 @@ export async function analyzeFloor(fp: FloorPlan, opts: AnalyzeOpts, log: Log, b
   await new Promise(r => setTimeout(r, 20))
   const withDoors = new Set(sel); v.classes.forEach((c, i) => { if (/DOOR|CUA DI|CUA SO|WINDOW/i.test(c.layer) && !c.fill) withDoors.add(i) })
   const { mask, W, H } = rasterWalls(v, withDoors, ppp, doors, true, mpp)
-  const res = findRooms(cv, v, mask, W, H, ppp, scaleDen, doorW)
+  let res = findRooms(cv, v, mask, W, H, ppp, scaleDen, doorW)
+  const zr = dxfI ? zoneRooms(v as any, mpp) : null
+  if (zr && zr.length >= 3) { res = { ...res, rooms: zr, leaked: false } as typeof res; log(`DXF: dùng ${zr.length} ranh giới không gian có sẵn trong bản vẽ (diện tích tính từ toạ độ).`) }
   log('Đang đếm đồ rời trong bản vẽ...')
   const furn = detectFurniture(v, mpp)
   const labels: [string, number, number][] = []
