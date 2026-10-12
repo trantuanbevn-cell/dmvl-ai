@@ -24,7 +24,7 @@ export function CommentsProvider({ children }: { children: ReactNode }) {
     let t: number | undefined
     const ch = supabase.channel('comments-' + uid).on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, p => {
       const n = p.new as Partial<Comment> | undefined
-      if (p.eventType === 'INSERT' && n?.to_user === uid && n.author_id !== uid) toast(`💬 ${n.author_name ?? 'Có người'} gửi nhận xét${n.entry_code ? ' cho ' + n.entry_code : ''} – xem ở biểu tượng 💬 trên thanh trên cùng`, 'info')
+      if (p.eventType === 'INSERT' && n?.to_user === uid && n.author_id !== uid) toast(`💬 ${n.author_name ?? 'Có người'} nhận xét${n.entry_code ? ' · ' + n.entry_code : ''}`, 'info')
       window.clearTimeout(t); t = window.setTimeout(load, 300)
     }).subscribe()
     return () => { window.clearTimeout(t); supabase.removeChannel(ch) }

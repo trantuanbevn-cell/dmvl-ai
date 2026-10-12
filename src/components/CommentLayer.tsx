@@ -47,7 +47,7 @@ export default function CommentLayer({ d }: { d: ProjectData }) {
     const err = await send({ project_id: pid, entry_id: tg.entryId, entry_code: tg.code, col: tg.col, body: text.trim(), to_user: to || null })
     setBusy(false)
     if (err) return toast('Không gửi được: ' + err)
-    toast(to ? `Đã gửi nhận xét cho ${people.find(p => p.id === to)?.name}` : 'Đã lưu nhận xét', 'ok'); setTg(null)
+    toast(to ? `Đã gửi ${people.find(p => p.id === to)?.name}` : 'Đã lưu', 'ok'); setTg(null)
   }
   // dấu 💬 ở các hàng đang có nhận xét chưa xử lý (liên quan đến tôi)
   const openByEntry = useMemo(() => { const m = new Map<string, Comment[]>(); for (const c of list) if (c.status === 'open' && c.entry_id && c.project_id === pid) m.set(c.entry_id, [...(m.get(c.entry_id) ?? []), c]); return m }, [list, pid])
@@ -82,17 +82,17 @@ export default function CommentLayer({ d }: { d: ProjectData }) {
   }, [focus, cmtId, !!cur]) // eslint-disable-line
   const close = () => { const q = new URLSearchParams(sp); q.delete('cmt'); q.delete('focus'); q.delete('t'); setSp(q, { replace: true }) }
   return <>
-    <button className={'cmt-fab cmt-ui' + (mode ? ' on' : '')} onClick={() => { setMode(m => !m); setTg(null) }} title="Bật rồi bấm vào hàng, ô hoặc tiêu đề cột để ghi nhận xét và gửi cho ai đó">{mode ? '✕ Thoát chế độ nhận xét (Esc)' : '💬 Nhận xét'}</button>
-    {mode && !tg && <div className="cmt-hint cmt-ui">Bấm vào <b>hàng, ô hoặc tiêu đề cột</b> cần nhận xét</div>}
+    <button className={'cmt-fab cmt-ui' + (mode ? ' on' : '')} onClick={() => { setMode(m => !m); setTg(null) }} >{mode ? '✕ Thoát (Esc)' : '💬 Nhận xét'}</button>
+    {mode && !tg && <div className="cmt-hint cmt-ui">Chọn hàng, ô hoặc cột</div>}
     {cur && <div className="cmt-banner cmt-ui">
       <div><b>💬 {cur.author_id === session.user.id ? 'Bạn ghi' : (cur.author_name ?? 'Có người') + ' nhận xét'}</b>{cur.entry_code ? ` · ${cur.entry_code}` : ''}{cur.col ? ` · cột “${cur.col}”` : ''}: {cur.body}</div>
-      <div className="row gap sm-gap">{cur.status === 'open' ? <button className="btn sm primary" onClick={() => { setDone(cur.id, true); close() }}>✓ Đã xử lý</button> : <span className="small">✓ đã xử lý</span>}<button className="btn sm" onClick={close}>Để xem sau</button></div>
+      <div className="row gap sm-gap">{cur.status === 'open' ? <button className="btn sm primary" onClick={() => { setDone(cur.id, true); close() }}>✓ Đã xử lý</button> : <span className="small">✓ đã xử lý</span>}<button className="btn sm" onClick={close}>Sau</button></div>
     </div>}
     {tg && createPortal(<div className="cmt-pop cmt-ui" ref={pop} style={{ left: tg.x, top: tg.y }}>
       <div className="row between"><b>Nhận xét</b><button className="btn ghost sm" onClick={() => setTg(null)}>✕</button></div>
       <div className="small muted">{tg.code ? <b>{tg.code}</b> : 'Cột'}{tg.col ? ` · ${tg.col}` : ''}</div>
       <label className="small">Gửi đến <select value={to} onChange={e => setTo(e.target.value)}><option value="">— chỉ ghi lại, không gửi ai —</option>{people.map(p => <option key={p.id} value={p.id}>{p.name}{p.role === 'admin' ? ' (quản trị)' : ''}</option>)}</select></label>
-      <textarea autoFocus rows={4} placeholder="Nội dung cần sửa / cần hỏi…" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submit() }} />
+      <textarea autoFocus rows={4} placeholder="Nội dung" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submit() }} />
       <div className="row gap" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={() => setTg(null)}>Huỷ</button><button className="btn primary" disabled={busy || !text.trim()} onClick={submit}>Gửi</button></div>
     </div>, document.body)}
   </>

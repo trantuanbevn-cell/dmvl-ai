@@ -43,20 +43,18 @@ export default function UpdateBell() {
       {open && <div className="bell-pop">
         <b>Thông báo</b>
         {info ? <div className="bell-item">
-          <div><b>Có bản cập nhật mới</b>{info.time && <span className="small muted"> · {new Date(info.time).toLocaleString('vi-VN')}</span>}</div>
-          <div className="small muted">{info.note || 'Bấm “Tải lại” để dùng phiên bản mới nhất. Nên lưu phần đang nhập trước khi tải lại.'}</div>
-          <button className="btn primary sm" onClick={reload}>⟳ Tải lại trang</button>
-        </div> : <div className="small muted" style={{ padding: '8px 0' }}>Bạn đang dùng phiên bản mới nhất.</div>}
+          <div><b>Bản cập nhật mới</b>{info.time && <span className="small muted"> · {new Date(info.time).toLocaleString('vi-VN')}</span>}</div>
+          {info.note && <div className="small muted">{info.note}</div>}
+          <button className="btn primary sm" onClick={reload}>Cập nhật</button>
+        </div> : <div className="small muted" style={{ padding: '8px 0' }}>Không có thông báo.</div>}
       </div>}
       {pop && info && createPortal(
         <div className="upd-bg">
-          <div className="upd-box" role="status" aria-label="Có bản cập nhật mới">
-            <div className="upd-ic">🔔</div>
-            <h3>Có bản cập nhật mới</h3>
-            <p>{info.note || 'Phần mềm vừa được nâng cấp. Bấm xác nhận để tải lại trang và dùng phiên bản mới nhất.'}</p>
-            {info.time && <div className="small muted">Phát hành lúc {new Date(info.time).toLocaleString('vi-VN')}</div>}
-            <p className="small muted">Bạn cứ làm tiếp, lúc rảnh hãy bấm. Đang gõ dở thì bấm ra ngoài ô để lưu trước.</p>
-            <div className="upd-act"><button className="btn" onClick={later}>Ẩn</button><button className="btn primary" onClick={reload}>⟳ Tải lại khi rảnh</button></div>
+          <div className="upd-box" role="status" aria-label="Bản cập nhật mới">
+            <h3>Bản cập nhật mới</h3>
+            {info.note && <p>{info.note}</p>}
+            {info.time && <div className="small muted">{new Date(info.time).toLocaleString('vi-VN')}</div>}
+            <div className="upd-act"><button className="btn" onClick={later}>Sau</button><button className="btn primary" onClick={reload}>Cập nhật</button></div>
           </div>
         </div>, document.body)}
     </div>
