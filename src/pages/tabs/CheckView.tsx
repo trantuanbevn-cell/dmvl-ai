@@ -17,6 +17,7 @@ import { loadEnglish } from '../../lib/spell'
 import { cleanEntries, sameNumbers, sameThing } from '../../lib/qc'
 import { runAiQc, loadFindings, resolveFinding, KIND_LABEL, type Finding } from '../../lib/aiQc'
 import { saveEntry } from '../../lib/entryLink'
+import { MarkedField } from '../../components/MarkedText'
 
 function Side({ d, e, tag, onKeep, busy, label }: { d: ProjectData; e: Entry; tag: string; onKeep?: () => void; busy: boolean; label?: string }) {
   const shots = d.occ.filter(o => o.entry_id === e.id && o.bbox && o.page_id)
@@ -194,7 +195,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
                 <tr key={f.id}>
                   <td><b className="code">{e ? symbolOf(e, undefined, undefined, symbolMap(d.entries)) : f.code}</b><div className="muted">{e?.name_vn}</div></td>
                   <td><span className="chk-tag chk-err">{KIND_LABEL[f.kind] ?? f.kind}</span><div className="muted">{f.field}{f.confidence ? ` · ${Math.round(f.confidence * 100)}%` : ''}</div></td>
-                  <td>{f.message}{f.current_text && <div className="muted">“{f.current_text}”{f.suggestion ? <> → <b>“{f.suggestion}”</b></> : null}</div>}{f.related?.length ? <div className="muted">Liên quan: {f.related.join(', ')}</div> : null}</td>
+                  <td>{f.message}{e && f.field && f.current_text && (e as any)[f.field] ? <MarkedField value={String((e as any)[f.field])} snippet={f.current_text} /> : f.current_text ? <div className="muted">“{f.current_text}”</div> : null}{f.suggestion ? <div className="small">→ <b>{f.suggestion}</b></div> : null}{f.related?.length ? <div className="muted">Liên quan: {f.related.join(', ')}</div> : null}</td>
                   <td className="row gap sm-gap" style={{ flexWrap: 'wrap' }}>
                     {canEdit && canApply && <button className="btn sm primary" onClick={() => applyFind(f)}>✓ Áp dụng</button>}
                     {e && <button className="btn sm" onClick={() => setSel(e.id)}>Mở & sửa</button>}

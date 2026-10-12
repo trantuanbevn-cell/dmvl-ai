@@ -3,6 +3,7 @@ import type { ProjectData } from '../lib/useProject'
 import { applySpell, addSkip, type SpellItem } from '../lib/spellScan'
 import { addUserWord } from '../lib/spell'
 import { toast } from '../lib/toast'
+import { MarkedBefore } from './MarkedText'
 
 /** Danh sách lỗi chính tả / dấu câu: xem trước → sau, sửa tay, chọn gợi ý, sửa tất cả các lỗi tự sửa được */
 export default function SpellReview({ d, items, onClose, onOpenEntry }: { d: ProjectData; items: SpellItem[]; onClose: () => void; onOpenEntry: (id: string) => void }) {
@@ -35,7 +36,8 @@ export default function SpellReview({ d, items, onClose, onOpenEntry }: { d: Pro
           <div key={i.key} className="sp-item">
             <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}><div><b>{i.label}</b> <span className="chk-tag chk-info">{i.fieldLabel}</span></div>
               <div className="row gap">{i.kind === 'entry' && <button className="btn ghost sm" onClick={() => onOpenEntry(i.id)}>Mở & sửa</button>}<button className="btn ghost sm" onClick={() => skip(i)}>Bỏ qua</button></div></div>
-            {i.after !== i.before && <div className="sp-diff small"><span className="sp-old">{i.before}</span><span className="sp-arrow">→</span><span className="sp-new">{i.after}</span></div>}
+            <MarkedBefore before={i.before} after={i.after} flags={i.flags.map(f => f.word).filter(w => !w.startsWith('⚠'))} />
+            {i.after !== i.before && <div className="sp-diff small"><span className="sp-arrow">Sau khi sửa →</span><span className="sp-new">{i.after}</span></div>}
             <textarea data-lang={i.lang === 'vi' ? 'vn' : i.lang === 'en' ? 'en' : 'name'} rows={Math.min(5, Math.max(1, Math.ceil(val(i).length / 90)))} value={val(i)} onChange={e => setEdit(x => ({ ...x, [i.key]: e.target.value }))} />
             {i.flags.length > 0 && <div className="sp-flags small">{i.flags.map(f => (
               <span key={f.word} className="sp-flag"><b>{f.word}</b>{f.suggestions.length ? ' → ' : ' (không có gợi ý) '}{f.suggestions.slice(0, 4).map(s => <a key={s} onClick={() => pick(i, f.word, s)}>{s}</a>)}<a className="sp-ign" title="Từ đúng (tên riêng, thuật ngữ) – thêm vào từ điển riêng" onClick={() => ignoreWord(i, f.word)}>✓ đúng</a></span>))}</div>}
