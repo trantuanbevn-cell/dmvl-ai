@@ -74,8 +74,8 @@ const HEAD: Record<Lang, string[]> = {
   both: ['STT / No.', 'KÍ HIỆU BẢN VẼ / DRAWING CODE', 'KÍ HIỆU VL / MATERIAL CODE', 'Hạng mục / Item', 'Vị trí / Location', 'Hình ảnh phối cảnh / Render', 'Thông số kỹ thuật / Specification', 'Xuất xứ/ Thương hiệu / Origin / Brand', 'Hình ảnh vật liệu / Material image', 'Ghi chú / Remarks'],
 }
 const HW: (number | string)[] = [38, 84, 112, 116, '11%', 104, '24%', '12%', 112, '13%']
-export default function RoomSections({ d, room, lang, filter, sel, onPick, onDetail, onRemove, onAdd, only }: {
-  only?: string; d: ProjectData; room: Room | null; lang: Lang; filter: 'all' | 'pending' | 'inferred' | 'missing'; sel: string | null
+export default function RoomSections({ d, room, lang, filter, sel, onPick, onDetail, onRemove, onAdd, only, entryId }: {
+  only?: string; entryId?: string; d: ProjectData; room: Room | null; lang: Lang; filter: 'all' | 'pending' | 'inferred' | 'missing'; sel: string | null
   onPick: (o: Occurrence) => void; onDetail: (id: string) => void; onRemove: (o: Occurrence) => void
   onAdd: (p: { section_key?: string | null; copy?: string; group: string; category: string; name: string; part_vn?: string | null; parent_id?: string | null; hint?: string }) => void
 }) {
@@ -87,6 +87,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   const ids = [...new Set(occ.map(o => o.entry_id))]
   let ents = d.entries.filter(e => (room ? ids.includes(e.id) : true) && e.status !== 'rejected')
   if (only) ents = ents.filter(e => sectionOf(e).key === only)
+  if (entryId) ents = ents.filter(e => e.id === entryId)
   if (filter === 'pending') ents = ents.filter(e => e.status === 'pending' || e.status === 'review')
   if (filter === 'inferred') ents = ents.filter(e => e.source === 'inferred')
   if (filter === 'missing') ents = ents.filter(e => missingOf(e, lang).length)

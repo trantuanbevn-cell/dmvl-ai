@@ -10,6 +10,7 @@ import type { ProjectData } from '../../lib/useProject'
 import type { Entry, Occurrence } from '../../lib/types'
 import Crop from '../../components/Crop'
 import EntryPanel from '../../components/EntryPanel'
+import MaterialPopup from '../../components/MaterialPopup'
 import { StatusDot } from './MaterialView'
 import Bar from '../../components/Bar'
 import PlanMap from '../../components/PlanMap'
@@ -29,6 +30,8 @@ export default function RoomView({ d }: { d: ProjectData }) {
   const room = d.rooms.find(r => r.id === roomId)
   const [sel, setSel] = useState<string | null>(null) // entry id
   const [selOcc, setSelOcc] = useState<string | null>(null)
+  const [pop, setPop] = useState<string | null>(null) // bảng vật liệu phóng to khi bấm ô khoanh
+  const [hidePanel, setHidePanel] = useState(false)
   const [pageIdx, setPageIdx] = useState(0)
   const [draw, setDraw] = useState(false)
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
@@ -54,7 +57,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
   const goto = (dir: number) => { const i = d.rooms.findIndex(r => r.id === roomId); const r = d.rooms[i + dir]; if (r) { setSp({ room: r.id }); setPageIdx(0); setSel(null) } }
 
   const pick = (o: Occurrence) => {
-    setSel(o.entry_id); setSelOcc(o.id)
+    setSel(o.entry_id); setSelOcc(o.id); setPop(o.entry_id); setHidePanel(true)
     const i = pages.findIndex(p => p.id === o.page_id); if (i >= 0) setPageIdx(i)
   }
   const rel = (ev: React.MouseEvent) => {
@@ -96,7 +99,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
   if (!d.rooms.length) return <div className="card muted">Chưa có phòng. Hãy tải concept ở bước 1.</div>
 
   return (
-    <div className={'room-layout' + (selEntry ? ' with-panel' : '')}>
+    <div className={'room-layout' + (selEntry && !hidePanel ? ' with-panel' : '')}>
       <div className="room-list">
         {d.rooms.map(r => {
           const st = stats.get(r.id)!; const hs = heroStyle(d, st.hero, r.id, 16 / 9)
@@ -175,7 +178,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
             {([['all', 'Tất cả'], ['pending', 'Chờ duyệt'], ['inferred', 'Suy luận (không thấy trong ảnh)'], ['missing', `⚠ Thiếu thông tin${rm.rows ? ' (' + rm.rows + ')' : ''}`]] as const).map(([k, l]) => <button key={k} className={'chip' + (flt === k ? ' on' : '')} onClick={() => setFlt(k)}>{l}</button>)}
           </div>
           <EnFill d={d} lang={lang} />
-          <RoomSections d={d} room={room!} lang={lang} filter={flt} sel={sel} onPick={pick} onDetail={id => { setSel(id); setSelOcc(null) }} onRemove={removeOcc} onAdd={setDlg} />
+          <RoomSections d={d} room={room!} lang={lang} filter={flt} sel={sel} onPick={pick} onDetail={id => { setSel(id); setSelOcc(null); setHidePanel(false) }} onRemove={removeOcc} onAdd={setDlg} />
           {room && <RoomSuggest d={d} room={room} onAdd={setDlg} />}
           {canEdit && <div className="row gap add-row">
             <select value={add.category} onChange={e => setAdd({ ...add, category: e.target.value })}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.vn}</option>)}</select>
@@ -187,7 +190,8 @@ export default function RoomView({ d }: { d: ProjectData }) {
       </div>
 
       {dlg && room && <AddMaterial d={d} room={room} preset={dlg} onClose={() => setDlg(null)} onDone={id => { setDlg(null); setSel(id); setSelOcc(null) }} />}
-      {selEntry && <EntryPanel d={d} entry={selEntry} onClose={() => { setSel(null); setSelOcc(null) }} />}
+      {selEntry && !hidePanel && <EntryPanel d={d} entry={selEntry} onClose={() => { setSel(null); setSelOcc(null) }} />}
+      {pop && <MaterialPopup d={d} entryId={pop} lang={lang} onClose={() => setPop(null)} onDetail={id => { setPop(null); setSel(id); setHidePanel(false) }} />}
     </div>
   )
 }
