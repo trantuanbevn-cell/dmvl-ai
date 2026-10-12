@@ -14,7 +14,7 @@ import AddShot from './AddShot'
 import { locationsOf } from '../lib/locations'
 import OccCrop from './OccCrop'
 import { useAuth } from '../lib/auth'
-import { reportActivity, useOnline, colorOf } from '../lib/presence'
+import { useOnline, colorOf } from '../lib/presence'
 import { fixCategory, type Issue } from '../lib/checks'
 
 type F = keyof Entry
@@ -28,8 +28,8 @@ function Field({ e, k, label, area, onSaved, type = 'text', bad }: { e: Entry; k
     const error = await saveEntry(e, { [k]: val })
     if (error) alert(error.message); else onSaved()
   }
-  const focus = () => reportActivity(`đang sửa ${e.code} · ${label}`, e.id)
-  const blur = () => reportActivity(`đang xem ${e.code}`, e.id)
+  const focus = () => undefined
+  const blur = () => undefined
   const dl = String(k).endsWith('_vn') ? 'vn' : String(k).endsWith('_en') ? 'en' : ['product_code', 'color_hex', 'product_url', 'product_image_url'].includes(String(k)) || type === 'number' ? 'none' : 'name'
   return (
     <label className={'fld' + (bad ? ' bad' : '')} data-flag={bad ? '1' : undefined}>{label}
@@ -42,8 +42,7 @@ function Field({ e, k, label, area, onSaved, type = 'text', bad }: { e: Entry; k
 export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectData; entry: Entry; onClose: () => void; issues?: Issue[] }) {
   const { canEdit, isAdmin, session } = useAuth()
   const online = useOnline()
-  useEffect(() => { reportActivity(`đang xem ${entry.code}`, entry.id); return () => reportActivity(null) }, [entry.id, entry.code])
-  const others = isAdmin ? online.filter(o => o.entry === entry.id && o.id !== session.user.id) : []
+  const others = isAdmin ? online.filter(o => o.entry === entry.id && o.act && o.id !== session.user.id) : []
   const [busy, setBusy] = useState('')
   const [shotRoom, setShotRoom] = useState<string | null>(null)
   const flagKeys = new Set((issues ?? []).flatMap(i => i.keys))
@@ -74,7 +73,7 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
   }
 
   return (
-    <aside className="panel" ref={root}>
+    <aside className="panel" ref={root} data-eid-panel={entry.id} data-code={entry.code}>
       <div className="row between panel-head">
         <div className="row gap sm-gap">
           <input className="code-in big" defaultValue={entry.code} onBlur={e => renameCode(e.target.value.trim())} />
@@ -84,7 +83,7 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
       </div>
       {!!issues?.length && <div className="issue-banner"><b>Cần sửa ({issues.length}) – các ô tô đỏ bên dưới:</b>
         {issues.map((i, k) => <div key={k} className={'small ib-' + i.kind}>• {i.text}{i.fix === 'category' && canEdit && <button className="btn sm primary" style={{ marginLeft: 8 }} onClick={async () => { await fixCategory(entry); d.reload() }}>Tự sửa</button>}</div>)}</div>}
-      {!!others.length && <div className="note" style={{ borderLeft: '4px solid ' + colorOf(others[0].id) }}>👁 {others.map(o => <b key={o.id} style={{ color: colorOf(o.id) }}>{o.name} </b>)}{others.some(o => o.act?.startsWith('đang sửa')) ? ': ' + others.find(o => o.act?.startsWith('đang sửa'))!.act : 'đang mở mã này'}</div>}
+      {!!others.filter(o => o.act).length && <div className="note" style={{ borderLeft: '4px solid ' + colorOf(others[0].id) }}>👁 {others.map(o => <b key={o.id} style={{ color: colorOf(o.id) }}>{o.name} </b>)}{others.find(o => o.act)!.act}</div>}
       <OpRuleBadge d={d} entryId={entry.id} />
 
       <fieldset className="plain" disabled={!canEdit}>

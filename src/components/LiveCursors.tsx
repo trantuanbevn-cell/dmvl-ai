@@ -2,53 +2,63 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
-import { colorOf } from '../lib/presence'
+import { colorOf, reportActivity } from '../lib/presence'
 
-type Cur = { id: string; name: string; eid?: string | null; fx: number; fy: number; x: number; y: number; at: number }
-const STALE = 6000
+type Edit = { id: string; name: string; eid: string; panel: boolean; k: number; label: string; code: string; at: number }
+const STALE = 12000
 
-/** Con trỏ chuột trực tiếp (kiểu Canva) trong danh mục – CHỈ admin nhìn thấy.
- *  Thành viên (không phải admin) gửi vị trí chuột; admin nhận và vẽ. Vị trí gắn theo dòng vật liệu đang trỏ (data-eid)
- *  nên đúng dòng dù màn hình hai máy khác cỡ; ngoài dòng thì tính theo tỉ lệ bề ngang vùng nội dung. */
+const labelOf = (el: HTMLElement): string => {
+  const lab = el.closest('label'); if (lab) { const t = [...lab.childNodes].find(n => n.nodeType === 3)?.textContent?.trim(); if (t) return t.slice(0, 40) }
+  const td = el.closest('td'), th = td?.closest('table')?.querySelectorAll('thead th')[(td as HTMLTableCellElement).cellIndex]
+  return (th?.textContent?.trim() || (el as HTMLInputElement).placeholder || '').slice(0, 40)
+}
+
+/** CHỈ khi ai đó đang bấm vào ô để sửa (danh mục) thì admin mới thấy: ô được tô viền màu + thẻ tên; không theo dõi di chuột.
+ *  Thành viên gửi "đang sửa ô nào của mã nào"; admin nhận và vẽ. Đồng thời báo trạng thái "đang sửa …" cho dải trên cùng của admin. */
 export default function LiveCursors({ projectId }: { projectId: string }) {
   const { session, isAdmin, name } = useAuth()
   const [, force] = useState(0)
-  const cur = useRef(new Map<string, Cur>())
+  const cur = useRef(new Map<string, Edit>())
   useEffect(() => {
     const ch = supabase.channel('cursors-' + projectId, { config: { broadcast: { self: false } } })
-    let last = 0, raf = 0
+    let raf = 0, beat = 0, active: Omit<Edit, 'at'> | null = null
     if (isAdmin) {
-      ch.on('broadcast', { event: 'c' }, ({ payload }) => { const p = payload as Cur & { bye?: boolean }; if (p.bye) cur.current.delete(p.id); else cur.current.set(p.id, { ...p, at: Date.now() }) })
+      ch.on('broadcast', { event: 'e' }, ({ payload }) => { const p = payload as Edit & { bye?: boolean }; if (p.bye) cur.current.delete(p.id); else cur.current.set(p.id, { ...p, at: Date.now() }) })
       const loop = () => { if (cur.current.size) force(n => (n + 1) % 1e9); raf = requestAnimationFrame(loop) }
       raf = requestAnimationFrame(loop)
     }
-    const move = (e: MouseEvent) => {
-      const now = performance.now(); if (now - last < 70) return; last = now
-      const page = document.querySelector('.page') as HTMLElement | null; if (!page) return
-      const pr = page.getBoundingClientRect()
-      const row = (e.target as HTMLElement | null)?.closest?.('[data-eid]') as HTMLElement | null
-      const rr = row?.getBoundingClientRect()
-      ch.send({ type: 'broadcast', event: 'c', payload: { id: session.user.id, name, eid: row?.dataset.eid ?? null, fx: rr ? (e.clientX - rr.left) / Math.max(1, rr.width) : 0, fy: rr ? (e.clientY - rr.top) / Math.max(1, rr.height) : 0, x: (e.clientX - pr.left) / Math.max(1, pr.width), y: e.clientY - pr.top } })
+    const send = (p: object) => { if (!isAdmin) ch.send({ type: 'broadcast', event: 'e', payload: p }) }
+    const fin = (e: FocusEvent) => {
+      const el = e.target as HTMLElement | null
+      if (!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return
+      const host = el.closest('[data-eid],[data-eid-panel]') as HTMLElement | null; if (!host) return
+      const panel = host.hasAttribute('data-eid-panel'), eid = (panel ? host.dataset.eidPanel : host.dataset.eid) ?? ''
+      const inputs = [...host.querySelectorAll('input,textarea,select')]
+      const code = host.dataset.code ?? ''
+      const label = labelOf(el)
+      active = { id: session.user.id, name, eid, panel, k: inputs.indexOf(el), label, code }
+      reportActivity(`đang sửa ${code}${label ? ' · ' + label : ''}`, eid)
+      send(active)
     }
-    const bye = () => { ch.send({ type: 'broadcast', event: 'c', payload: { id: session.user.id, bye: true } }) }
+    const fout = () => { active = null; reportActivity(null); send({ id: session.user.id, bye: true }) }
+    document.addEventListener('focusin', fin)
+    document.addEventListener('focusout', fout)
+    beat = window.setInterval(() => { if (active) send(active) }, 4000)
     ch.subscribe()
-    if (!isAdmin) { window.addEventListener('mousemove', move, { passive: true }); document.addEventListener('mouseleave', bye) }
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('mousemove', move); document.removeEventListener('mouseleave', bye); if (!isAdmin) bye(); supabase.removeChannel(ch); cur.current.clear() }
+    return () => { cancelAnimationFrame(raf); window.clearInterval(beat); document.removeEventListener('focusin', fin); document.removeEventListener('focusout', fout); if (active) fout(); supabase.removeChannel(ch); cur.current.clear() }
   }, [projectId, isAdmin, session.user.id, name])
   if (!isAdmin) return null
-  const now = Date.now(), page = document.querySelector('.page') as HTMLElement | null, pr = page?.getBoundingClientRect()
+  const now = Date.now()
   const items = [...cur.current.values()].filter(c => now - c.at < STALE).map(c => {
-    let left: number, top: number
-    const el = c.eid ? (document.querySelector(`[data-eid="${c.eid}"]`) as HTMLElement | null) : null
-    if (el) { const r = el.getBoundingClientRect(); left = r.left + c.fx * r.width; top = r.top + c.fy * r.height }
-    else if (pr) { left = pr.left + c.x * pr.width; top = pr.top + c.y } else return null
-    if (top < -20 || top > window.innerHeight + 20 || left < -20 || left > window.innerWidth + 20) return null
-    return { c, left, top }
-  }).filter(Boolean) as { c: Cur; left: number; top: number }[]
+    const host = (document.querySelector(`[data-eid-panel="${c.eid}"]`) ?? document.querySelector(`[data-eid="${c.eid}"]`)) as HTMLElement | null
+    const el = host?.querySelectorAll('input,textarea,select')[c.k] as HTMLElement | undefined
+    const r = (el ?? host)?.getBoundingClientRect()
+    if (!r || r.bottom < 0 || r.top > window.innerHeight) return null
+    return { c, r }
+  }).filter(Boolean) as { c: Edit; r: DOMRect }[]
   if (!items.length) return null
-  return createPortal(<div className="live-cursors">{items.map(({ c, left, top }) => (
-    <div key={c.id} className="live-cur" style={{ transform: `translate(${left}px, ${top}px)` }}>
-      <svg width="16" height="20" viewBox="0 0 16 20"><path d="M1 1 L1 15 L5 11.5 L8 18 L10.5 17 L7.5 10.5 L13 10.5 Z" fill={colorOf(c.id)} stroke="#fff" strokeWidth="1.2" strokeLinejoin="round" /></svg>
-      <span style={{ background: colorOf(c.id) }}>{c.name}</span>
+  return createPortal(<div className="live-cursors">{items.map(({ c, r }) => (
+    <div key={c.id} className="live-edit" style={{ left: r.left - 2, top: r.top - 2, width: r.width + 4, height: r.height + 4, borderColor: colorOf(c.id) }}>
+      <span style={{ background: colorOf(c.id) }}>{c.name} đang sửa{c.label ? ` · ${c.label}` : ''}</span>
     </div>))}</div>, document.body)
 }
