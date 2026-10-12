@@ -219,7 +219,8 @@ export const PREFIXES: Prefix[] = [
   { prefix: 'EWD', en: 'Engineered Wood', vn: 'Gỗ công nghiệp', includes_en: 'MDF, MFC, plywood, melamine, laminate, acrylic panels', includes_vn: 'MDF, MFC, ván ép, melamine, laminate, acrylic', groups: ['LM'] },
   { prefix: 'LVT', en: 'Resilient Flooring', vn: 'Sàn nhựa', includes_en: 'luxury vinyl tile, vinyl sheet', includes_vn: 'sàn vinyl, sàn nhựa', groups: ['LVT'] },
   { prefix: 'CPT', en: 'Carpet', vn: 'Thảm', includes_en: 'broadloom, carpet tile', includes_vn: 'thảm cuộn, thảm tấm', groups: ['CPT'] },
-  { prefix: 'PNT', en: 'Paint', vn: 'Sơn', includes_en: 'emulsion paint, special / epoxy coatings', includes_vn: 'sơn nước, sơn đặc biệt, epoxy', groups: ['PT', 'SP'] },
+  { prefix: 'PNT', en: 'Paint', vn: 'Sơn nước', includes_en: 'emulsion and standard paint', includes_vn: 'sơn nước, sơn thường', groups: ['PT'] },
+  { prefix: 'SPT', en: 'Specialty Coating', vn: 'Sơn đặc biệt', includes_en: 'epoxy, textured and effect coatings', includes_vn: 'sơn epoxy, sơn hiệu ứng, sơn đặc biệt', groups: ['SP'] },
   { prefix: 'WC', en: 'Wallcovering', vn: 'Giấy / vải dán tường', includes_en: 'wallpaper, fabric wallcovering', includes_vn: 'giấy dán tường, vải dán tường', groups: ['WC'] },
   { prefix: 'WP', en: 'Wall Panelling', vn: 'Tấm ốp tường', includes_en: 'timber slats, acoustic and decorative panels', includes_vn: 'lam gỗ, tấm tiêu âm, tấm ốp trang trí', groups: ['WP'] },
   { prefix: 'GWB', en: 'Gypsum Board', vn: 'Thạch cao', includes_en: 'gypsum board ceiling and partition', includes_vn: 'trần, vách thạch cao', groups: ['GWB'] },
@@ -247,7 +248,7 @@ export const PREFIXES: Prefix[] = [
 ]
 /** Ký hiệu viết tắt từ cụm tiếng Anh đầy đủ nào (để người xem bản vẽ biết chữ cái nghĩa là gì) */
 export const PREFIX_FULL: Record<string, string> = {
-  CT: 'Ceramic Tile', ST: 'Natural Stone', EST: 'Engineered Stone', WD: 'Natural Wood', EWD: 'Engineered Wood', LVT: 'Luxury Vinyl Tile', CPT: 'Carpet', PNT: 'Paint', WC: 'Wall Covering', WP: 'Wall Panelling', GWB: 'Gypsum Wall Board',
+  CT: 'Ceramic Tile', ST: 'Natural Stone', EST: 'Engineered Stone', WD: 'Natural Wood', EWD: 'Engineered Wood', LVT: 'Luxury Vinyl Tile', CPT: 'Carpet', PNT: 'Paint', SPT: 'Specialty Coating', WC: 'Wall Covering', WP: 'Wall Panelling', GWB: 'Gypsum Wall Board',
   ACT: 'Acoustic Ceiling Tile', SKT: 'Skirting', MTL: 'Metal', GL: 'Glass', MIR: 'Mirror', FAB: 'Fabric', LTH: 'Leather', DR: 'Door', HW: 'Hardware', MWK: 'Millwork',
   FHW: 'Furniture Hardware', FUR: 'Furniture', LGT: 'Lighting', PLB: 'Plumbing', WRA: 'Washroom Accessories', EQP: 'Equipment', ART: 'Artwork', DEC: 'Decorative',
   WT: 'Window Treatment', SGN: 'Signage', MEP: 'Mechanical, Electrical & Plumbing',
@@ -313,3 +314,28 @@ export function tx(vn: string | null | undefined, en: string | null | undefined,
   if (lang === 'en') return b || a
   return b && b !== a ? (a ? `${a}\n${b}` : b) : a
 }
+
+/** Danh sách chọn nhóm (tiền tố) xếp theo họ vật liệu: vật liệu hoàn thiện chính lên đầu, các nhóm cùng họ (gỗ tự nhiên – gỗ công nghiệp, đá tự nhiên – nhân tạo…) nằm cạnh nhau */
+export const PICK_FAMILIES: { label: string; groups: string[] }[] = [
+  { label: 'Gạch', groups: ['CT'] },
+  { label: 'Đá', groups: ['ST', 'ES'] },
+  { label: 'Gỗ', groups: ['WD', 'LM'] },
+  { label: 'Sàn nhựa – Thảm', groups: ['LVT', 'CPT'] },
+  { label: 'Sơn – Giấy dán tường', groups: ['PT', 'SP', 'WC'] },
+  { label: 'Ốp tường – Trần – Len chân tường', groups: ['WP', 'GWB', 'ACT', 'BS'] },
+  { label: 'Kim loại – Kính – Gương', groups: ['MT', 'GL', 'MR'] },
+  { label: 'Vải – Da – Rèm', groups: ['FB', 'LE', 'WT'] },
+  { label: 'Cửa & phụ kiện cửa', groups: ['DR', 'HW'] },
+  { label: 'Nội thất', groups: ['JN', 'FH', 'FF'] },
+  { label: 'Thiết bị – Đèn – Vệ sinh', groups: ['LT', 'SF', 'BA', 'EQ'] },
+  { label: 'Trang trí – Khác', groups: ['DC', 'AW', 'SN', 'ME'] },
+]
+export function pickerFamilies(): { label: string; groups: Group[] }[] {
+  const all = allGroups(), by = new Map(all.map(g => [g.code, g])), used = new Set<string>()
+  const out = PICK_FAMILIES.map(f => ({ label: f.label, groups: f.groups.map(c => by.get(c)).filter(Boolean) as Group[] })).filter(f => f.groups.length)
+  out.forEach(f => f.groups.forEach(g => used.add(g.code)))
+  const rest = all.filter(g => !used.has(g.code))
+  return rest.length ? [...out, { label: 'Nhóm riêng của dự án', groups: rest }] : out
+}
+/** Mục tự tạo (custom) gắn với tiền tố nhóm này, nếu có */
+export const customSectionOfGroup = (g: string): string | null => CUSTOM.find(c => c.groups[0] === g)?.key ?? null

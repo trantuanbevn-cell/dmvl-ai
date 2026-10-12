@@ -11,6 +11,8 @@ import type { Entry } from '../lib/types'
 import type { ProjectData } from '../lib/useProject'
 import RoomShotFallback from './RoomShotFallback'
 import AddShot from './AddShot'
+import GroupPicker from './GroupPicker'
+import { changeGroup } from '../lib/entryGroup'
 import { locationsOf } from '../lib/locations'
 import OccCrop from './OccCrop'
 import { useAuth } from '../lib/auth'
@@ -117,7 +119,7 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
       </div>
 
       <div className="grid2">
-        <label className={'fld' + (B('group') ? ' bad' : '')} data-flag={B('group') ? '1' : undefined}>Nhóm<select value={entry.group_code} onChange={e => set({ group_code: e.target.value })}>{allGroups().map(g => <option key={g.code} value={g.code}>{prefixLabel(intlPrefix(g.code))} – {g.vn}</option>)}</select></label>
+        <label className={'fld' + (B('group') ? ' bad' : '')} data-flag={B('group') ? '1' : undefined}>Nhóm / ký hiệu<GroupPicker value={entry.group_code} disabled={!canEdit} onPick={async g => { const err = await changeGroup(entry, g, d.entries); if (err) alert(err.message); else d.reload() }} /></label>
         <label className={'fld' + (B('category') ? ' bad' : '')} data-flag={B('category') ? '1' : undefined}>Bề mặt / mục<select value={entry.category ?? ''} onChange={e => set({ category: e.target.value })}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.vn}</option>)}</select></label>
       </div>
 
