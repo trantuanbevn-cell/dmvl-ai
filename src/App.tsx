@@ -6,6 +6,7 @@ import ForcePassword from './components/ForcePassword'
 import { AuthProvider, useAuth, ROLE_VN } from './lib/auth'
 import { PresenceProvider, useOnline, colorOf } from './lib/presence'
 import { Toaster } from './lib/toast'
+import SingleSession from './lib/singleSession'
 import UpdateBell from './components/UpdateBell'
 import Login from './pages/Login'
 import Projects from './pages/Projects'
@@ -46,6 +47,7 @@ function Shell({ session }: { session: Session }) {
           <button className="btn ghost sm" onClick={out}>Đăng xuất</button>
         </nav>
       </header>
+      {isAdmin && online.some(o => o.act && o.id !== session.user.id) && <div className="live-strip">{online.filter(o => o.act && o.id !== session.user.id).map(o => <span key={o.id} className="live-chip"><i style={{ background: colorOf(o.id) }} /><b>{o.name}</b> {o.act}</span>)}</div>}
       <main>
         <Routes>
           <Route path="/" element={<Projects />} />
@@ -78,5 +80,5 @@ export default function App() {
   if (!ready) return <div className="center-card">Đang tải…</div>
   if (!session) return <Login />
   if (session.user.user_metadata?.must_change) return <ForcePassword name={(session.user.email ?? '').replace(/@dmvl\.local$/i, '')} />
-  return <AuthProvider session={session}><PresenceProvider><Shell session={session} /></PresenceProvider></AuthProvider>
+  return <AuthProvider session={session}><PresenceProvider><SingleSession /><Shell session={session} /></PresenceProvider></AuthProvider>
 }

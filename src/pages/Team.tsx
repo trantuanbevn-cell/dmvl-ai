@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth, ROLE_VN, ROLE_HELP, type Role } from '../lib/auth'
 import { FEATURES } from '../lib/features'
 import { supabase } from '../lib/supabase'
+import EditLog from '../components/EditLog'
 import { useOnline } from '../lib/presence'
 import { listUsers, createUser, updateUser, deleteUser, genPassword, loginName, slugName, inviteText, listProjectsLite, listMembers, setMemberProjects, type TeamUser, type ProjectLite } from '../lib/team'
 
@@ -69,7 +70,7 @@ export default function Team() {
                   </>}
                 </td>
                 <td className="small">{u.role === 'admin' ? <span className="muted">Tất cả</span> : FEATURES.map(ft => { const cur = feats.get(u.id) ?? []; return <label key={ft.key} className="row gap sm-gap small"><input type="checkbox" disabled={busy} checked={cur.includes(ft.key)} onChange={e => act(async () => { const nx = e.target.checked ? [...cur, ft.key] : cur.filter(x => x !== ft.key); const { error } = await supabase.from('profiles').update({ features: nx }).eq('id', u.id); if (error) throw error })} /> {ft.label}</label> })}</td>
-                <td className="small">{on ? <span style={{ color: '#2e7d32' }}>● đang online{on.tab ? ` – tab ${on.tab}` : ''}</span> : <span className="muted">đăng nhập {ago(u.last_sign_in_at)}</span>}</td>
+                <td className="small">{on ? <span style={{ color: '#2e7d32' }}>● đang online{on.tab ? ` – tab ${on.tab}` : ''}{on.act ? <b> · {on.act}</b> : ''}</span> : <span className="muted">đăng nhập {ago(u.last_sign_in_at)}</span>}</td>
                 <td>{u.active ? <span className="pill">Đang dùng</span> : <span className="pill st-error">Đã khoá</span>}</td>
                 <td className="row gap sm-gap">
                   <button className="btn sm" disabled={busy || me} onClick={() => act(() => updateUser(u.id, { active: !u.active }))}>{u.active ? 'Khoá' : 'Mở khoá'}</button>
@@ -80,6 +81,7 @@ export default function Team() {
           })}</tbody>
         </table>
       </div>
+      <EditLog projects={projects} />
     </div>
   )
 }

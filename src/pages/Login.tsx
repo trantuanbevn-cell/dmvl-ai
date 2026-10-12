@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 export default function Login() {
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
-  const [msg, setMsg] = useState('')
+  const [msg, setMsg] = useState(() => { try { if (localStorage.getItem('dmvl_kicked')) { localStorage.removeItem('dmvl_kicked'); return 'Tài khoản này vừa đăng nhập ở máy khác nên máy này đã bị đăng xuất (mỗi tài khoản chỉ dùng trên 1 máy).' } } catch { /* */ } return '' })
   const [busy, setBusy] = useState(false)
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setMsg('')
