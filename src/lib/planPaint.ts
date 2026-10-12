@@ -139,6 +139,19 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       }
     } catch (e) { console.warn('bắt điểm ranh giới lỗi', e) }
   }
+  // sàn tô lan ~0,2 m xuống dưới nét tường/cột (tường, hatch xám đè lên sau) → không còn viền trắng giữa màu sàn và tường/cột
+  if (g.src !== 'zones') {
+    const kk = Math.max(2, Math.round(0.2 * pxPerM))
+    for (let it = 0; it < kk; it++) {
+      const out = roomOf.slice()
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = y * W + x; if (roomOf[i]) continue
+        const l = x > 0 ? roomOf[i - 1] : 0, r = x < W - 1 ? roomOf[i + 1] : 0, u = y > 0 ? roomOf[i - W] : 0, dn = y < H - 1 ? roomOf[i + W] : 0
+        const v = l || r || u || dn; if (v) out[i] = v
+      }
+      roomOf.set(out)
+    }
+  }
   // thành phần liên thông của vùng "không nét" trong từng phòng
   const comp = new Int32Array(N), sizes: number[] = [0], compRoom: number[] = [0], stack = new Int32Array(N)
   for (let s = 0; s < N; s++) {

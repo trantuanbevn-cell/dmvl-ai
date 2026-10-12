@@ -262,12 +262,22 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
         if (tot > 0.04 * W * H) continue
       }
       if (opt.draw) { let d = ''; for (const lp of p.loops) { lp.forEach((t, i) => { d += (i ? 'L' : 'M') + f2(X(t[0])) + ' ' + f2(Y(t[1])) }); d += 'Z' } // phân loại: cột = một vòng đơn, cạnh 0,15–1,6 m, gần vuông/tròn; còn lại (dải dài, vòng tường, lõi) = tường
-        let bx0 = 1e18, by0 = 1e18, bx1 = -1e18, by1 = -1e18; for (const t of p.loops[0]) { bx0 = Math.min(bx0, X(t[0])); bx1 = Math.max(bx1, X(t[0])); by0 = Math.min(by0, Y(t[1])); by1 = Math.max(by1, Y(t[1])) }
+        const ar3 = (lp: Pt[]) => { let a = 0; for (let i = 0; i + 1 < lp.length; i++) a += lp[i][0] * lp[i + 1][1] - lp[i + 1][0] * lp[i][1]; return Math.abs(a) / 2 }
+        const LP = p.loops.map(lp => lp.map(t => [X(t[0]), Y(t[1])] as Pt))
+        let bx0 = 1e18, by0 = 1e18, bx1 = -1e18, by1 = -1e18, sumA = 0; for (const lp of LP) { sumA += ar3(lp); for (const t of lp) { bx0 = Math.min(bx0, t[0]); bx1 = Math.max(bx1, t[0]); by0 = Math.min(by0, t[1]); by1 = Math.max(by1, t[1]) } }
         const mPt = (PT_MM * den) / 1000, wm = (bx1 - bx0) * mPt, hm = (by1 - by0) * mPt
-        const isCol = p.loops.length <= 2 && Math.min(wm, hm) >= 0.15 && Math.max(wm, hm) <= 1.6 && Math.max(wm, hm) / Math.max(0.01, Math.min(wm, hm)) <= 2.6
+        // cột có thể gồm 4 tam giác (ký hiệu chéo X): gộp tất cả vòng; cột vuông/tròn lấp đầy khung bao ≥ 0,7, mẩu tường chữ T/L thì thấp hơn
+        const fillR = sumA / Math.max(1e-6, (bx1 - bx0) * (by1 - by0))
+        const isCol = p.loops.length <= 8 && Math.min(wm, hm) >= 0.25 && Math.max(wm, hm) <= 1.6 && Math.max(wm, hm) / Math.max(0.01, Math.min(wm, hm)) <= 1.8 && fillR >= 0.7
         if (isCol) nCol++; else nWall++
         hatchRuns.push({ cls: clsOf(p.layer, 0, true), fc: '#d0d0d0', lw: 0, d, eo: true, hp: true, rl: isCol ? 'col' : 'wall' }) }
       continue
+    }
+    // tường vẽ bằng đường bao kín (không có hatch): vòng mảnh (bề dày ≤ 0,5 m) trên layer tường → coi là thân tường, tô như hatch
+    if (opt.draw && p.closed && !p.fill && /tuong|wall/i.test(p.layer) && !ZONE_LAYER.test(p.layer) && !DOOR_LAYER.test(p.layer) && pts.length >= 8) {
+      let a = 0, per = 0; for (let i = 0; i + 3 < pts.length; i += 2) { a += pts[i] * pts[i + 3] - pts[i + 2] * pts[i + 1]; per += Math.hypot(pts[i + 2] - pts[i], pts[i + 3] - pts[i + 1]) }
+      a = Math.abs(a) / 2; const mPt = (PT_MM * den) / 1000
+      if (a > 0 && (2 * a) / per * mPt <= 0.5 && a < 0.04 * W * H) { let d = ''; for (let i = 0; i < pts.length; i += 2) d += (i ? 'L' : 'M') + f2(pts[i]) + ' ' + f2(pts[i + 1]); nWall++; hatchRuns.push({ cls: clsOf(p.layer, 0, true), fc: '#d0d0d0', lw: 0, d: d + 'Z', eo: true, hp: true, rl: 'wall' }) }
     }
     // bỏ nét trùng hệt (cùng một đường được vẽ nhiều lần / nhiều xref)
     const pk = pts.length <= 40 ? Array.from(pts, v => Math.round(v * 20)).join(',') : ''
