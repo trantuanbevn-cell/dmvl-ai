@@ -120,13 +120,18 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
   const { paths, texts: rawT, layers } = collect(dxf)
   if (paths.length < 20) throw new Error('DXF gần như không có nét vẽ trong Model space.')
   const xs: number[] = [], ys: number[] = []
-  for (const p of paths) for (const pt of p.pts) { xs.push(pt[0]); ys.push(pt[1]) }
+  // khung bản vẽ: ưu tiên nét tường / ô diện tích (bản vẽ hay có vật thể lạc rất xa), không có thì lấy mọi nét trừ Defpoints
+  const core = /tuong|wall|\$area$/i
+  const pick = (f: (l: string) => boolean) => { xs.length = 0; ys.length = 0; for (const p of paths) if (f(p.layer)) for (const pt of p.pts) { xs.push(pt[0]); ys.push(pt[1]) } }
+  pick(l => core.test(l) && !/dim/i.test(l)); if (xs.length < 400) pick(l => !/defpoints/i.test(l))
   const insu = +(dxf.header?.$INSUNITS ?? 0)
-  let x0 = q(xs, 0.005), x1 = q(xs, 0.995), y0 = q(ys, 0.005), y1 = q(ys, 0.995)
-  const mx = (x1 - x0) * 0.1, my = (y1 - y0) * 0.1; x0 -= mx; x1 += mx; y0 -= my; y1 += my
+  let x0 = q(xs, 0.02), x1 = q(xs, 0.98), y0 = q(ys, 0.02), y1 = q(ys, 0.98)
+  const mx = (x1 - x0) * 0.25, my = (y1 - y0) * 0.25; x0 -= mx; x1 += mx; y0 -= my; y1 += my
   let mmU = MM_PER_UNIT[insu] ?? 0, unit = ['', 'inch', 'feet', 'dặm', 'mm', 'cm', 'm'][insu] ?? `mã ${insu}`
   const span = Math.max(x1 - x0, y1 - y0)
-  if (!mmU) { if (span < 500) { mmU = 1000; unit = 'm (đoán)' } else { mmU = 1; unit = 'mm (đoán)' } }
+  // $INSUNITS trong file thường sai (vd. để inch dù vẽ bằng mm) → kiểm tra bằng kích thước toà nhà thật (8–400 m), sai thì đoán lại
+  const okSpan = (u: number) => { const m = (span * u) / 1000; return m >= 8 && m <= 400 }
+  if (!mmU || !okSpan(mmU)) { const g = [1, 10, 1000].find(okSpan) ?? 1; if (g !== mmU) { mmU = g; unit = g === 1 ? 'mm (đoán)' : g === 10 ? 'cm (đoán)' : 'm (đoán)' } }
   const spanMm = span * mmU
   // tỉ lệ chuẩn gần nhất sao cho cạnh dài ≈ 1500–3500 pt
   const target = spanMm / PT_MM / 2400
@@ -142,7 +147,7 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
   const segs: number[] = [], segCls: number[] = [], fills: VecPage['fills'] = [], arcs: VecPage['arcs'] = [], runs: DrawRun[] = []
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString()
   for (const p of paths) {
-    if (p.pts.every(t => t[0] < x0 || t[0] > x1 || t[1] < y0 || t[1] > y1)) continue
+    if (/defpoints/i.test(p.layer) || p.pts.every(t => t[0] < x0 || t[0] > x1 || t[1] < y0 || t[1] > y1)) continue
     const lwPt = Math.max(0.18, (p.lw ?? 0.25) / PT_MM * 0.7), pts: number[] = []
     for (const t of p.pts) pts.push(X(t[0]), Y(t[1]))
     const ci = clsOf(p.layer, lwPt, false), c = classes[ci]
