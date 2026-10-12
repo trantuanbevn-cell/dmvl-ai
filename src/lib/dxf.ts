@@ -253,7 +253,12 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
     for (const t of p.pts) pts.push(X(t[0]), Y(t[1]))
     if (p.hatch && p.loops) {
       { // hatch phủ gần cả bản vẽ (vùng nền/ranh giới lớn) không phải thân tường → bỏ
-        let tot = 0; for (const lp of p.loops) { let a = 0; for (let i = 0; i + 1 < lp.length; i++) a += X(lp[i][0]) * Y(lp[i + 1][1]) - X(lp[i + 1][0]) * Y(lp[i][1]); tot += Math.abs(a) / 2 }
+        // diện tích THỰC (even-odd): vòng nằm trong vòng khác thì trừ đi (vòng tường bao quanh toàn nhà có lỗ rất lớn, chỉ là dải mỏng)
+        const L2 = p.loops.map(lp => lp.map(t => [X(t[0]), Y(t[1])] as Pt)), ar2 = (lp: Pt[]) => { let a = 0; for (let i = 0; i + 1 < lp.length; i++) a += lp[i][0] * lp[i + 1][1] - lp[i + 1][0] * lp[i][1]; return Math.abs(a) / 2 }
+        const inPoly = (pt: Pt, lp: Pt[]) => { let c = false; for (let i = 0, j = lp.length - 1; i < lp.length; j = i++) if ((lp[i][1] > pt[1]) !== (lp[j][1] > pt[1]) && pt[0] < ((lp[j][0] - lp[i][0]) * (pt[1] - lp[i][1])) / (lp[j][1] - lp[i][1]) + lp[i][0]) c = !c; return c }
+        const areas = L2.map(ar2); let tot = 0
+        L2.forEach((lp, i) => { let depth = 0; L2.forEach((o, j) => { if (j !== i && areas[j] > areas[i] && inPoly(lp[0], o)) depth++ }); tot += depth % 2 ? 0 : areas[i]; if (depth % 2) tot -= areas[i] })
+        tot = Math.max(0, tot)
         if (tot > 0.04 * W * H) continue
       }
       if (opt.draw) { let d = ''; for (const lp of p.loops) { lp.forEach((t, i) => { d += (i ? 'L' : 'M') + f2(X(t[0])) + ' ' + f2(Y(t[1])) }); d += 'Z' } // phân loại: cột = một vòng đơn, cạnh 0,15–1,6 m, gần vuông/tròn; còn lại (dải dài, vòng tường, lõi) = tường
