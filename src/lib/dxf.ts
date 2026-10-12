@@ -76,11 +76,10 @@ function rawHatches(txt: string): { model: any[]; blocks: Record<string, any[]> 
         if (cc === 72) { edge = +vv; pts.length = 0 }
         else if (edge === 1) { if (cc === 10) pts[0] = [+vv, 0]; else if (cc === 20 && pts[0]) pts[0][1] = +vv; else if (cc === 11) pts[1] = [+vv, 0]; else if (cc === 21 && pts[1]) { pts[1][1] = +vv; edges.push([pts[0] as Pt, pts[1] as Pt]); pts.length = 0 } }
         else if (edge === 2) { if (cc === 10) pts[0] = [+vv, 0]; else if (cc === 20 && pts[0]) pts[0][1] = +vv; else if (cc === 40) pts[1] = [+vv, 0]; else if (cc === 50) pts[2] = [+vv, 0]; else if (cc === 51) pts[3] = [+vv, 0]; else if (cc === 73 && pts[0] && pts[1] && pts[2] && pts[3]) {
-          const r = pts[1][0], a0 = (pts[2][0] * Math.PI) / 180; let a1 = (pts[3][0] * Math.PI) / 180; const ccw = +vv !== 0
-          if (!ccw) { const t0 = a0, t1 = a1; ; void t0; void t1 }
-          let sw = ccw ? a1 - a0 : a0 - a1; while (sw <= 0) sw += Math.PI * 2; a1 = ccw ? a0 + sw : a0 - sw
+          const r = pts[1][0], a0 = (pts[2][0] * Math.PI) / 180, a1 = (pts[3][0] * Math.PI) / 180, ccw = +vv !== 0
+          let sw = a1 - a0; while (sw <= 0) sw += Math.PI * 2 // ccw=0: góc đo theo chiều kim đồng hồ (đảo dấu) – quy ước DXF HATCH
           const n = Math.max(2, Math.ceil(sw / (Math.PI / 18)))
-          const ar: Pt[] = []; for (let k = 0; k <= n; k++) ar.push([pts[0][0] + r * Math.cos(a0 + ((a1 - a0) * k) / n), pts[0][1] + r * Math.sin(a0 + ((a1 - a0) * k) / n)]); edges.push(ar)
+          const ar: Pt[] = []; for (let k = 0; k <= n; k++) { const f = a0 + (sw * k) / n, an = ccw ? f : -f; ar.push([pts[0][0] + r * Math.cos(an), pts[0][1] + r * Math.sin(an)]) } edges.push(ar)
           pts.length = 0 } }
       }
     }
