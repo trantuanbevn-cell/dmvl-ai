@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth'
 import { useProject } from '../lib/useProject'
 import { setProjectWords } from '../lib/spell'
 import { projectStats, roomStats } from '../lib/progress'
+import CommentLayer from '../components/CommentLayer'
 import LiveCursors from '../components/LiveCursors'
 import Bar from '../components/Bar'
 import Overview from './tabs/Overview'
@@ -44,6 +45,7 @@ export default function ProjectPage() {
   return (
     <div className="page wide">
       <LiveCursors projectId={data.project.id} />
+      <CommentLayer d={data} />
       <div className="proj-head">
         <div><h1>{data.project.name}</h1><div className="muted small">{data.project.location}</div></div>
         <div className="proj-prog"><div className="small"><b>{ps.pct}%</b> đã xác nhận · {ps.approved}/{ps.total} mã · {data.rooms.length} phòng</div><Bar approved={ps.approved} pending={ps.pending + ps.review} total={ps.total} /></div>

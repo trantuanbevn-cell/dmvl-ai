@@ -8,6 +8,8 @@ import { PresenceProvider, useOnline, colorOf } from './lib/presence'
 import { Toaster } from './lib/toast'
 import SingleSession from './lib/singleSession'
 import UpdateBell from './components/UpdateBell'
+import CommentBell from './components/CommentBell'
+import { CommentsProvider } from './lib/comments'
 import Login from './pages/Login'
 import Projects from './pages/Projects'
 import ProjectPage from './pages/ProjectPage'
@@ -38,6 +40,7 @@ function Shell({ session }: { session: Session }) {
           <Link to="/">Lập danh mục</Link>
           {isAdmin && <Link to="/team">Thành viên</Link>}
           {isAdmin && <Link to="/settings">Cài đặt</Link>}
+          <CommentBell />
           <UpdateBell />
           <div className="online" title={online.map(o => `${o.name} (${ROLE_VN[o.role as keyof typeof ROLE_VN] ?? o.role})`).join('\n')}>
             <span className="online-n">● {online.length} online</span>
@@ -80,5 +83,5 @@ export default function App() {
   if (!ready) return <div className="center-card">Đang tải…</div>
   if (!session) return <Login />
   if (session.user.user_metadata?.must_change) return <ForcePassword name={(session.user.email ?? '').replace(/@dmvl\.local$/i, '')} />
-  return <AuthProvider session={session}><PresenceProvider><SingleSession /><Shell session={session} /></PresenceProvider></AuthProvider>
+  return <AuthProvider session={session}><PresenceProvider><CommentsProvider><SingleSession /><Shell session={session} /></CommentsProvider></PresenceProvider></AuthProvider>
 }

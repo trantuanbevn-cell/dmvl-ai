@@ -1,5 +1,6 @@
 import { syncLibrary } from '../../lib/matLibrary'
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import EnFill from '../../components/EnFill'
 import { useAuth } from '../../lib/auth'
 import { CATEGORY_GROUPS } from '../../lib/codes'
@@ -50,6 +51,13 @@ export default function MaterialView({ d }: { d: ProjectData }) {
   const shift = (band: string, row: { sec: { key: string } }[], key: string, dir: -1 | 1) => { const i = row.findIndex(x => x.sec.key === key), j = i + dir; if (i < 0 || j < 0 || j >= row.length) return; saveLayout(d, dir < 0 ? moveSection(key, band, row[j].sec.key) : j + 1 < row.length ? moveSection(key, band, row[j + 1].sec.key) : moveSection(key, band)) }
   const drop = (band: string, before?: string) => { const k = dragKey; setDragKey(null); setOver(null); if (k && k !== before) saveLayout(d, moveSection(k, band, before)) }
   const [sel, setSel] = useState<string | null>(null)
+  // mở từ thông báo nhận xét: đưa về đúng nhóm + mở mã cần sửa
+  const [sp] = useSearchParams(), focusId = sp.get('focus'), focusT = sp.get('t')
+  useEffect(() => {
+    if (!focusId) return
+    const e = d.entries.find(x => x.id === focusId); if (!e) return
+    setOnly(sectionOf(e).key); setRoomId(''); setFlt('all'); setSel(e.id)
+  }, [focusId, focusT, d.entries.length]) // eslint-disable-line
   const [dlg, setDlg] = useState<AddPreset | null>(null)
   const selEntry = d.entries.find(e => e.id === sel)
   const room = d.rooms.find(r => r.id === roomId) ?? null
