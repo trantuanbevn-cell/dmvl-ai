@@ -21,7 +21,7 @@ const DOMAIN = `décor decor inox melamine laminate mdf mfc hdf hpl pu led gypsu
   headboard nightstand armchair banquette bolster cushion drapery sheer blackout curtain valance tieback anodized anodised brushed powdercoated galvanised
   sanitary lavatory basin faucet shower bidet cistern urinal vanity countertop backsplash splashback tempered laminated frosted opaque translucent
   hinge handle pull knob latch deadbolt cabinet wardrobe closet drawer shelving shelf bracket cornice coving architrave plinth threshold
-  mitred mitered grey colour colours coloured colourless cementitious flohydric niken crom crôm inox sus polymer polymeric bevelled chamfered rebated rebate toughened epoxy bullnose tongue groove flush recessed concealed hairline satin sandblasted bush-hammered honed flamed lappato tumbled vietnam vietnamese hanoi danang indonesia malaysia thailand italy italian china chinese korea korean japan japanese germany german spain spanish`.split(/\s+/)
+  mitred mitered grey colour colours coloured colourless cementitious flohydric seater seaters inchem niken crom crôm inox sus polymer polymeric bevelled chamfered rebated rebate toughened epoxy bullnose tongue groove flush recessed concealed hairline satin sandblasted bush-hammered honed flamed lappato tumbled vietnam vietnamese hanoi danang indonesia malaysia thailand italy italian china chinese korea korean japan japanese germany german spain spanish`.split(/\s+/)
 export function loadEnglish(): Promise<void> {
   if (en) return Promise.resolve()
   return (enLoading ??= (async () => {
@@ -90,19 +90,22 @@ const lev1 = (a: string, b: string) => {
 const britishOk = (w: string) => {
   if (!en) return false
   const l = w.toLowerCase()
-  const c = [l.replace(/our(s|ed|ing|less)?$/, 'or$1'), l.replace(/ise(s|d)?$/, 'ize$1'), l.replace(/isation/, 'ization'), l.replace(/(tre|tres)$/, m => (m === 'tre' ? 'ter' : 'ters')), l.replace(/(ll)(ed|ing|er)$/, 'l$2'), l.replace(/ae/, 'e'), l.replace(/ogue$/, 'og'), l.replace(/grey/, 'gray')]
+  const c = [l.replace(/our(s|ed|ing|less)?$/, 'or$1'), l.replace(/ise(s|d)?$/, 'ize$1'), l.replace(/isation/, 'ization'), l.replace(/(tre|tres)$/, m => (m === 'tre' ? 'ter' : 'ters')), l.replace(/(ll)(ed|ing|er)$/, 'l$2'), l.replace(/ae/, 'e'), l.replace(/ou/, 'o'), l.replace(/ogue$/, 'og'), l.replace(/grey/, 'gray')]
   return c.some(x => x !== l && en!.correct(x))
 }
+/** a và b chỉ khác nhau theo kiểu Anh–Anh / Anh–Mỹ (colour–color, centre–center, moulded–molded…) */
+const britPair = (a: string, b: string) => { const n = (x: string) => x.toLowerCase().replace(/ou/g, 'o').replace(/iz/g, 'is').replace(/ll/g, 'l').replace(/ae/g, 'e').replace(/(?<=\p{L})er\b/gu, 're'); return n(a) === n(b) }
 const matchCase = (src: string, rep: string) => (src[0] !== src[0].toLowerCase() ? rep[0].toUpperCase() + rep.slice(1) : rep)
 
 function spellWords(text: string, lang: SpellLang, fixes: Fix[], flags: Flag[]) {
   if (!lang) return text
-  let out = '', last = 0
+  let out = '', last = 0, viInEn = 0
   const urlSpans = [...text.matchAll(/(https?:\/\/\S+|www\.\S+|\S+@\S+\.\S+)/g)].map(u => [u.index!, u.index! + u[0].length])
   for (const m of text.matchAll(WORD)) {
     const w = m[0], i = m.index!, inUrl = urlSpans.some(([a, b]) => i >= a && i < b), prev = text[i - 1] ?? '', next = text[i + w.length] ?? ''
     out += text.slice(last, i); last = i + w.length
     let rep = w
+    if (lang === 'en' && VI_CH.test(w)) { viInEn++; out += w; continue }
     const skip = inUrl || w.length < 2 || isUpperWord(w) || /[\d_/@#.]/.test(prev) || /[\d_/@#]/.test(next) || (next === '.' && /\p{L}/u.test(text[i + w.length + 1] ?? '')) || known(w)
     if (!skip) {
       const lineStart = /^\s*(?:[-•*·–]\s*)?$/.test(text.slice(0, i).split('\n').pop() ?? '') || /[.!?]\s+$/.test(text.slice(0, i))
@@ -118,19 +121,23 @@ function spellWords(text: string, lang: SpellLang, fixes: Fix[], flags: Flag[]) 
       } else if (en && !w.includes("'") && w.length >= 3 && !proper) {
         if (!en.correct(w) && !en.correct(w.toLowerCase()) && !britishOk(w)) {
           const sg = en.suggest(w).slice(0, 5), near = sg.filter(x => lev1(w.toLowerCase(), x.toLowerCase()))
-          if (near.length === 1 && w.length >= 5 && !VI_CH.test(w)) { rep = matchCase(w, near[0]); fixes.push({ from: w, to: rep, kind: 'spell' }) }
+          if (near.length && near.every(x => britPair(w, x))) { /* biến thể Anh–Anh: không phải lỗi */ }
+          else if (near.length === 1 && w.length >= 5 && !VI_CH.test(w)) { rep = matchCase(w, near[0]); fixes.push({ from: w, to: rep, kind: 'spell' }) }
           else if (near.length) flags.push({ word: w, suggestions: sg })   // không có gợi ý gần giống ⇒ nhiều khả năng là thuật ngữ/tên riêng, không báo
         }
       }
     }
     out += rep
   }
+  if (lang === 'en' && viInEn >= 2) flags.push({ word: '⚠ Ô tiếng Anh đang chứa chữ tiếng Việt (chưa dịch)', suggestions: [] })
   return out + text.slice(last)
 }
 
 /** Sửa một đoạn text: dấu câu/khoảng trắng + chính tả. Đồng bộ (dùng từ điển Anh nếu đã nạp). */
 export function fixText(text: string, lang: SpellLang, opts: SpellOpts = {}): SpellResult {
   const fixes: Fix[] = [], flags: Flag[] = []
+  /* Mã HTML lẫn vào chữ (B&#224;n → Bàn) – thường do dán từ web */
+  if (/&#\d+;|&#x[0-9a-f]+;|&(?:amp|quot|apos|lt|gt|nbsp);/i.test(text)) text = text.replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&nbsp;/gi, ' ').replace(/&quot;/gi, '"').replace(/&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&amp;/gi, '&')
   const nfc = text.normalize('NFC')
   if (nfc !== text) fixes.push({ from: text, to: nfc, kind: 'unicode' })
   let lines = nfc.split('\n').map(l => tidyLine(l, lang, opts, fixes))

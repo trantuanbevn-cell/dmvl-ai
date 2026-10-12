@@ -14,7 +14,7 @@ import { symbolMap, symbolOf } from '../../lib/sections'
 import SpellReview from '../../components/SpellReview'
 import { spellScan } from '../../lib/spellScan'
 import { loadEnglish } from '../../lib/spell'
-import { cleanEntries, sameNumbers } from '../../lib/qc'
+import { cleanEntries, sameNumbers, sameThing } from '../../lib/qc'
 import { runAiQc, loadFindings, resolveFinding, KIND_LABEL, type Finding } from '../../lib/aiQc'
 import { saveEntry } from '../../lib/entryLink'
 
@@ -55,7 +55,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
   const keyOf = (p: DupPair) => p.keep.id + p.dup.id
   const txt = (e: Entry) => `${e.name_vn} ${e.material_vn ?? ''} ${e.desc_vn ?? ''}`
   // Chỉ coi là trùng khi thông số (kích thước, số hộc…) giống nhau – khác số là hai món khác nhau
-  const dups = useMemo(() => findDuplicates(clean).filter(p => sameNumbers(txt(p.keep), txt(p.dup))).map(p => ({ ...p, keep: orig.get(p.keep.id)!, dup: orig.get(p.dup.id)! })).filter(p => !skip.includes(keyOf(p))), [clean, orig, skip])
+  const dups = useMemo(() => findDuplicates(clean).filter(p => sameNumbers(txt(p.keep), txt(p.dup)) && sameThing(p.keep, p.dup)).map(p => ({ ...p, keep: orig.get(p.keep.id)!, dup: orig.get(p.dup.id)! })).filter(p => !skip.includes(keyOf(p))), [clean, orig, skip])
   const cur = dups.findIndex(p => keyOf(p) === open), pair = cur >= 0 ? dups[cur] : null
   const dismiss = (p: DupPair) => { const n = [...skip, keyOf(p)]; setSkip(n); try { localStorage.setItem('dmvl-dup-skip', JSON.stringify(n)) } catch { /* */ } }
   const merge = async (keep: Entry, dup: Entry) => {

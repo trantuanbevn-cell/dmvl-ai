@@ -6,7 +6,7 @@ import { missingOf, missText } from './missing'
 import { CATEGORY_GROUPS } from './codes'
 import { supabase } from './supabase'
 import { SYNC_KEYS, SYNC_LABEL } from './entryLink'
-import { internalSet, realCodes, numbersOf } from './qc'
+import { internalSet, realCodes } from './qc'
 
 /** keys = ô cần tô đỏ trong khung sửa: tên cột của mã (name_vn, product_code…) hoặc 'loc' | 'shot' | 'group' | 'category' | 'link' | 'qty' */
 export type Issue = { kind: 'err' | 'miss' | 'info'; text: string; keys: string[]; fix?: 'category' }
@@ -37,14 +37,6 @@ export function checkEntries(d: ProjectData, lang: Lang): EntryIssues[] {
     if (!occ.some(o => o.room_id)) issues.push({ kind: 'err', text: 'Chưa gán vào phòng nào – thêm phòng ở ô “Vị trí”', keys: ['loc'] })
     // Mã gốc phải khớp nhóm (ký hiệu hiển thị trên bản vẽ có thể khác mã gốc – không so ký hiệu)
     if (e.code.split('-')[0] !== e.group_code) issues.push({ kind: 'err', text: `Mã ${e.code} không khớp ô “Nhóm” (${e.group_code}) – sửa lại mã hoặc nhóm`, keys: ['group', 'code'] })
-    // Việt ↔ Anh: số liệu (kích thước, độ dày…) phải giống nhau
-    for (const [vk, ek, lb] of [['desc_vn', 'desc_en', 'Thông số'], ['material_vn', 'material_en', 'Vật liệu']] as const) {
-      const v = e[vk], en = e[ek]
-      if (!v || !en || v.length < 12 || en.length < 12) continue
-      const nv = [...new Set(numbersOf(v))], ne = [...new Set(numbersOf(en))]
-      const onlyV = nv.filter(x => !ne.includes(x)), onlyE = ne.filter(x => !nv.includes(x))
-      if (onlyV.length || onlyE.length) issues.push({ kind: 'err', text: `${lb}: số liệu tiếng Việt và tiếng Anh khác nhau (${[...onlyV.map(x => 'VN ' + x), ...onlyE.map(x => 'EN ' + x)].slice(0, 4).join(', ')})`, keys: [vk, ek] })
-    }
     const mine = realCodes(e, sets)
     const same = [...new Set(mine.flatMap(c => byCode.get(norm(c)) ?? []))].filter(x => x.id !== e.id)
     const diff = same.filter(x => norm(x.brand) && norm(e.brand) && norm(x.brand) !== norm(e.brand) && !norm(x.brand).includes(norm(e.brand)) && !norm(e.brand).includes(norm(x.brand)))

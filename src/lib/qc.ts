@@ -32,3 +32,8 @@ export const sameNumbers = (a: string | null | undefined, b: string | null | und
   const x = [...numbersOf(a)].sort().join(','), y = [...numbersOf(b)].sort().join(',')
   return x === y
 }
+
+const toks = (t: string | null | undefined) => new Set(String(t ?? '').toLowerCase().normalize('NFC').split(/[^\p{L}\p{N}]+/u).filter(w => w.length > 1))
+const jac = (a: Set<string>, b: Set<string>) => { if (!a.size && !b.size) return 1; let i = 0; for (const x of a) if (b.has(x)) i++; return i / (a.size + b.size - i) }
+/** Hai mã chỉ là trùng khi tên VÀ vật liệu gần như giống hệt (khác “chống cháy/chống ẩm”, “mờ/trong suốt”… là hai món khác nhau) */
+export const sameThing = (a: Entry, b: Entry) => jac(toks(a.name_vn), toks(b.name_vn)) >= 0.85 && jac(toks(a.material_vn), toks(b.material_vn)) >= 0.8 && jac(toks(a.part_vn), toks(b.part_vn)) >= 0.8
