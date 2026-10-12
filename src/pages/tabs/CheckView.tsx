@@ -10,6 +10,7 @@ import EntryPanel from '../../components/EntryPanel'
 import { checkEntries, fixCategory } from '../../lib/checks'
 import { linkSuggestions, linkConflicts, linkEntries, resyncGroup } from '../../lib/entryLink'
 import type { Lang } from '../../lib/sections'
+import { symbolMap, symbolOf } from '../../lib/sections'
 import SpellReview from '../../components/SpellReview'
 import { spellScan } from '../../lib/spellScan'
 import { loadEnglish } from '../../lib/spell'
@@ -20,7 +21,7 @@ function Side({ d, e, tag, onKeep, busy, label }: { d: ProjectData; e: Entry; ta
   const row = (k: string, v?: string | null) => v ? <div className="dc-row"><span>{k}</span>{v}</div> : null
   return (
     <div className="dc-side">
-      <div className="dc-head"><b className="code big-code">{e.code}</b> <b>{e.name_vn}</b> <span className="src">{tag}</span></div>
+      <div className="dc-head"><b className="code big-code">{symbolOf(e, undefined, undefined, symbolMap(d.entries))}</b> <b>{e.name_vn}</b> <span className="src">{tag}</span></div>
       <div className="dc-shots">{shots.slice(0, 4).map(o => <OccCrop key={o.id} d={d} o={o} height={190} maxWidth={300} />)}
         {!shots.length && <div className="ic-none wide" style={e.color_hex ? { background: e.color_hex } : undefined}><span>Chưa có ảnh crop</span></div>}
 </div>
@@ -124,7 +125,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
             <thead><tr><th>Mã</th><th>Hạng mục</th><th>Vấn đề cần xử lý</th><th>Phòng</th><th /></tr></thead>
             <tbody>{issues.map(({ e, issues: is }) => (
               <tr key={e.id}>
-                <td><b className="code">{e.code}</b></td>
+                <td><b className="code">{symbolOf(e, undefined, undefined, symbolMap(d.entries))}</b></td>
                 <td>{e.name_vn}</td>
                 <td>{is.map((i, k) => <span key={k} className={'chk-tag chk-' + i.kind}>{i.text}</span>)}</td>
                 <td className="small">{locationsOf(e.id, d.occ, d.rooms, d.pages).map(l => l.room.code).join(', ') || '—'}</td>

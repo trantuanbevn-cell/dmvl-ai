@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import ProductReadDialog from './ProductReadDialog'
 import { saveEntry, linkedWith, linkEntries, unlinkEntry, SYNC_LABEL } from '../lib/entryLink'
 import { CATEGORIES } from '../lib/codes'
-import { allGroups, intlPrefix, prefixLabel } from '../lib/sections'
+import { allGroups, intlPrefix, prefixLabel, symbolMap, symbolOf } from '../lib/sections'
 import { writeSpecs, applyProduct } from '../lib/pipeline'
 import { librarySuggestions, saveToLibrary, searchLinks, LibProduct } from '../lib/library'
 import type { Entry } from '../lib/types'
@@ -80,6 +80,7 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
       <div className="row between panel-head">
         <div className="row gap sm-gap">
           <input className="code-in big" defaultValue={entry.code} onBlur={e => renameCode(e.target.value.trim())} />
+          <span className="small" title="Ký hiệu bản vẽ – dùng trong danh mục và trên ảnh khoanh">→ <b>{symbolOf(entry, undefined, undefined, symbolMap(d.entries))}</b></span>
           <span className={'src src-' + entry.source}>{entry.source === 'image' ? 'Ảnh' : entry.source === 'inferred' ? 'Suy luận' : 'Thêm tay'}</span>
         </div>
         <button className="btn ghost sm" onClick={onClose}>✕</button>

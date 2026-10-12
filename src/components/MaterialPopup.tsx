@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { symbolMap, symbolOf } from '../lib/sections'
 import RoomSections from './RoomSections'
 import { supabase } from '../lib/supabase'
 import { syncLibrary } from '../lib/matLibrary'
@@ -11,6 +12,7 @@ export default function MaterialPopup({ d, entryId, lang: l0, onClose, onDetail 
   const { canEdit } = useAuth()
   const [lang, setLang] = useState<Lang>(l0)
   const e = d.entries.find(x => x.id === entryId)
+  const symMap = useMemo(() => symbolMap(d.entries), [d.entries])
   useEffect(() => { const k = (ev: KeyboardEvent) => { if (ev.key === 'Escape') onClose() }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k) }, [onClose])
   if (!e) return null
   const setStatus = async (status: 'approved' | 'review') => { await supabase.from('entries').update({ status }).eq('id', e.id); if (status === 'approved') syncLibrary(e.project_id, [{ ...e, status }]); d.reload() }
@@ -19,7 +21,7 @@ export default function MaterialPopup({ d, entryId, lang: l0, onClose, onDetail 
       <div className="modal dup-modal" style={{ width: 'min(1250px, 96vw)', padding: 14 }} onMouseDown={ev => ev.stopPropagation()}>
         <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
           <div className="row gap sm-gap" style={{ flexWrap: 'wrap' }}>
-            <b style={{ fontSize: 16 }}>{e.code} · {e.name_vn}</b>
+            <b style={{ fontSize: 16 }}>{symbolOf(e, lang, undefined, symMap)} · {e.name_vn}</b>
             {([['vn', 'Tiếng Việt'], ['en', 'English'], ['both', 'Song ngữ']] as const).map(([k, l]) => <button key={k} className={'chip' + (lang === k ? ' on' : '')} onClick={() => setLang(k)}>{l}</button>)}
           </div>
           <div className="row gap sm-gap">

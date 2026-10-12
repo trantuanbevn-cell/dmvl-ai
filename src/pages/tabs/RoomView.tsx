@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { CATEGORIES, roomTypeLabel } from '../../lib/codes'
-import { allGroups } from '../../lib/sections'
+import { allGroups, symbolMap, symbolOf } from '../../lib/sections'
 import { clampBox } from '../../lib/crop'
 import type { ProjectData } from '../../lib/useProject'
 import type { Entry, Occurrence } from '../../lib/types'
@@ -48,6 +48,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
   const occ = d.occ.filter(o => o.room_id === roomId)
   const entryById = useMemo(() => new Map(d.entries.map(e => [e.id, e])), [d.entries])
   const pageById = useMemo(() => new Map(d.pages.map(p => [p.id, p])), [d.pages])
+  const symMap = useMemo(() => symbolMap(d.entries), [d.entries]) // ký hiệu bản vẽ đúng như bảng danh mục (vd PNT-02), không dùng mã nội bộ
   const selEntry = sel ? entryById.get(sel) : undefined
 
   const stats = useMemo(() => roomStats(d), [d])
@@ -149,7 +150,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
               </svg>
               {occ.filter(o => o.page_id === page.id && o.bbox).map(o => {
                 const [x, y] = clampBox(o.bbox!); const e = entryById.get(o.entry_id)
-                return <span key={o.id} className={'bb-label' + (o.entry_id === sel ? ' on' : '')} style={{ left: `${x * 100}%`, top: `${y * 100}%` }} onClick={() => !draw && pick(o)}>{e?.code}</span>
+                return <span key={o.id} className={'bb-label' + (o.entry_id === sel ? ' on' : '')} style={{ left: `${x * 100}%`, top: `${y * 100}%` }} onClick={() => !draw && pick(o)}>{e ? symbolOf(e, lang, undefined, symMap) : ''}</span>
               })}
             </div>
           </div>
