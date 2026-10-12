@@ -50,13 +50,13 @@ export default function UpdateBell() {
       </div>}
       {pop && info && createPortal(
         <div className="upd-bg">
-          <div className="upd-box" role="alertdialog" aria-label="Có bản cập nhật mới">
+          <div className="upd-box" role="status" aria-label="Có bản cập nhật mới">
             <div className="upd-ic">🔔</div>
             <h3>Có bản cập nhật mới</h3>
             <p>{info.note || 'Phần mềm vừa được nâng cấp. Bấm xác nhận để tải lại trang và dùng phiên bản mới nhất.'}</p>
             {info.time && <div className="small muted">Phát hành lúc {new Date(info.time).toLocaleString('vi-VN')}</div>}
-            <p className="small muted">Dữ liệu đã nhập đều được lưu tự động. Nếu đang gõ dở, hãy bấm ra ngoài ô để lưu trước khi xác nhận.</p>
-            <div className="upd-act"><button className="btn" onClick={later}>Để sau</button><button className="btn primary" autoFocus onClick={reload}>✓ Xác nhận & tải lại</button></div>
+            <p className="small muted">Bạn cứ làm tiếp, lúc rảnh hãy bấm. Đang gõ dở thì bấm ra ngoài ô để lưu trước.</p>
+            <div className="upd-act"><button className="btn" onClick={later}>Ẩn</button><button className="btn primary" onClick={reload}>⟳ Tải lại khi rảnh</button></div>
           </div>
         </div>, document.body)}
     </div>
