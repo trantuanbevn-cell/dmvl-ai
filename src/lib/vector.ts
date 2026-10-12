@@ -55,7 +55,7 @@ export function detectDoors(v: VecPage, mPerPt: number): number[][] {
   const near = (x: number, y: number, tol: number) => { const out: number[] = []; for (let gx = -1; gx <= 1; gx++) for (let gy = -1; gy <= 1; gy++) for (const i of grid.get(`${Math.floor(x / cell) + gx},${Math.floor(y / cell) + gy}`) ?? []) out.push(i); return out.filter((i, k, a) => a.indexOf(i) === k) }
   const doors: number[][] = [], seen = new Set<string>()
   for (const ar of v.arcs) {
-    const rm = ar.r * mPerPt; if (rm < 0.45 || rm > 1.4) continue
+    const rm = ar.r * mPerPt; if (rm < ((v as any).dxf ? 0.22 : 0.45) || rm > ((v as any).dxf ? 1.7 : 1.4)) continue
     // tâm cung: nằm đối diện điểm giữa cung qua dây cung
     const mx = (ar.a[0] + ar.b[0]) / 2, my = (ar.a[1] + ar.b[1]) / 2
     let nx = -(ar.b[1] - ar.a[1]), ny = ar.b[0] - ar.a[0]; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl

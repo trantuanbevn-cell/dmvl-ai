@@ -119,7 +119,7 @@ export async function buildPlanPaint(buf: ArrayBuffer, pageNo: number, g: FloorG
       const wallNear = dilate(wall, W, H, 2)
       const arcDoors: number[][] = []
       for (const ar of vv.arcs) {
-        const rm = ar.r * g.m_per_pt, ch = Math.hypot(ar.b[0] - ar.a[0], ar.b[1] - ar.a[1]); if (rm < 0.55 || rm > 1.3 || Math.abs(ch / ar.r - Math.SQRT2) > 0.2) continue
+        const rm = ar.r * g.m_per_pt, ch = Math.hypot(ar.b[0] - ar.a[0], ar.b[1] - ar.a[1]); if (rm < ((vv as any).dxf ? 0.22 : 0.55) || rm > ((vv as any).dxf ? 1.7 : 1.3) || Math.abs(ch / ar.r - Math.SQRT2) > 0.2) continue
         const mx = (ar.a[0] + ar.b[0]) / 2, my = (ar.a[1] + ar.b[1]) / 2; let nx = -(ar.b[1] - ar.a[1]), ny = ar.b[0] - ar.a[0]; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl
         if ((ar.m[0] - mx) * nx + (ar.m[1] - my) * ny > 0) { nx = -nx; ny = -ny }
         const hx = (mx + nx * ch / 2) * sx0, hy = (my + ny * ch / 2) * sx0
