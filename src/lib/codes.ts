@@ -156,6 +156,17 @@ export const GROUPS: Group[] = [
   "std_intl": "EN 438 (HPL); EN 14322 (melamine); EN 717-1"
  },
  {
+  "code": "WPC",
+  "vn": "Gỗ nhựa (WPC, gỗ nhựa composite, nhựa giả gỗ)",
+  "en": "Wood Plastic Composite (WPC)",
+  "legacy": "GO",
+  "csi": "06 60 00 Plastic Fabrications",
+  "attrs_vn": "Thành phần (bột gỗ + nhựa PVC/PE), kích thước, độ dày, bề mặt/vân, màu, chống nước – mối mọt, chống cháy, kiểu lắp (clip/vít)",
+  "attrs_en": "Composition (wood flour + PVC/PE), size, thickness, finish/grain, colour, water & termite resistance, fire rating, fixing method",
+  "std_vn": "—",
+  "std_intl": "ASTM D7032 (WPC decking); EN 15534"
+ },
+ {
   "code": "MT",
   "vn": "Kim loại",
   "en": "Metal Finishes",

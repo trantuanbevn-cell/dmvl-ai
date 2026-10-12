@@ -22,7 +22,7 @@ export const SECTIONS: Section[] = [
   { key: 'panel', vn: 'ỐP TƯỜNG (GỖ, LAM, TIÊU ÂM)', en: 'WALL PANELLING', band: 'A', groups: ['WP'] },
   { key: 'ceiling', vn: 'TRẦN THẠCH CAO & TRẦN ĐẶC BIỆT', en: 'GYPSUM & SPECIALTY CEILING', band: 'A', groups: ['GWB', 'ACT'] },
   { key: 'skirting', vn: 'LEN CHÂN TƯỜNG – PHÀO CHỈ', en: 'SKIRTING & MOULDING', band: 'A', groups: ['BS'] },
-  { key: 'wood', vn: 'GỖ (TỰ NHIÊN – CÔNG NGHIỆP)', en: 'WOOD (NATURAL – ENGINEERED)', band: 'B', groups: ['WD', 'LM'] },
+  { key: 'wood', vn: 'GỖ (TỰ NHIÊN – CÔNG NGHIỆP – NHỰA)', en: 'WOOD (NATURAL – ENGINEERED – WPC)', band: 'B', groups: ['WD', 'LM', 'WPC'] },
   { key: 'metal', vn: 'KIM LOẠI', en: 'METAL', band: 'B', groups: ['MT'] },
   { key: 'glass', vn: 'KÍNH', en: 'GLASS', band: 'B', groups: ['GL'] },
   { key: 'mirror', vn: 'GƯƠNG', en: 'MIRROR', band: 'B', groups: ['MR'] },
@@ -92,7 +92,7 @@ const resolve = (k: string) => { let c = k, n = 0; while (LAYOUT.merge?.[c] && n
 type SecEntry = Pick<Entry, 'group_code' | 'category'> & { section_key?: string | null }
 const rawKey = (e: SecEntry): string => {
   if (e.section_key && fullSections().some(x => x.key === e.section_key && x.custom)) return e.section_key
-  return (e.group_code === 'WD' || e.group_code === 'LM') && e.category === 'floor' ? 'floor' : (SECTIONS.find(s => s.groups.includes(e.group_code)) ?? SECTIONS[SECTIONS.length - 1]).key
+  return (e.group_code === 'WD' || e.group_code === 'LM' || e.group_code === 'WPC') && e.category === 'floor' ? 'floor' : (SECTIONS.find(s => s.groups.includes(e.group_code)) ?? SECTIONS[SECTIONS.length - 1]).key
 }
 /** Tiền tố ký hiệu hiệu lực: mục đã gộp thì dùng tiền tố của mục đích (đánh số liên tục cùng dãy) */
 export function effPrefix(e: SecEntry): string {
@@ -217,6 +217,7 @@ export const PREFIXES: Prefix[] = [
   { prefix: 'EST', en: 'Engineered Stone', vn: 'Đá nhân tạo', includes_en: 'quartz, terrazzo, solid surface, sintered stone', includes_vn: 'quartz, terrazzo, solid surface, đá nung kết', groups: ['ES'] },
   { prefix: 'WD', en: 'Natural Wood', vn: 'Gỗ tự nhiên', includes_en: 'solid wood, timber, veneer', includes_vn: 'gỗ thịt, veneer', groups: ['WD'] },
   { prefix: 'EWD', en: 'Engineered Wood', vn: 'Gỗ công nghiệp', includes_en: 'MDF, MFC, plywood, melamine, laminate, acrylic panels', includes_vn: 'MDF, MFC, ván ép, melamine, laminate, acrylic', groups: ['LM'] },
+  { prefix: 'WPC', en: 'Wood Plastic Composite', vn: 'Gỗ nhựa', includes_en: 'WPC, wood-plastic composite, wood-look plastic', includes_vn: 'gỗ nhựa composite, nhựa giả gỗ, lam gỗ nhựa', groups: ['WPC'] },
   { prefix: 'LVT', en: 'Resilient Flooring', vn: 'Sàn nhựa', includes_en: 'luxury vinyl tile, vinyl sheet', includes_vn: 'sàn vinyl, sàn nhựa', groups: ['LVT'] },
   { prefix: 'CPT', en: 'Carpet', vn: 'Thảm', includes_en: 'broadloom, carpet tile', includes_vn: 'thảm cuộn, thảm tấm', groups: ['CPT'] },
   { prefix: 'PNT', en: 'Paint', vn: 'Sơn nước', includes_en: 'emulsion and standard paint', includes_vn: 'sơn nước, sơn thường', groups: ['PT'] },
@@ -248,7 +249,7 @@ export const PREFIXES: Prefix[] = [
 ]
 /** Ký hiệu viết tắt từ cụm tiếng Anh đầy đủ nào (để người xem bản vẽ biết chữ cái nghĩa là gì) */
 export const PREFIX_FULL: Record<string, string> = {
-  CT: 'Ceramic Tile', ST: 'Natural Stone', EST: 'Engineered Stone', WD: 'Natural Wood', EWD: 'Engineered Wood', LVT: 'Luxury Vinyl Tile', CPT: 'Carpet', PNT: 'Paint', SPT: 'Specialty Coating', WC: 'Wall Covering', WP: 'Wall Panelling', GWB: 'Gypsum Wall Board',
+  CT: 'Ceramic Tile', ST: 'Natural Stone', EST: 'Engineered Stone', WD: 'Natural Wood', EWD: 'Engineered Wood', WPC: 'Wood Plastic Composite', LVT: 'Luxury Vinyl Tile', CPT: 'Carpet', PNT: 'Paint', SPT: 'Specialty Coating', WC: 'Wall Covering', WP: 'Wall Panelling', GWB: 'Gypsum Wall Board',
   ACT: 'Acoustic Ceiling Tile', SKT: 'Skirting', MTL: 'Metal', GL: 'Glass', MIR: 'Mirror', FAB: 'Fabric', LTH: 'Leather', DR: 'Door', HW: 'Hardware', MWK: 'Millwork',
   FHW: 'Furniture Hardware', FUR: 'Furniture', LGT: 'Lighting', PLB: 'Plumbing', WRA: 'Washroom Accessories', EQP: 'Equipment', ART: 'Artwork', DEC: 'Decorative',
   WT: 'Window Treatment', SGN: 'Signage', MEP: 'Mechanical, Electrical & Plumbing',
@@ -319,7 +320,7 @@ export function tx(vn: string | null | undefined, en: string | null | undefined,
 export const PICK_FAMILIES: { label: string; groups: string[] }[] = [
   { label: 'Gạch', groups: ['CT'] },
   { label: 'Đá', groups: ['ST', 'ES'] },
-  { label: 'Gỗ', groups: ['WD', 'LM'] },
+  { label: 'Gỗ', groups: ['WD', 'LM', 'WPC'] },
   { label: 'Sàn nhựa – Thảm', groups: ['LVT', 'CPT'] },
   { label: 'Sơn – Giấy dán tường', groups: ['PT', 'SP', 'WC'] },
   { label: 'Ốp tường – Trần – Len chân tường', groups: ['WP', 'GWB', 'ACT', 'BS'] },
