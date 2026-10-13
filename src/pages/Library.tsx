@@ -12,7 +12,8 @@ export const GROUPS: { kind: string; label: string }[] = [
   { kind: 'floor', label: 'Sàn gỗ' },
   { kind: 'stone', label: 'Đá tự nhiên' },
   { kind: 'tile', label: 'Gạch ốp lát' },
-  { kind: 'paint', label: 'Sơn' },
+  { kind: 'paint', label: 'Sơn hiệu ứng' },
+  { kind: 'moulding', label: 'Phào chỉ & ốp trang trí' },
 ]
 const COLORS = ['Trắng', 'Be', 'Xám', 'Đen', 'Nâu', 'Vàng', 'Đỏ', 'Xanh']
 const STEP = 120
