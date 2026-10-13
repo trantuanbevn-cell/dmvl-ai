@@ -17,7 +17,7 @@ const blank = (v: unknown) => v == null || String(v).trim() === ''
 
 /** Các ô tiếng Anh cần dịch: (1) còn trống; (2) do phần mềm tự dịch trước đây, tiếng Việt đã đổi sau đó và tiếng Anh chưa bị ai sửa tay → dịch lại cho đồng bộ.
  *  Ô tiếng Anh người dùng tự gõ / sửa thì không bao giờ bị đụng tới. */
-export function planFill(d: ProjectData): TrItem[] {
+export function planFill(d: ProjectData, force = false): TrItem[] {
   const out: TrItem[] = []
   const add = (kind: 'entry' | 'room', row: any, label: string, ef: string, vi: unknown, prevEn?: string, forceAI = false) => {
     const s = String(vi ?? '').trim(); if (!s) return
@@ -27,6 +27,8 @@ export function planFill(d: ProjectData): TrItem[] {
   const check = (kind: 'entry' | 'room', row: any, label: string, vf: string, ef: string) => {
     if (blank(row[vf])) { if (viWords(row[ef]) >= 2) add(kind, row, label, ef, row[ef], row[ef], true); return }   // không có bản Việt: dịch chính ô EN đang lẫn tiếng Việt
     if (blank(row[ef])) return add(kind, row, label, ef, row[vf])
+    // force: tiếng Việt là bản gốc – mọi ô EN không phải do bước dịch này tạo ra (AI phân tích sinh riêng, nhập từ thư viện, sửa tay…) đều dịch lại theo VN
+    if (force) { const sc = (row.en_src as EnSrc | null)?.[ef]; if (!(sc && sc.en === row[ef] && norm(sc.vi) === norm(row[vf]))) return add(kind, row, label, ef, row[vf], row[ef], true) }
     const src = (row.en_src as EnSrc | null)?.[ef]
     if (src && src.en === row[ef] && norm(src.vi) !== norm(row[vf])) return add(kind, row, label, ef, row[vf], row[ef])
     // Ô tiếng Anh đang lẫn chữ tiếng Việt (chép nguyên từ bản Việt / trang hãng, chưa dịch) → dịch lại bằng AI
@@ -88,8 +90,8 @@ async function callTranslate(context: string | undefined, items: { id: string; v
 }
 
 /** Đồng bộ toàn bộ tiếng Anh với tiếng Việt: dịch ô trống + dịch lại ô tự dịch cũ mà tiếng Việt đã đổi. Dùng khi chuyển EN/song ngữ và trước khi xuất file. */
-export async function syncEnglish(d: ProjectData, log: (s: string) => void = () => {}): Promise<{ done: number; failed: number }> {
-  const plan = planFill(d); if (!plan.length) return { done: 0, failed: 0 }
+export async function syncEnglish(d: ProjectData, log: (s: string) => void = () => {}, force = false): Promise<{ done: number; failed: number }> {
+  const plan = planFill(d, force); if (!plan.length) return { done: 0, failed: 0 }
   const n1 = await fillByDictionary(d, plan)
   const left = plan.filter(i => !i.ok)
   const n2 = left.length ? await fillByAI(d, left, log) : 0

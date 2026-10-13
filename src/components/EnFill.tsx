@@ -32,7 +32,16 @@ export default function EnFill({ d, lang }: { d: ProjectData; lang: Lang }) {
       setBusy(false); setMsg('')
     })()
   }, [lang, planSig, canEdit, nonce])
-  if (lang === 'vn' || !canEdit || (!busy && !err)) return null
+  const redoAll = async () => {
+    const n = planFill(d, true).length
+    if (!n || !confirm(`Dịch lại ${n} ô tiếng Anh theo tiếng Việt (tiếng Việt là bản gốc)?\nCác ô EN đang có sẽ bị thay bằng bản dịch mới (tự sao lưu trước). Có thể mất vài phút.`)) return
+    setBusy(true); setErr('')
+    try { const { done, failed } = await syncEnglish(d, setMsg, true); toast(`Đã dịch lại ${done} ô${failed ? `, ${failed} ô chưa được` : ''}`, failed ? 'info' : 'ok'); if (failed) setErr(`AI chưa dịch được ${failed} ô – bấm Thử lại sau ít phút`) }
+    catch (e) { setErr(String(e).replace(/^Error: /, '')) }
+    await d.reload(); setBusy(false); setMsg('')
+  }
+  if (lang === 'vn' || !canEdit) return null
+  if (!busy && !err) return <div className="row small" style={{ margin: '4px 0' }}><button className="btn ghost sm" title="Dịch lại toàn bộ ô tiếng Anh theo tiếng Việt (VN là bản gốc) – dùng khi EN và VN mâu thuẫn" onClick={redoAll}>🔁 Dịch lại toàn bộ EN theo VN</button></div>
   return (
     <div className="row gap small" style={{ margin: '6px 0', padding: '6px 10px', background: err ? '#fdecea' : '#eef6ff', borderRadius: 8, flexWrap: 'wrap' }}>
       {busy ? <span>🌐 {msg || `Đang tự dịch ${plan.length} ô sang tiếng Anh…`}</span> : <>
