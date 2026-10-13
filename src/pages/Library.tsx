@@ -2,6 +2,8 @@
 // Cây: Nhóm vật liệu → Thương hiệu → Dòng nhóm sản phẩm; bên phải là lưới map vật liệu.
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
+import LibraryImport from '../components/LibraryImport'
 
 export type Mat = { id: string; brand: string; product_code: string; name: string | null; line: string | null; kind: string; url: string | null; image_url: string | null; tex_url: string | null; attrs: Record<string, string | null>; variants?: { sub: string; size: string; th: string }[] }
 const COLS = 'id,brand,product_code,name,line,kind,url,image_url,tex_url,attrs'
@@ -32,9 +34,11 @@ export default function Library() {
   const [all, setAll] = useState<Mat[]>([]), [loading, setLoading] = useState(true), [err, setErr] = useState('')
   const [sel, setSel] = useState<Sel>({ kind: 'wood', brand: '', fam: '' })
   const [line, setLine] = useState(''), [color, setColor] = useState(''), [q, setQ] = useState(''), [shown, setShown] = useState(STEP)
+  const { isAdmin } = useAuth()
+  const [imp, setImp] = useState(false), [reload, setReload] = useState(0)
   const [open, setOpen] = useState<Mat | null>(null)
   const [fold, setFold] = useState<Record<string, boolean>>({})
-  useEffect(() => { loadAll().then(setAll).catch(e => setErr(String(e.message ?? e))).finally(() => setLoading(false)) }, [])
+  useEffect(() => { loadAll().then(setAll).catch(e => setErr(String(e.message ?? e))).finally(() => setLoading(false)) }, [reload])
   useEffect(() => { setShown(STEP) }, [sel, line, color, q])
   useEffect(() => { setLine('') }, [sel])
 
@@ -59,7 +63,7 @@ export default function Library() {
 
   return (
     <div className="page">
-      <h1>Thư viện vật liệu</h1>
+      <div className="row between"><h1>Thư viện vật liệu</h1>{isAdmin && <button className="btn" onClick={() => setImp(true)}>⬆ Nhập thư viện từ file</button>}</div>
       <p className="muted small">Dữ liệu đọc từ website công khai của hãng (mã, map vật liệu, thông số, kích thước/độ dày, link gốc để đối chiếu).</p>
       {err && <div className="note warn">⚠ {err}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: 14, alignItems: 'start' }}>
@@ -116,6 +120,7 @@ export default function Library() {
           {!loading && !list.length && <div className="card muted">Không có mã nào.</div>}
         </div>
       </div>
+      {imp && <LibraryImport onClose={() => setImp(false)} onDone={() => setReload(reload + 1)} />}
       {open && <MatDetail m={open} onClose={() => setOpen(null)} />}
     </div>
   )

@@ -13,6 +13,7 @@
     "@techstark/opencv-js": "^5.0.0-release.1",
     "dxf-parser": "^1.1.2",
     "exceljs": "^4.4.0",
+    "jszip": "^3.10.1",
     "nspell": "^2.1.5",
     "pdfjs-dist": "^4.10.38",
     "react": "^18.3.1",
