@@ -1,3 +1,4 @@
+import { translateViText } from './viEn'
 // Viết thông số kỹ thuật, tính chất theo không gian và tiêu chuẩn tham chiếu – KHÔNG dùng AI.
 // Dựa trên: nhóm mã + mô tả vật liệu AI đã nhận ra + loại phòng. Người dùng sửa lại được.
 import { groupOf, baseGroup } from './codes'
@@ -72,11 +73,18 @@ export function perfFor(e: Pick<Entry, 'group_code' | 'category'>, roomTypes: st
   return [vn.join('; '), en.join('; ')]
 }
 
+/** Cấu tạo (tiếng Việt) → tiếng Anh: dịch bằng từ điển; còn chữ Việt chưa dịch được thì BỎ khỏi bản EN (không chép nguyên tiếng Việt vào ô tiếng Anh) */
+export function compEn(c: string | null | undefined): string {
+  const t = (c ?? '').trim(); if (!t) return ''
+  const r = translateViText(t).en.replace(/\.$/, '')
+  return /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(r) ? '' : r
+}
+
 /** Mô tả & thông số (VN, EN) */
 export function descFor(e: Pick<Entry, 'group_code' | 'name_vn' | 'name_en' | 'material_vn' | 'material_en' | 'composition'>): [string, string] {
   const [tv, te] = T[e.group_code] ?? T[baseGroup(e.group_code)] ?? ['', '']
   const vn = [e.material_vn ? `${e.material_vn.replace(/\.$/, '')}.` : `${e.name_vn}.`, tv, e.composition ? `Cấu tạo: ${e.composition}.` : ''].filter(Boolean).join(' ')
-  const en = [e.material_en ? `${e.material_en.replace(/\.$/, '')}.` : e.name_en ? `${e.name_en}.` : '', te, e.composition ? `Composition: ${e.composition}.` : ''].filter(Boolean).join(' ')
+  const en = [e.material_en ? `${e.material_en.replace(/\.$/, '')}.` : e.name_en ? `${e.name_en}.` : '', te, compEn(e.composition) ? `Composition: ${compEn(e.composition)}.` : ''].filter(Boolean).join(' ')
   return [vn, en]
 }
 

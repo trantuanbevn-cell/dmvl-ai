@@ -11,22 +11,26 @@ import type { EnSrc } from './types'
 export type TrItem = { key: string; kind: 'entry' | 'room'; id: string; field: string; vi: string; draft: string; ok: boolean; label: string; prevEn?: string; src?: EnSrc | null }
 const norm = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim()
 const EF: [string, string, string][] = [['name_vn', 'name_en', 'tên'], ['part_vn', 'part_en', 'bộ phận'], ['material_vn', 'material_en', 'vật liệu'], ['desc_vn', 'desc_en', 'thông số'], ['perf_vn', 'perf_en', 'tính chất'], ['note_vn', 'note_en', 'ghi chú']]
+/** Số từ tiếng Việt (có dấu) lẫn trong một ô tiếng Anh */
+const viWords = (v: unknown) => (String(v ?? '').match(/[\p{L}]*[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ][\p{L}]*/giu) ?? []).length
 const blank = (v: unknown) => v == null || String(v).trim() === ''
 
 /** Các ô tiếng Anh cần dịch: (1) còn trống; (2) do phần mềm tự dịch trước đây, tiếng Việt đã đổi sau đó và tiếng Anh chưa bị ai sửa tay → dịch lại cho đồng bộ.
  *  Ô tiếng Anh người dùng tự gõ / sửa thì không bao giờ bị đụng tới. */
 export function planFill(d: ProjectData): TrItem[] {
   const out: TrItem[] = []
-  const add = (kind: 'entry' | 'room', row: any, label: string, ef: string, vi: unknown, prevEn?: string) => {
+  const add = (kind: 'entry' | 'room', row: any, label: string, ef: string, vi: unknown, prevEn?: string, forceAI = false) => {
     const s = String(vi ?? '').trim(); if (!s) return
     const r = translateViText(s)
-    out.push({ key: `${row.id}:${ef}:${norm(s)}`, kind, id: row.id, field: ef, vi: s, draft: r.en, ok: r.ok && !!r.en, label, prevEn, src: row.en_src ?? null })
+    out.push({ key: `${row.id}:${ef}:${norm(s)}`, kind, id: row.id, field: ef, vi: s, draft: r.en, ok: !forceAI && r.ok && !!r.en, label, prevEn, src: row.en_src ?? null })
   }
   const check = (kind: 'entry' | 'room', row: any, label: string, vf: string, ef: string) => {
-    if (blank(row[vf])) return
+    if (blank(row[vf])) { if (viWords(row[ef]) >= 2) add(kind, row, label, ef, row[ef], row[ef], true); return }   // không có bản Việt: dịch chính ô EN đang lẫn tiếng Việt
     if (blank(row[ef])) return add(kind, row, label, ef, row[vf])
     const src = (row.en_src as EnSrc | null)?.[ef]
-    if (src && src.en === row[ef] && norm(src.vi) !== norm(row[vf])) add(kind, row, label, ef, row[vf], row[ef])
+    if (src && src.en === row[ef] && norm(src.vi) !== norm(row[vf])) return add(kind, row, label, ef, row[vf], row[ef])
+    // Ô tiếng Anh đang lẫn chữ tiếng Việt (chép nguyên từ bản Việt / trang hãng, chưa dịch) → dịch lại bằng AI
+    if (viWords(row[ef]) >= 2) add(kind, row, label, ef, row[vf], row[ef], true)
   }
   for (const e of d.entries) if (e.status !== 'rejected') for (const [vf, ef] of EF) check('entry', e, `${e.code} · ${e.name_vn}`, vf, ef)
   for (const r of d.rooms) check('room', r, r.code, 'name_vn', 'name_en')
