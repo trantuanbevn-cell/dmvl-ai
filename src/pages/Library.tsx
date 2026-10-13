@@ -148,7 +148,9 @@ export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void;
             {A.pattern && <div><b>Loại vân:</b> {A.pattern}</div>}{A.color && <div><b>Màu:</b> {A.color}</div>}{A.finish && <div><b>Bề mặt:</b> {A.finish}</div>}
             {A.special && <div><b>Tính năng:</b> {A.special}</div>}{A.solution && <div><b>Giải pháp:</b> {A.solution}</div>}{A.price_group && <div><b>Nhóm giá:</b> {A.price_group}</div>}
             {A.sizes && <div><b>Kích thước tấm:</b> {A.sizes} mm</div>}
-            {A.finishes && <div><b>Bề mặt có sẵn:</b> {A.finishes}</div>}{A.catalog_page && <div><b>Trang catalog:</b> {A.catalog_page}</div>}
+            {A.thickness && <div><b>Độ dày:</b> {A.thickness}</div>}{A.grain && <div><b>Kiểu vân:</b> {A.grain}</div>}
+            {A.finishes && <div><b>Bề mặt có sẵn:</b> {A.finishes}</div>}{A.usage && <div><b>Ứng dụng:</b> {A.usage}</div>}{A.worktop && <div><b>Mặt bàn:</b> {A.worktop}</div>}
+            {A.note && <div className="muted">⚠ {A.note}</div>}{A.catalog_status && <div className="muted">⚠ {A.catalog_status}</div>}{A.catalog_page && <div><b>Trang catalog:</b> {A.catalog_page}</div>}
             {m.url && <div style={{ marginTop: 6 }}><a href={m.url} target="_blank" rel="noreferrer">🔗 Xem trên website hãng</a></div>}
           </div>
         </div>

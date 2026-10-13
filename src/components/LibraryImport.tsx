@@ -13,7 +13,7 @@ export default function LibraryImport({ onClose, onDone }: { onClose: () => void
       const JSZip = (await import('jszip')).default
       const zip = await JSZip.loadAsync(f)
       const man = JSON.parse(await zip.file('manifest.json')!.async('string')) as Item[]
-      if (man.length && man[0].variants && !man[0].key) { // file bổ sung quy cách: chỉ cập nhật các mã đã có
+      if (man.length && (man[0].variants || man[0].attrs) && !man[0].key) { // file bổ sung quy cách: chỉ cập nhật các mã đã có
         setMsg('Đang cập nhật quy cách…')
         const ex: { id: string; product_code: string; name: string | null; attrs: any }[] = []
         for (let from = 0; ; from += 1000) {
@@ -27,9 +27,9 @@ export default function LibraryImport({ onClose, onDone }: { onClose: () => void
           const it = man[i], hit = by.get(it.code)
           if (!hit) { miss++; continue }
           for (const r of hit) {
-            const finishes = [...new Set((it.variants ?? []).map(v => v.sub))].join(', ')
-            const pages = [...new Set((it.variants ?? []).map(v => v.page).filter(Boolean))].join(', ')
-            const { error } = await supabase.from('materials').update({ variants: it.variants, ...(!r.name && it.name ? { name: it.name } : {}), attrs: { ...r.attrs, ...(it.attrs ?? {}), finishes, catalog_page: pages, catalog_name: it.name, specs_from: 'Catalog Formica (2021/22, Incanto 2024, DecoMetal 2022)' } }).eq('id', r.id)
+            const vs = it.variants
+            const extra = vs ? { finishes: [...new Set(vs.map(v => v.sub))].join(', '), catalog_page: [...new Set(vs.map(v => v.page).filter(Boolean))].join(', '), catalog_name: it.name, specs_from: 'Catalog Formica (2021/22, Incanto 2024, DecoMetal 2022)' } : {}
+            const { error } = await supabase.from('materials').update({ ...(vs ? { variants: vs } : {}), ...(!r.name && it.name ? { name: it.name } : {}), attrs: { ...r.attrs, ...(it.attrs ?? {}), ...extra } }).eq('id', r.id)
             if (error) throw new Error('Lưu quy cách lỗi: ' + error.message)
             n++
           }
