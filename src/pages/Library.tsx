@@ -11,7 +11,7 @@ export type Var = { sub: string; size: string; th: string; edge?: string | null;
 /** Chuẩn hoá khổ về mm: "60x120cm" → "600×1200 mm"; "300x600" → "300×600 mm"; bỏ "KHÁC". */
 export function normSizes(s?: string | null): string[] {
   if (!s) return []
-  const out: string[] = [], re = /(\d+(?:[.,]\d+)?)\s*[x×X]\s*(\d+(?:[.,]\d+)?)\s*(cm|mm)?/g
+  const out: string[] = [], re = /(\d+(?:[.,]\d+)?)\s*[x×X*]\s*(\d+(?:[.,]\d+)?)\s*(cm|mm)?/g
   const tail = /\b(cm|mm)\b/i.exec(s)?.[1]?.toLowerCase()
   for (const m of s.matchAll(re)) {
     const a = parseFloat(m[1].replace(',', '.')), b = parseFloat(m[2].replace(',', '.'))
