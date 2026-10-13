@@ -16,6 +16,7 @@ import ProjectPage from './pages/ProjectPage'
 import SettingsPage from './pages/Settings'
 import Team from './pages/Team'
 import { ConceptList, ConceptPage } from './pages/Concept'
+import Library from './pages/Library'
 
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(-2).map(w => w[0]).join('').toUpperCase() || '?'
 
@@ -38,6 +39,7 @@ function Shell({ session }: { session: Session }) {
         <nav>
           {can('concept') && <Link to="/concept">Dàn trang concept</Link>}
           <Link to="/">Lập danh mục</Link>
+          {can('library') && <Link to="/library">Thư viện vật liệu</Link>}
           {isAdmin && <Link to="/team">Thành viên</Link>}
           {isAdmin && <Link to="/settings">Cài đặt</Link>}
           <CommentBell />
@@ -58,6 +60,7 @@ function Shell({ session }: { session: Session }) {
           <Route path="/p/:id/:tab" element={<ProjectPage />} />
           <Route path="/concept" element={can('concept') ? <ConceptList /> : <div className="page"><div className="card muted">Bạn chưa được cấp quyền dùng chức năng này.</div></div>} />
           <Route path="/c/:id" element={can('concept') ? <ConceptPage /> : <div className="page"><div className="card muted">Bạn chưa được cấp quyền dùng chức năng này.</div></div>} />
+          <Route path="/library" element={can('library') ? <Library /> : <div className="page"><div className="card muted">Bạn chưa được cấp quyền dùng chức năng này.</div></div>} />
           <Route path="/team" element={<Team />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>

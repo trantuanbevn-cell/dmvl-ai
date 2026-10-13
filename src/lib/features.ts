@@ -2,4 +2,5 @@
 // Thêm tính năng lớn mới => thêm 1 dòng ở đây + dùng can('key') để ẩn menu/route.
 export const FEATURES: { key: string; label: string }[] = [
   { key: 'concept', label: 'Dàn trang concept' },
+  { key: 'library', label: 'Thư viện vật liệu' },
 ]
