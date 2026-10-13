@@ -170,6 +170,7 @@ export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void;
             {(sizesTxt || A.sizes) && <div><b>Kích thước tấm:</b> {sizesTxt || A.sizes}</div>}
             {A.thickness && <div><b>Độ dày:</b> {A.thickness}</div>}{A.grain && <div><b>Kiểu vân:</b> {A.grain}</div>}
             {A.finishes && <div><b>Bề mặt có sẵn:</b> {A.finishes}</div>}{A.usage && <div><b>Ứng dụng:</b> {A.usage}</div>}{A.worktop && <div><b>Mặt bàn:</b> {A.worktop}</div>}
+            {A.alt_codes && <div><b>Mã khác cùng bộ sưu tập (màu/khổ khác):</b> {A.alt_codes}</div>}
             {A.note && <div className="muted">⚠ {A.note}</div>}{A.catalog_status && <div className="muted">⚠ {A.catalog_status}</div>}{A.catalog_page && <div><b>Trang catalog:</b> {A.catalog_page}</div>}
             {pick && <div style={{ marginTop: 6 }}><b>Mã đang chọn:</b> {pick.code} · {pick.size}{pick.sub ? ` · ${pick.sub}` : ''}</div>}
             {(pick?.url || m.url) && <div style={{ marginTop: 6 }}><a href={pick?.url || m.url || undefined} target="_blank" rel="noreferrer">🔗 Xem trên website hãng</a></div>}
