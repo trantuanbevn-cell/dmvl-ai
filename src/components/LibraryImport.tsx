@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-type Item = { code: string; name: string; line: string; pattern: string; file: string; key: string; extra?: Record<string, string>; name2?: string; attrs?: Record<string, string>; variants?: { sub: string; size: string; th: string; edge?: string | null; page?: number }[] }
+type Item = { kind?: string; brand?: string; code: string; name: string; line: string; pattern: string; file: string; key: string; extra?: Record<string, string>; name2?: string; attrs?: Record<string, string>; variants?: { sub: string; size: string; th: string; edge?: string | null; page?: number }[] }
 const FAM: Record<string, string> = { 'Formica Laminate': 'Laminate', 'Formica Incanto': 'Incanto', 'Formica DecoMetal': 'DecoMetal' }
 
 export default function LibraryImport({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
@@ -37,17 +37,16 @@ export default function LibraryImport({ onClose, onDone }: { onClose: () => void
         }
         setPct(100); setMsg(`✅ Xong: cập nhật quy cách cho ${n} mã (${miss} mã trong catalog chưa có ảnh map nên bỏ qua).`); onDone(); setBusy(false); return
       }
-      const slug = brand.toLowerCase().replace(/[^a-z0-9]+/g, '-')
       let done = 0
       const rows: any[] = []
       for (let i = 0; i < man.length; i += 8) {
         await Promise.all(man.slice(i, i + 8).map(async x => {
           const ent = zip.file(`img/${x.key}.jpg`); if (!ent) return
           const blob = await ent.async('blob')
-          const path = `${slug}/map_${x.key}.jpg`
+          const bd = x.brand || brand, sl = bd.toLowerCase().replace(/[^a-z0-9]+/g, '-'), path = `${sl}/map_${x.key}.jpg`
           const { error } = await supabase.storage.from('materials').upload(path, blob, { contentType: 'image/jpeg', upsert: false })
           if (error && !/already exists|Duplicate/i.test(error.message)) throw new Error('Tải ảnh lỗi: ' + error.message)
-          rows.push({ brand, source_id: 'map/' + x.key, product_code: x.code, name: x.name || null, line: x.pattern, kind: 'wood', url: null, image_url: null,
+          rows.push({ brand: bd, source_id: 'map/' + x.key, product_code: x.code, name: x.name || null, line: x.pattern, kind: x.kind || 'wood', url: null, image_url: null,
             tex_url: supabase.storage.from('materials').getPublicUrl(path).data.publicUrl,
             attrs: { family: FAM[x.line] ?? x.line, pattern: x.pattern, source_file: x.file, ...Object.fromEntries(Object.entries(x.extra ?? {}).filter(([, v]) => v)) }, variants: [], updated_at: new Date().toISOString() })
         }))
