@@ -104,7 +104,7 @@ export default function Library() {
             {list.slice(0, shown).map(m => (
               <div key={m.id} className="card" style={{ cursor: 'pointer', padding: 6 }} onClick={() => setOpen(m)}>
                 <div style={{ aspectRatio: '2/1', borderRadius: 6, background: '#eee', overflow: 'hidden' }}>
-                  <img src={m.tex_url ?? ''} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
+                  <img src={m.tex_url ?? ''} alt="" decoding="async" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
                 </div>
                 <div style={{ fontWeight: 600, marginTop: 5, fontSize: 13 }}>{m.product_code}</div>
                 <div className="small">{m.name}</div>
