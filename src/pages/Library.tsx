@@ -5,7 +5,23 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import LibraryImport from '../components/LibraryImport'
 
-export type Mat = { id: string; brand: string; product_code: string; name: string | null; line: string | null; kind: string; url: string | null; image_url: string | null; tex_url: string | null; attrs: Record<string, string | null>; variants?: { sub: string; size: string; th: string; edge?: string | null; page?: number }[] }
+export type Mat = { id: string; brand: string; product_code: string; name: string | null; line: string | null; kind: string; url: string | null; image_url: string | null; tex_url: string | null; attrs: Record<string, string | null>; variants?: Var[] }
+export type Var = { sub: string; size: string; th: string; edge?: string | null; page?: number; code?: string; url?: string; tex?: string }
+
+/** Chuẩn hoá khổ về mm: "60x120cm" → "600×1200 mm"; "300x600" → "300×600 mm"; bỏ "KHÁC". */
+export function normSizes(s?: string | null): string[] {
+  if (!s) return []
+  const out: string[] = [], re = /(\d+(?:[.,]\d+)?)\s*[x×X]\s*(\d+(?:[.,]\d+)?)\s*(cm|mm)?/g
+  const tail = /\b(cm|mm)\b/i.exec(s)?.[1]?.toLowerCase()
+  for (const m of s.matchAll(re)) {
+    const a = parseFloat(m[1].replace(',', '.')), b = parseFloat(m[2].replace(',', '.'))
+    const u = (m[3] ?? tail ?? (Math.max(a, b) <= 200 ? 'cm' : 'mm')).toLowerCase(), k = u === 'cm' ? 10 : 1
+    out.push(`${Math.round(a * k * 10) / 10}×${Math.round(b * k * 10) / 10} mm`)
+  }
+  return [...new Set(out)]
+}
+export const fmtSizes = (s?: string | null) => normSizes(s).join(', ')
+
 const COLS = 'id,brand,product_code,name,line,kind,url,image_url,tex_url,attrs'
 export const GROUPS: { kind: string; label: string }[] = [
   { kind: 'wood', label: 'Gỗ & bề mặt gỗ công nghiệp' },
@@ -127,9 +143,9 @@ export default function Library() {
   )
 }
 
-export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void; onPick?: (m: Mat, v: { sub: string; size: string; th: string; edge?: string | null; page?: number } | null) => void }) {
+export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void; onPick?: (m: Mat, v: Var | null) => void }) {
   const [vars, setVars] = useState<Mat['variants']>(m.variants)
-  const [sub, setSub] = useState(''), [size, setSize] = useState(''), [th, setTh] = useState('')
+  const [sub, setSub] = useState(''), [size, setSize] = useState(''), [th, setTh] = useState(''), [sel, setSel] = useState('')
   useEffect(() => { if (!m.variants) supabase.from('materials').select('variants').eq('id', m.id).single().then(({ data }) => setVars((data as any)?.variants ?? [])) }, [m])
   const subs = useMemo(() => [...new Set((vars ?? []).map(v => v.sub))], [vars])
   useEffect(() => { if (subs.length && !subs.includes(sub)) setSub(subs[0]) }, [subs]) // eslint-disable-line
@@ -138,33 +154,43 @@ export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void;
   const chosen = ofSub.find(v => v.size === size && v.th === th) ?? (!sizes.some(Boolean) ? ofSub[0] : null) ?? null
   const edge = [...new Set(ofSub.map(v => v.edge).filter(Boolean))].join(', ')
   const A = m.attrs
+  const coded = (vars ?? []).filter(v => v.code)
+  const sizesTxt = coded.length ? [...new Set(coded.map(v => v.size).filter(Boolean))].join(', ') : fmtSizes(A.sizes)
+  const pick = coded.find(v => v.code === sel) ?? null
   return (
     <div className="modal-bg center" onMouseDown={onClose}>
       <div className="modal" style={{ width: 'min(760px, 96vw)', maxHeight: '90vh', overflow: 'auto' }} onMouseDown={e => e.stopPropagation()}>
         <div className="row between"><h3>{m.product_code} — {m.name}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
         <div className="row" style={{ gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <img src={m.tex_url ?? ''} alt="" referrerPolicy="no-referrer" style={{ width: 340, maxWidth: '100%', aspectRatio: '2/1', objectFit: 'cover', borderRadius: 8, background: '#eee' }} />
+          <img src={pick?.tex || m.tex_url || ''} alt="" referrerPolicy="no-referrer" style={{ width: 340, maxWidth: '100%', aspectRatio: '2/1', objectFit: 'cover', borderRadius: 8, background: '#eee' }} />
           <div style={{ flex: '1 1 260px' }} className="small">
             <div><b>Hãng:</b> {m.brand}</div><div><b>Dòng:</b> {m.line}</div>
             {A.pattern && <div><b>Loại vân:</b> {A.pattern}</div>}{A.color && <div><b>Màu:</b> {A.color}</div>}{A.finish && <div><b>Bề mặt:</b> {A.finish}</div>}
             {A.special && <div><b>Tính năng:</b> {A.special}</div>}{A.solution && <div><b>Giải pháp:</b> {A.solution}</div>}{A.price_group && <div><b>Nhóm giá:</b> {A.price_group}</div>}
-            {A.sizes && <div><b>Kích thước tấm:</b> {A.sizes} mm</div>}
+            {(sizesTxt || A.sizes) && <div><b>Kích thước tấm:</b> {sizesTxt || A.sizes}</div>}
             {A.thickness && <div><b>Độ dày:</b> {A.thickness}</div>}{A.grain && <div><b>Kiểu vân:</b> {A.grain}</div>}
             {A.finishes && <div><b>Bề mặt có sẵn:</b> {A.finishes}</div>}{A.usage && <div><b>Ứng dụng:</b> {A.usage}</div>}{A.worktop && <div><b>Mặt bàn:</b> {A.worktop}</div>}
             {A.note && <div className="muted">⚠ {A.note}</div>}{A.catalog_status && <div className="muted">⚠ {A.catalog_status}</div>}{A.catalog_page && <div><b>Trang catalog:</b> {A.catalog_page}</div>}
-            {m.url && <div style={{ marginTop: 6 }}><a href={m.url} target="_blank" rel="noreferrer">🔗 Xem trên website hãng</a></div>}
+            {pick && <div style={{ marginTop: 6 }}><b>Mã đang chọn:</b> {pick.code} · {pick.size}{pick.sub ? ` · ${pick.sub}` : ''}</div>}
+            {(pick?.url || m.url) && <div style={{ marginTop: 6 }}><a href={pick?.url || m.url || undefined} target="_blank" rel="noreferrer">🔗 Xem trên website hãng</a></div>}
           </div>
         </div>
-        {subs.length > 0 && <div className="card" style={{ marginTop: 8 }}>
+        {coded.length > 0 && <div className="card" style={{ marginTop: 8 }}>
+          <b>Kích thước và mã sản phẩm</b>
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+            {coded.map(v => <button key={v.code} className={'btn sm' + (sel === v.code ? ' primary' : '')} onClick={() => setSel(sel === v.code ? '' : v.code!)}>{v.size} · {v.code}{v.sub ? ` (${v.sub})` : ''}</button>)}
+          </div>
+        </div>}
+        {!coded.length && subs.length > 0 && <div className="card" style={{ marginTop: 8 }}>
           <b>Chọn quy cách{ofSub.some(v => !v.th) ? ' / bề mặt' : ''}</b>
           <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
             <select value={sub} onChange={e => { setSub(e.target.value); setSize(''); setTh('') }}>{subs.map(s => <option key={s}>{s}</option>)}</select>
-            {sizes.some(Boolean) && <select value={size} onChange={e => { setSize(e.target.value); setTh('') }}><option value="">Kích thước (mm)</option>{sizes.filter(Boolean).map(s => <option key={s}>{s}</option>)}</select>}
+            {sizes.some(Boolean) && <select value={size} onChange={e => { setSize(e.target.value); setTh('') }}><option value="">Kích thước</option>{sizes.filter(Boolean).map(s => <option key={s}>{s}</option>)}</select>}
             {ths.some(Boolean) && <select value={th} onChange={e => setTh(e.target.value)}><option value="">Độ dày (mm)</option>{ths.filter(Boolean).map(s => <option key={s}>{s}</option>)}</select>}
           </div>
         </div>}
         {edge && <div className="small" style={{ marginTop: 6 }}>Mã nẹp cạnh: <b>{edge}</b></div>}
-        {onPick && <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}><button className="btn primary" onClick={() => onPick(m, chosen)}>Chọn mã này</button></div>}
+        {onPick && <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}><button className="btn primary" onClick={() => onPick(m, pick ?? chosen)}>Chọn mã này</button></div>}
       </div>
     </div>
   )
