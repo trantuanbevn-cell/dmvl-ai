@@ -9,8 +9,9 @@ import { MatDetail, type Mat } from '../pages/Library'
 import { bboxFeat, loadFeatMats, rank, SUGGEST_MIN, type Cand, type FMat } from '../lib/suggest'
 import { applyPicks, sizeText, type Pick } from '../lib/suggestApply'
 
-export default function SuggestDialog({ d, entry, occId, onClose }: { d: ProjectData; entry: Entry; occId?: string; onClose: () => void }) {
+export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d: ProjectData; entry: Entry; occId?: string; onClose: () => void }) {
   const { isAdmin } = useAuth()
+  const entry = d.entries.find(e => e.id === entry0.id) ?? entry0   // luôn lấy bản mới nhất: đổi nhóm vật liệu thì danh sách đề xuất tự rà lại theo nhóm mới
   const occs = useMemo(() => d.occ.filter(o => o.entry_id === entry.id && o.bbox && (o.page_id || o.view?.img)), [d.occ, entry.id])
   const [oid, setOid] = useState(occId ?? occs[0]?.id ?? '')
   const o = occs.find(x => x.id === oid) ?? occs[0]
