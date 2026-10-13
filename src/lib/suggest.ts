@@ -120,7 +120,7 @@ export async function autoPickRoom(project: Project, room: Room, urlOf: (p: Page
     try {
       const best = rank(await bboxFeat(await urlOf(pg), o.bbox!), mats, e.group_code)[0]
       if (!best) continue
-      await applyPicks(e, [{ m: best.m, v: await singleVariant(best.m) } as Pick]); n++
+      await applyPicks(e, [{ m: best.m, v: await singleVariant(best.m) } as Pick], false); n++
     } catch { /* bỏ qua mục lỗi ảnh */ }
   }
   if (n) log(`  ${room.code} – tự chọn ${n} mẫu thư viện khớp nhất (≥ ${Math.round(SUGGEST_MIN * 100)}%)`)

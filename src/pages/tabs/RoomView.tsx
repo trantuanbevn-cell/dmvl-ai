@@ -20,7 +20,6 @@ import AddMaterial, { type AddPreset } from '../../components/AddMaterial'
 import type { Lang } from '../../lib/sections'
 import { roomPages } from '../../lib/roomPages'
 import { roomStats, heroStyle } from '../../lib/progress'
-import SuggestDialog from '../../components/SuggestDialog'
 import { useAuth } from '../../lib/auth'
 import { useOnline, colorOf } from '../../lib/presence'
 import { roomMissing } from '../../lib/missing'
@@ -38,8 +37,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   const [lang, setLang] = useState<Lang>('vn')
   const [flt, setFlt] = useState<'all' | 'pending' | 'inferred' | 'missing'>('all')
-  const { canEdit, name, can } = useAuth()
-  const [sug, setSug] = useState<{ e: Entry; occ: string } | null>(null)
+  const { canEdit, name } = useAuth()
   const online = useOnline()
   const [add, setAdd] = useState({ group: 'DC', name: '', category: 'decor' })
   const [dlg, setDlg] = useState<AddPreset | null>(null)
@@ -61,7 +59,6 @@ export default function RoomView({ d }: { d: ProjectData }) {
 
   const pick = (o: Occurrence) => {
     setSel(o.entry_id); setSelOcc(o.id); setPop(o.entry_id); setHidePanel(true)
-    const en = entryById.get(o.entry_id); if (can('suggest') && canEdit && en && o.bbox) setSug({ e: en, occ: o.id })
     const i = pages.findIndex(p => p.id === o.page_id); if (i >= 0) setPageIdx(i)
   }
   const rel = (ev: React.MouseEvent) => {
@@ -145,7 +142,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
                   const [x, y, w, h] = clampBox(o.bbox!)
                   const e = entryById.get(o.entry_id)
                   const on = o.entry_id === sel
-                  return <g key={o.id} onClick={() => !draw && pick(o)} className={'bb' + (on ? ' on' : '') + (e?.source === 'inferred' ? ' inf' : '')}>
+                  return <g key={o.id} onClick={() => !draw && pick(o)} className={'bb' + (on ? ' on' : '') + (e && (e.status === 'approved' || e.lib_id) ? ' done' : '') + (e?.source === 'inferred' ? ' inf' : '')}>
                     <rect x={x} y={y} width={w} height={h} vectorEffect="non-scaling-stroke" />
                   </g>
                 })}
@@ -153,7 +150,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
               </svg>
               {occ.filter(o => o.page_id === page.id && o.bbox).map(o => {
                 const [x, y] = clampBox(o.bbox!); const e = entryById.get(o.entry_id)
-                return <span key={o.id} className={'bb-label' + (o.entry_id === sel ? ' on' : '')} style={{ left: `${x * 100}%`, top: `${y * 100}%` }} onClick={() => !draw && pick(o)}>{e ? symbolOf(e, lang, undefined, symMap) : ''}</span>
+                return <span key={o.id} className={'bb-label' + (o.entry_id === sel ? ' on' : '') + (e && (e.status === 'approved' || e.lib_id) ? ' done' : '')} style={{ left: `${x * 100}%`, top: `${y * 100}%` }} onClick={() => !draw && pick(o)}>{e ? symbolOf(e, lang, undefined, symMap) : ''}</span>
               })}
             </div>
           </div>
@@ -195,7 +192,6 @@ export default function RoomView({ d }: { d: ProjectData }) {
 
       {dlg && room && <AddMaterial d={d} room={room} preset={dlg} onClose={() => setDlg(null)} onDone={id => { setDlg(null); setSel(id); setSelOcc(null) }} />}
       {selEntry && !hidePanel && <EntryPanel d={d} entry={selEntry} onClose={() => { setSel(null); setSelOcc(null) }} />}
-      {sug && <SuggestDialog d={d} entry={sug.e} occId={sug.occ} onClose={() => setSug(null)} />}
       {pop && <MaterialPopup d={d} entryId={pop} lang={lang} onClose={() => setPop(null)} onDetail={id => { setPop(null); setSel(id); setHidePanel(false) }} />}
     </div>
   )

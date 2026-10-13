@@ -442,3 +442,5 @@ input[data-lang="en"], textarea[data-lang="en"] { font-style: italic }
 .sug-btn { display: block; margin-top: 4px; padding: 2px 6px; font-size: 11px; white-space: nowrap }
 @media print { .no-export { display: none !important } }
 .page-tile { position: relative }
+.bb.done rect { fill: rgba(46,139,87,.08); stroke: #2e8b57 } .bb.done.on rect { fill: rgba(46,139,87,.25); stroke: #1f7a4a }
+.bb-label.done { background: #2e8b57 } .bb-label.done.on { background: #1f7a4a }

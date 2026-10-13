@@ -25,7 +25,8 @@ const setLine = (desc: string | null, re: RegExp, line: string) => {
   return re.test(t) ? t.replace(re, line) : (t ? t + '\n' : '') + line
 }
 
-export async function applyPicks(entry: Entry, picks: Pick[]) {
+/** mark=false: tự chọn mặc định (chưa phải người làm xác nhận) → chưa đánh dấu xanh trên phối cảnh */
+export async function applyPicks(entry: Entry, picks: Pick[], mark = true) {
   if (!picks.length) return null
   const two = picks.length > 1
   const code = (p: Pick) => p.v?.code || p.m.product_code
@@ -36,6 +37,7 @@ export async function applyPicks(entry: Entry, picks: Pick[]) {
     product_url: picks[0].v?.url || picks[0].m.url || null,
     product_image_url: picks[0].v?.tex || picks[0].m.tex_url || picks[0].m.image_url || null,
     mat_view: null,
+    lib_id: mark ? picks[0].m.id : null,
   }
   const o = picks[0].m.attrs.origin; if (o) patch.origin = o
   const vn = picks.map(p => (two ? p.m.brand + ': ' : '') + sizeText(p)).filter(s => s.replace(/^.*: /, '')).join('; ')

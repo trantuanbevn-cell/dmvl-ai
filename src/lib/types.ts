@@ -16,6 +16,7 @@ export type Entry = {
   source: 'image' | 'inferred' | 'manual'; status: 'pending' | 'approved' | 'rejected' | 'review'
   note_vn: string | null; note_en: string | null; enriched: boolean; sort: number
   link_id?: string | null
+  lib_id?: string | null
   en_src?: EnSrc | null
   section_key?: string | null
   mat_view?: { img?: string | null; region?: number[] | null } | null

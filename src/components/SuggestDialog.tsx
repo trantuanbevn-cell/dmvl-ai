@@ -34,7 +34,7 @@ export default function SuggestDialog({ d, entry, occId, onClose }: { d: Project
   }
   const apply = async () => { setBusy(true); const e = await applyPicks(entry, picks); setBusy(false); if (e) return alert(e.message); await d.reload(); onClose() }
   return (
-    <div className="modal-bg center no-export" onMouseDown={onClose}>
+    <div className="modal-bg center no-export" style={{ zIndex: 80 }} onMouseDown={e => { e.stopPropagation(); onClose() }}>
       <div className="modal" style={{ width: 'min(1180px, 97vw)', height: '88vh', maxHeight: '88vh' }} onMouseDown={e => e.stopPropagation()}>
         <div className="row between"><h3>Vật Liệu Đề Xuất — {entry.code} {entry.name_vn}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, flex: 1, minHeight: 0 }}>
@@ -72,7 +72,7 @@ export default function SuggestDialog({ d, entry, occId, onClose }: { d: Project
           <button className="btn primary" disabled={!picks.length || busy} onClick={apply}>{busy ? 'Đang lưu…' : 'Áp dụng vào danh mục'}</button>
         </div>
       </div>
-      {open && <MatDetail m={open} onClose={() => setOpen(null)} onPick={addPick} pickLabel="Chọn vào danh mục" />}
+      {open && <div style={{ position: 'relative', zIndex: 90 }} onMouseDown={e => e.stopPropagation()}><MatDetail m={open} onClose={() => setOpen(null)} onPick={addPick} pickLabel="Chọn vào danh mục" /></div>}
       {browse && <MaterialSuggest entry={entry} onClose={() => setBrowse(false)} onDone={() => { d.reload(); onClose() }} />}
     </div>
   )
