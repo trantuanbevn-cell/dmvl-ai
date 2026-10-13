@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import LibraryImport from '../components/LibraryImport'
+import { backfillFeats } from '../lib/suggest'
 
 export type Mat = { id: string; brand: string; product_code: string; name: string | null; line: string | null; kind: string; url: string | null; image_url: string | null; tex_url: string | null; attrs: Record<string, string | null>; variants?: Var[] }
 export type Var = { sub: string; size: string; th: string; edge?: string | null; page?: number; code?: string; url?: string; tex?: string }
@@ -56,6 +57,8 @@ export default function Library() {
   const [imp, setImp] = useState(false), [reload, setReload] = useState(0)
   const [open, setOpen] = useState<Mat | null>(null)
   const [fold, setFold] = useState<Record<string, boolean>>({})
+  const [fp, setFp] = useState<string>(''), [fstop, setFstop] = useState(false)
+  const runFeat = async () => { setFstop(false); setFp('Đang phân tích…'); try { const n = await backfillFeats((a, b) => setFp(`Đã phân tích ${a}/${b}`), () => (window as any).__fstop === true); setFp(`Xong (${n} mã)`) } catch (e: any) { setFp('Lỗi: ' + (e.message ?? e)) } }
   useEffect(() => { loadAll().then(setAll).catch(e => setErr(String(e.message ?? e))).finally(() => setLoading(false)) }, [reload])
   useEffect(() => { setShown(STEP) }, [sel, line, color, q])
   useEffect(() => { setLine('') }, [sel])
@@ -81,7 +84,7 @@ export default function Library() {
 
   return (
     <div className="page">
-      <div className="row between"><h1>Thư viện vật liệu</h1>{isAdmin && <button className="btn" onClick={() => setImp(true)}>⬆ Nhập thư viện từ file</button>}</div>
+      <div className="row between"><h1>Thư viện vật liệu</h1>{isAdmin && <span className="row gap"><span className="small muted">{fp}</span><button className="btn" onClick={() => { (window as any).__fstop = false; runFeat() }}>🔍 Phân tích ảnh thư viện</button><button className="btn" onClick={() => setImp(true)}>⬆ Nhập thư viện từ file</button></span>}</div>
       <p className="muted small">Dữ liệu đọc từ website công khai của hãng (mã, map vật liệu, thông số, kích thước/độ dày, link gốc để đối chiếu).</p>
       {err && <div className="note warn">⚠ {err}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: 14, alignItems: 'start' }}>

@@ -18,7 +18,7 @@ import { locationsOf } from '../lib/locations'
 import OccCrop from './OccCrop'
 import { useAuth } from '../lib/auth'
 import { useOnline, colorOf } from '../lib/presence'
-import MaterialSuggest from './MaterialSuggest'
+import SuggestDialog from './SuggestDialog'
 import { fixCategory, type Issue } from '../lib/checks'
 
 type F = keyof Entry
@@ -156,7 +156,7 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
 
       <h4>Mã thực tế</h4>
       {canEdit && can('suggest') && <button className="btn primary sm" onClick={() => setSug(true)}>✨ Vật Liệu Đề Xuất</button>}
-      {sug && <MaterialSuggest entry={entry} used={d.entries.filter(x => x.brand && x.product_code).flatMap(x => x.product_code!.split('\n').map(c => ({ brand: x.brand!, code: c.replace(/^.*?:\s*/, '').trim() })))} onClose={() => setSug(false)} onDone={() => d.reload()} />}
+      {sug && <SuggestDialog d={d} entry={entry} onClose={() => setSug(false)} />}
       <div className="grid2">
         <Field bad={B('brand') || ('brand'.startsWith('qty') && B('qty'))} e={entry} k="brand" label="Hãng / thương hiệu" onSaved={saved} />
         <Field bad={B('product_code') || ('product_code'.startsWith('qty') && B('qty'))} e={entry} k="product_code" area label="Mã sản phẩm (nhiều mã: mỗi mã một dòng)" onSaved={saved} />

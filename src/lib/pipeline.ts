@@ -1,4 +1,5 @@
 import { compDefault } from './compDefault'
+import { autoPickRoom } from './suggest'
 import { supabase, BUCKET, signedUrl, signedUrls } from './supabase'
 import { renderPdf, cleanText } from './pdf'
 import { callAI } from './ai'
@@ -366,6 +367,7 @@ export async function analyzeRoom(project: Project, room: Room, log: Log) {
     const added = await applyInference(project, room)
     log(`  ${room.code} – quy tắc suy luận thêm ${added} hạng mục (không dùng AI)`)
     await writeSpecs(project)
+    try { await autoPickRoom(project, room, async pg => await signedUrl(pg.image_path), log) } catch { /* thư viện chưa phân tích ảnh → bỏ qua */ }
     try { await syncLibrary(project.id, await must(supabase.from('entries').select('*').eq('project_id', project.id)) as Entry[]) } catch { /* */ }
     await must(supabase.from('rooms').update({ analysis_status: 'done', analysis_log: null }).eq('id', room.id))
   } catch (e) {
