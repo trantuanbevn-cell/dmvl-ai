@@ -84,7 +84,7 @@ export default function Library() {
 
   return (
     <div className="page">
-      <div className="row between"><h1>Thư viện vật liệu</h1>{isAdmin && <span className="row gap"><span className="small muted">{fp}</span><button className="btn" onClick={() => { (window as any).__fstop = false; runFeat() }}>🔍 Phân tích ảnh thư viện</button><button className="btn" onClick={() => setImp(true)}>⬆ Nhập thư viện từ file</button></span>}</div>
+      <div className="row between"><h1>Thư viện vật liệu</h1>{isAdmin && <span className="row gap"><span className="small muted">{fp}</span><button className="btn" onClick={() => { (window as any).__fstop = false; runFeat() }}>🔍 Phân tích lại ảnh thư viện</button><button className="btn" onClick={() => setImp(true)}>⬆ Nhập thư viện từ file</button></span>}</div>
       <p className="muted small">Dữ liệu đọc từ website công khai của hãng (mã, map vật liệu, thông số, kích thước/độ dày, link gốc để đối chiếu).</p>
       {err && <div className="note warn">⚠ {err}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: 14, alignItems: 'start' }}>

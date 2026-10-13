@@ -6,7 +6,7 @@ import type { Entry } from '../lib/types'
 import OccCrop from './OccCrop'
 import MaterialSuggest from './MaterialSuggest'
 import { MatDetail, type Mat } from '../pages/Library'
-import { bboxFeat, loadFeatMats, rank, SUGGEST_MIN, type Cand, type FMat } from '../lib/suggest'
+import { bboxFeat, loadFeatMats, ensureFeats, rank, SUGGEST_MIN, type Cand, type FMat } from '../lib/suggest'
 import { applyPicks, sizeText, type Pick } from '../lib/suggestApply'
 
 export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d: ProjectData; entry: Entry; occId?: string; onClose: () => void }) {
@@ -18,7 +18,19 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
   const [mats, setMats] = useState<FMat[] | null>(null)
   const [cands, setCands] = useState<Cand[] | null>(null)
   const [open, setOpen] = useState<Mat | null>(null), [picks, setPicks] = useState<Pick[]>([]), [busy, setBusy] = useState(false), [browse, setBrowse] = useState(false), [err, setErr] = useState('')
-  useEffect(() => { loadFeatMats().then(setMats).catch(e => setErr(String(e.message ?? e))) }, [])
+  const [prog, setProg] = useState('')
+  useEffect(() => {
+    let off = false
+    loadFeatMats().then(async m => {
+      if (off) return
+      setMats(m)
+      if (isAdmin) { // thư viện còn mã chưa phân tích ảnh → tự chạy ngầm (miễn phí) rồi nạp lại
+        const n = await ensureFeats((a, b) => !off && setProg(`Đang phân tích ảnh thư viện ${a}/${b}…`))
+        if (!off && n) { setProg(''); setMats(await loadFeatMats(true)) }
+      }
+    }).catch(e => setErr(String(e.message ?? e)))
+    return () => { off = true }
+  }, []) // eslint-disable-line
   const pg = o?.page_id ? d.pages.find(p => p.id === o.page_id) : undefined
   const url = pg ? d.urls[pg.image_path] : undefined
   const bkey = o?.bbox?.join(',')
@@ -49,7 +61,8 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
             <b>Vật liệu đề xuất {cands ? `(${cands.length})` : ''}</b>
             {err && <div className="note warn">⚠ {err}</div>}
             {(!mats || (!cands && !err)) && <p className="muted">Đang so khớp…</p>}
-            {mats && !mats.length && <p className="muted">Thư viện chưa được phân tích ảnh (admin bấm “Phân tích ảnh thư viện” ở trang Thư viện).</p>}
+            {prog && <p className="muted">{prog}</p>}
+            {mats && !mats.length && !prog && <p className="muted">Thư viện đang được chuẩn bị tự động, vui lòng mở lại sau ít phút.</p>}
             {cands && !cands.length && mats?.length ? <p className="muted">Không có mẫu thư viện nào khớp từ {Math.round(SUGGEST_MIN * 100)}%. Giữ thông tin hiện tại, người làm tự nhập mã/ảnh cho hạng mục này.</p> : null}
             <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 10, marginTop: 8 }}>
               {(cands ?? []).map(({ m, score }) => {

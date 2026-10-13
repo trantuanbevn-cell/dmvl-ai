@@ -3,6 +3,7 @@ import { Routes, Route, Link, useNavigate } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, configured } from './lib/supabase'
 import ForcePassword from './components/ForcePassword'
+import { ensureFeats } from './lib/suggest'
 import { AuthProvider, useAuth, ROLE_VN } from './lib/auth'
 import { PresenceProvider, useOnline, colorOf } from './lib/presence'
 import { Toaster } from './lib/toast'
@@ -22,6 +23,7 @@ const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(-2).map(w =
 
 function Shell({ session }: { session: Session }) {
   const { profile, role, isAdmin, can, name, loading } = useAuth()
+  useEffect(() => { if (isAdmin) { const t = setTimeout(() => { ensureFeats() }, 4000); return () => clearTimeout(t) } }, [isAdmin])   // tự phân tích ảnh thư viện mới nạp (ngầm, miễn phí)
   const online = useOnline()
   const nav = useNavigate()
   const out = async () => { await supabase.auth.signOut(); nav('/') }

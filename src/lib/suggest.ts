@@ -105,7 +105,8 @@ export async function singleVariant(m: Mat): Promise<Var | null> {
 
 /** Lần quét phối cảnh đầu: mã chưa có hãng/mã → tự chọn mẫu thư viện khớp nhất (≥ ngưỡng) làm mặc định */
 export async function autoPickRoom(project: Project, room: Room, urlOf: (p: Page) => Promise<string>, log: (s: string) => void): Promise<number> {
-  const mats = await loadFeatMats(); if (!mats.length) return 0
+  log('  Đang đối chiếu thư viện vật liệu…'); await ensureFeats((a, b) => log(`  Phân tích ảnh thư viện ${a}/${b}…`))
+  const mats = await loadFeatMats(true); if (!mats.length) return 0
   const [{ data: occ }, { data: ents }, { data: pgs }] = await Promise.all([
     supabase.from('occurrences').select('*').eq('room_id', room.id).not('bbox', 'is', null).not('page_id', 'is', null),
     supabase.from('entries').select('*').eq('project_id', project.id),
@@ -125,4 +126,11 @@ export async function autoPickRoom(project: Project, room: Room, urlOf: (p: Page
   }
   if (n) log(`  ${room.code} – tự chọn ${n} mẫu thư viện khớp nhất (≥ ${Math.round(SUGGEST_MIN * 100)}%)`)
   return n
+}
+
+/** Tự động phân tích ảnh các mã thư viện còn thiếu (miễn phí, chạy ngầm; chỉ admin ghi được). Gọi nhiều lần vẫn chỉ chạy một lần. */
+let running: Promise<number> | null = null
+export function ensureFeats(onProgress?: (done: number, total: number) => void): Promise<number> {
+  if (!running) running = backfillFeats((a, b) => onProgress?.(a, b), () => false).catch(() => 0).finally(() => { running = null })
+  return running
 }
