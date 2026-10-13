@@ -165,7 +165,7 @@ export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void;
           <img src={pick?.tex || m.tex_url || ''} alt="" referrerPolicy="no-referrer" style={{ width: 340, maxWidth: '100%', aspectRatio: '2/1', objectFit: 'cover', borderRadius: 8, background: '#eee' }} />
           <div style={{ flex: '1 1 260px' }} className="small">
             <div><b>Hãng:</b> {m.brand}</div><div><b>Dòng:</b> {m.line}</div>
-            {A.pattern && <div><b>Loại vân:</b> {A.pattern}</div>}{A.color && <div><b>Màu:</b> {A.color}</div>}{A.finish && <div><b>Bề mặt:</b> {A.finish}</div>}
+            {A.pattern && <div><b>Loại vân:</b> {A.pattern}</div>}{A.species && <div><b>Loại gỗ:</b> {A.species}</div>}{A.material && <div><b>Vật liệu:</b> {A.material}</div>}{A.color && <div><b>Màu:</b> {A.color}</div>}{A.finish && <div><b>Bề mặt:</b> {A.finish}</div>}
             {A.special && <div><b>Tính năng:</b> {A.special}</div>}{A.solution && <div><b>Giải pháp:</b> {A.solution}</div>}{A.price_group && <div><b>Nhóm giá:</b> {A.price_group}</div>}
             {(sizesTxt || A.sizes) && <div><b>Kích thước tấm:</b> {sizesTxt || A.sizes}</div>}
             {A.thickness && <div><b>Độ dày:</b> {A.thickness}</div>}{A.grain && <div><b>Kiểu vân:</b> {A.grain}</div>}
@@ -185,7 +185,7 @@ export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void;
         {!coded.length && subs.length > 0 && <div className="card" style={{ marginTop: 8 }}>
           <b>Chọn quy cách{ofSub.some(v => !v.th) ? ' / bề mặt' : ''}</b>
           <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-            <select value={sub} onChange={e => { setSub(e.target.value); setSize(''); setTh('') }}>{subs.map(s => <option key={s}>{s}</option>)}</select>
+            {(subs.length > 1 || subs[0]) && <select value={sub} onChange={e => { setSub(e.target.value); setSize(''); setTh('') }}>{subs.map(s => <option key={s}>{s}</option>)}</select>}
             {sizes.some(Boolean) && <select value={size} onChange={e => { setSize(e.target.value); setTh('') }}><option value="">Kích thước</option>{sizes.filter(Boolean).map(s => <option key={s}>{s}</option>)}</select>}
             {ths.some(Boolean) && <select value={th} onChange={e => setTh(e.target.value)}><option value="">Độ dày (mm)</option>{ths.filter(Boolean).map(s => <option key={s}>{s}</option>)}</select>}
           </div>
