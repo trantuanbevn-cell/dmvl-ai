@@ -6,7 +6,7 @@ import { kindOfGroup, applyPicks, type Pick } from './suggestApply'
 import type { Entry, Occurrence, Page, Project, Room } from './types'
 
 /** Ngưỡng độ trùng khớp tối thiểu để được đề xuất */
-export const SUGGEST_MIN = 0.9
+export const SUGGEST_MIN = 0.8
 export type Feat = number[]   // [L,a,b, sdL,sda,sdb, edge, 8 ô histogram sáng]
 
 function lab(r: number, g: number, b: number): [number, number, number] {

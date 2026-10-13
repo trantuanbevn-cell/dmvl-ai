@@ -163,16 +163,17 @@ export function MatDetail({ m, onClose, onPick, pickLabel }: { m: Mat; onClose: 
   const sizesTxt = coded.length ? [...new Set(coded.map(v => v.size).filter(Boolean))].join(', ') : fmtSizes(A.sizes)
   const pick = coded.find(v => v.code === sel) ?? null
   const strSizes = !(vars ?? []).length ? normSizes(A.sizes) : []
-  const [asz, setAsz] = useState('')
+  const [asz, setAsz] = useState(''), [zoom, setZoom] = useState(false)
   const result: Var | null = pick ?? chosen ?? (asz ? { sub: '', size: asz, th: '' } : null)
   // khi chọn vào danh mục: mẫu có nhiều kích thước thì BẮT BUỘC chọn đúng 1 kích thước
   const need = coded.length > 1 ? 'kích thước / mã' : !coded.length && sizes.some(Boolean) && !chosen ? 'kích thước' + (ths.some(Boolean) ? ' và độ dày' : '') : strSizes.length > 1 && !asz ? 'kích thước' : ''
   return (
-    <div className="modal-bg center" onMouseDown={onClose}>
+    <div className="modal-bg center" style={{ zIndex: 95 }} onMouseDown={e => { e.stopPropagation(); onClose() }}>
       <div className="modal" style={{ width: 'min(760px, 96vw)', maxHeight: '90vh', overflow: 'auto' }} onMouseDown={e => e.stopPropagation()}>
+        {zoom && <div onMouseDown={e => { e.stopPropagation(); setZoom(false) }} style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(20,15,10,.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out', padding: 16 }}><img src={pick?.tex || m.tex_url || ''} alt="" referrerPolicy="no-referrer" style={{ maxWidth: '96vw', maxHeight: '94vh', objectFit: 'contain', borderRadius: 6, background: '#fff' }} /><span style={{ position: 'fixed', top: 14, right: 22, color: '#fff', fontSize: 13 }}>Bấm bất kỳ đâu để đóng</span></div>}
         <div className="row between"><h3>{m.product_code} — {m.name}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
         <div className="row" style={{ gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <img src={pick?.tex || m.tex_url || ''} alt="" referrerPolicy="no-referrer" style={{ width: 340, maxWidth: '100%', aspectRatio: '2/1', objectFit: 'cover', borderRadius: 8, background: '#eee' }} />
+          <img src={pick?.tex || m.tex_url || ''} alt="" title="Bấm để phóng to map" onClick={() => setZoom(true)} referrerPolicy="no-referrer" style={{ cursor: 'zoom-in', width: 340, maxWidth: '100%', aspectRatio: '2/1', objectFit: 'cover', borderRadius: 8, background: '#eee' }} />
           <div style={{ flex: '1 1 260px' }} className="small">
             <div><b>Hãng:</b> {m.brand}</div><div><b>Dòng:</b> {m.line}</div>
             {A.pattern && <div><b>Loại vân:</b> {A.pattern}</div>}{A.species && <div><b>Loại gỗ:</b> {A.species}</div>}{A.material && <div><b>Vật liệu:</b> {A.material}</div>}{A.color && <div><b>Màu:</b> {A.color}</div>}{A.finish && <div><b>Bề mặt:</b> {A.finish}</div>}

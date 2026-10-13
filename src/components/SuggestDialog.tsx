@@ -82,12 +82,12 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
           {picks.map(p => <span key={p.m.brand} className="pill">{p.m.brand}: {p.v?.code || p.m.product_code}{sizeText(p) ? ' · ' + sizeText(p) : ''} <a onClick={() => setPicks(picks.filter(x => x !== p))} style={{ cursor: 'pointer' }}>✕</a></span>)}
           {!picks.length && <span className="muted small">Bấm mẫu → chọn kích thước → “Chọn vào danh mục”. Được chọn 2 hãng nếu map giống nhau.</span>}
           <span style={{ flex: 1 }} />
-          {isAdmin && <button className="btn sm" onClick={() => setBrowse(true)}>Duyệt toàn thư viện (admin)</button>}
+          <button className="btn sm" onClick={() => setBrowse(true)}>🔎 Tìm trong thư viện (theo nhóm)</button>
           <button className="btn primary" disabled={!picks.length || busy} onClick={apply}>{busy ? 'Đang lưu…' : 'Áp dụng vào danh mục'}</button>
         </div>
       </div>
       {open && <div style={{ position: 'relative', zIndex: 90 }} onMouseDown={e => e.stopPropagation()}><MatDetail m={open} onClose={() => setOpen(null)} onPick={addPick} pickLabel="Chọn vào danh mục" /></div>}
-      {browse && <MaterialSuggest entry={entry} onClose={() => setBrowse(false)} onDone={() => { d.reload(); onClose() }} />}
+      {browse && <div style={{ position: 'relative', zIndex: 85 }} onMouseDown={e => e.stopPropagation()}><MaterialSuggest entry={entry} onClose={() => setBrowse(false)} onDone={() => { d.reload(); onClose() }} /></div>}
     </div>
   )
 }

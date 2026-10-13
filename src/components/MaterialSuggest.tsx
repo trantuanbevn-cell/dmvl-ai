@@ -32,7 +32,7 @@ export default function MaterialSuggest({ entry, used, onClose, onDone }: { entr
   const apply = async () => { setBusy(true); const e = await applyPicks(entry, picks); setBusy(false); if (e) return alert(e.message); onDone(); onClose() }
   const chip = (on: boolean): React.CSSProperties => ({ cursor: 'pointer', padding: '4px 8px', borderRadius: 6, background: on ? '#e9dccb' : 'transparent' })
   return (
-    <div className="modal-bg center" onMouseDown={onClose}>
+    <div className="modal-bg center" onMouseDown={e => { e.stopPropagation(); onClose() }}>
       <div className="modal" style={{ width: 'min(1200px, 97vw)', height: '92vh', maxHeight: '92vh' }} onMouseDown={e => e.stopPropagation()}>
         <div className="row between"><h3>Vật Liệu Đề Xuất — {entry.code} {entry.name_vn}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
