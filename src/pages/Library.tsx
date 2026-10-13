@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 export type Mat = { id: string; brand: string; product_code: string; name: string | null; line: string | null; kind: string; url: string | null; image_url: string | null; tex_url: string | null; attrs: Record<string, string | null>; variants?: { sub: string; size: string; th: string }[] }
-const COLS = 'id,brand,product_code,name,line,kind,url,image_url,attrs'
+const COLS = 'id,brand,product_code,name,line,kind,url,image_url,tex_url,attrs'
 export const GROUPS: { kind: string; label: string }[] = [
   { kind: 'wood', label: 'Gỗ & bề mặt gỗ công nghiệp' },
   { kind: 'floor', label: 'Sàn gỗ' },
@@ -104,7 +104,7 @@ export default function Library() {
             {list.slice(0, shown).map(m => (
               <div key={m.id} className="card" style={{ cursor: 'pointer', padding: 6 }} onClick={() => setOpen(m)}>
                 <div style={{ aspectRatio: '2/1', borderRadius: 6, background: '#eee', overflow: 'hidden' }}>
-                  <img src={m.image_url ?? ''} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
+                  <img src={m.tex_url ?? ''} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
                 </div>
                 <div style={{ fontWeight: 600, marginTop: 5, fontSize: 13 }}>{m.product_code}</div>
                 <div className="small">{m.name}</div>
@@ -136,7 +136,7 @@ export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void;
       <div className="modal" style={{ width: 'min(760px, 96vw)', maxHeight: '90vh', overflow: 'auto' }} onMouseDown={e => e.stopPropagation()}>
         <div className="row between"><h3>{m.product_code} — {m.name}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
         <div className="row" style={{ gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <img src={m.image_url ?? ''} alt="" referrerPolicy="no-referrer" style={{ width: 340, maxWidth: '100%', aspectRatio: '2/1', objectFit: 'cover', borderRadius: 8, background: '#eee' }} />
+          <img src={m.tex_url ?? ''} alt="" referrerPolicy="no-referrer" style={{ width: 340, maxWidth: '100%', aspectRatio: '2/1', objectFit: 'cover', borderRadius: 8, background: '#eee' }} />
           <div style={{ flex: '1 1 260px' }} className="small">
             <div><b>Hãng:</b> {m.brand}</div><div><b>Dòng:</b> {m.line}</div>
             {A.pattern && <div><b>Loại vân:</b> {A.pattern}</div>}{A.color && <div><b>Màu:</b> {A.color}</div>}{A.finish && <div><b>Bề mặt:</b> {A.finish}</div>}
