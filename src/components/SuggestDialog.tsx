@@ -7,6 +7,7 @@ import OccCrop from './OccCrop'
 import MaterialSuggest from './MaterialSuggest'
 import { MatDetail, type Mat } from '../pages/Library'
 import { bboxFeat, loadFeatMats, ensureFeats, rank, SUGGEST_MIN, type Cand, type FMat } from '../lib/suggest'
+import { BASIC_SPECS, relevantSpecs, applyBasicSpec } from '../lib/basicSpecs'
 import { applyPicks, sizeText, type Pick } from '../lib/suggestApply'
 
 export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d: ProjectData; entry: Entry; occId?: string; onClose: () => void }) {
@@ -18,7 +19,9 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
   const [mats, setMats] = useState<FMat[] | null>(null)
   const [cands, setCands] = useState<Cand[] | null>(null)
   const [open, setOpen] = useState<Mat | null>(null), [picks, setPicks] = useState<Pick[]>([]), [busy, setBusy] = useState(false), [browse, setBrowse] = useState(false), [err, setErr] = useState('')
-  const [prog, setProg] = useState('')
+  const [prog, setProg] = useState(''), [allBasic, setAllBasic] = useState(false), [appliedKey, setAppliedKey] = useState('')
+  const basics = allBasic ? BASIC_SPECS : relevantSpecs(entry)
+  const pickBasic = async (b: typeof BASIC_SPECS[number]) => { const er = await applyBasicSpec(entry, b); if (er) return alert(er.message); setAppliedKey(b.key); d.reload() }
   useEffect(() => {
     let off = false
     loadFeatMats().then(async m => {
@@ -58,6 +61,16 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
             <p className="small muted">Phần mềm so màu và bề mặt của vùng khoanh với map vật liệu thư viện, chỉ hiện mẫu khớp từ {Math.round(SUGGEST_MIN * 100)}%.</p>
           </div>
           <div className="card" style={{ overflow: 'auto' }}>
+            {(basics.length > 0 || !allBasic) && <div style={{ marginBottom: 12 }}>
+              <div className="row between"><b>Vật liệu cơ bản – thông số chuẩn</b>{!allBasic && <a className="small" style={{ cursor: 'pointer' }} onClick={() => setAllBasic(true)}>xem tất cả</a>}</div>
+              {!basics.length && <p className="muted small">Chưa có thông số chuẩn cho nhóm này.</p>}
+              {basics.map(b => <div key={b.key} className="card" style={{ padding: 8, marginTop: 6, outline: appliedKey === b.key ? '2px solid var(--brown)' : undefined }}>
+                <div className="row between" style={{ gap: 8, alignItems: 'flex-start' }}>
+                  <div><b className="small">{b.title}</b>{b.brand && <span className="pill" style={{ marginLeft: 6 }}>{b.brand}</span>}<div className="small muted">{b.vn[0]}</div>{b.note && <div className="small" style={{ color: '#b45309' }}>{b.note}</div>}<div className="small muted">Nguồn: {b.src_url ? <a href={b.src_url} target="_blank" rel="noreferrer">{b.src}</a> : b.src}</div></div>
+                  <button className="btn sm primary" onClick={() => pickBasic(b)}>{appliedKey === b.key ? '✓ Đã điền' : 'Dùng'}</button>
+                </div>
+              </div>)}
+            </div>}
             <b>Vật liệu đề xuất {cands ? `(${cands.length})` : ''}</b>
             {err && <div className="note warn">⚠ {err}</div>}
             {(!mats || (!cands && !err)) && <p className="muted">Đang so khớp…</p>}

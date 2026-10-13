@@ -1,7 +1,9 @@
 // Danh sách tính năng lớn cần cấp quyền. Mặc định CHỈ admin dùng; admin tick cho từng thành viên ở trang Thành viên.
 // Thêm tính năng lớn mới => thêm 1 dòng ở đây + dùng can('key') để ẩn menu/route.
-export const FEATURES: { key: string; label: string }[] = [
+/** editorDefault: mặc định người có quyền SỬA dùng được (người chỉ xem phải được admin tích thêm) */
+export const FEATURES: { key: string; label: string; editorDefault?: boolean }[] = [
   { key: 'concept', label: 'Dàn trang concept' },
   { key: 'library', label: 'Thư viện vật liệu' },
-  { key: 'suggest', label: 'Vật liệu đề xuất (nối thư viện vào danh mục)' },
+  { key: 'suggest', label: 'Vật liệu đề xuất (nối thư viện vào danh mục)', editorDefault: true },
 ]
+export const editorHas = (key: string) => !!FEATURES.find(f => f.key === key)?.editorDefault

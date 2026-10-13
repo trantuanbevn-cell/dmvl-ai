@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { editorHas } from './features'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 
@@ -32,7 +33,7 @@ export function AuthProvider({ session, children }: { session: Session; children
   const v = useMemo<Ctx>(() => {
     const ok = !!profile?.active
     const role = ok ? profile!.role : null
-    return { session, profile, role, canEdit: role === 'admin' || role === 'editor', isAdmin: role === 'admin', can: (f: string) => role === 'admin' || (ok && !!profile?.features?.includes(f)), name: profile?.full_name || session.user.email?.split('@')[0] || 'Ẩn danh', loading }
+    return { session, profile, role, canEdit: role === 'admin' || role === 'editor', isAdmin: role === 'admin', can: (f: string) => role === 'admin' || (ok && (!!profile?.features?.includes(f) || (role === 'editor' && editorHas(f)))), name: profile?.full_name || session.user.email?.split('@')[0] || 'Ẩn danh', loading }
   }, [session, profile, loading])
   return <AuthCtx.Provider value={v}>{children}</AuthCtx.Provider>
 }
