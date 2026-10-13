@@ -37,8 +37,9 @@ export default function MaterialView({ d }: { d: ProjectData }) {
       d.reload()
     })()
   }, [d.entries, d.occ, canEdit])
-  const secs = allSections().map(sec => ({ sec, list: live.filter(e => sectionOf(e).key === sec.key) })).filter(x => x.list.length || x.sec.custom)
   const [onlyRaw, setOnly] = useState<string>('')          // '' = tất cả
+  // nhóm hết vật liệu thì tự biến mất (kể cả nhóm tự tạo); riêng nhóm đang mở vừa tạo thì còn giữ đến khi chuyển sang nhóm khác
+  const secs = allSections().map(sec => ({ sec, list: live.filter(e => sectionOf(e).key === sec.key) })).filter(x => x.list.length || (x.sec.custom && x.sec.key === onlyRaw))
   const only = secs.some(x => x.sec.key === onlyRaw) ? onlyRaw : ''   // tab hết vật liệu thì tự biến mất
   const [roomId, setRoomId] = useState<string>('')      // '' = mọi phòng
   const [lang, setLang] = useState<Lang>('vn')
@@ -84,7 +85,7 @@ export default function MaterialView({ d }: { d: ProjectData }) {
             {canEdit && <button className="chip add" onClick={() => setBands(true)} title="Tạo / tách / gộp các nhóm lớn (Hoàn thiện, Nội thất…) và chuyển mục giữa các nhóm">⇅ Quản lý nhóm lớn</button>}
             {canEdit && <span className="small muted" style={{ marginLeft: 6 }}>kéo thả ô vật liệu sang hàng khác để chuyển nhóm</span>}</div>
           {bandKeys().map(b => {
-            const row = secs.filter(x => x.sec.band === b); if (!row.length && !canEdit) return null
+            const row = secs.filter(x => x.sec.band === b); if (!row.length && !(canEdit && dragKey)) return null   // nhóm lớn hết nhóm con thì tự biến mất (chỉ hiện ô trống khi đang kéo thả)
             return <div key={b} className={'nav-row' + (over === 'band:' + b ? ' drop' : '')} onDragOver={e => { if (dragKey) { e.preventDefault(); setOver('band:' + b) } }} onDragLeave={() => setOver(o => (o === 'band:' + b ? null : o))} onDrop={e => { e.preventDefault(); drop(b) }}>
               <span className="nav-band">{bandTitle(b, 'vn').split(' – ')[0].replace(/^[A-Z]\d?\. /, '')}</span>
               {!row.length && <span className="small muted">Nhóm trống – kéo thả ô vật liệu vào đây</span>}
