@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-type Item = { code: string; name: string; line: string; pattern: string; file: string; key: string; variants?: { sub: string; size: string; th: string; edge?: string | null; page?: number }[] }
+type Item = { code: string; name: string; line: string; pattern: string; file: string; key: string; extra?: Record<string, string>; name2?: string; attrs?: Record<string, string>; variants?: { sub: string; size: string; th: string; edge?: string | null; page?: number }[] }
 const FAM: Record<string, string> = { 'Formica Laminate': 'Laminate', 'Formica Incanto': 'Incanto', 'Formica DecoMetal': 'DecoMetal' }
 
 export default function LibraryImport({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
@@ -15,9 +15,9 @@ export default function LibraryImport({ onClose, onDone }: { onClose: () => void
       const man = JSON.parse(await zip.file('manifest.json')!.async('string')) as Item[]
       if (man.length && man[0].variants && !man[0].key) { // file bổ sung quy cách: chỉ cập nhật các mã đã có
         setMsg('Đang cập nhật quy cách…')
-        const ex: { id: string; product_code: string; attrs: any }[] = []
+        const ex: { id: string; product_code: string; name: string | null; attrs: any }[] = []
         for (let from = 0; ; from += 1000) {
-          const { data, error } = await supabase.from('materials').select('id,product_code,attrs').eq('brand', brand).range(from, from + 999)
+          const { data, error } = await supabase.from('materials').select('id,product_code,name,attrs').eq('brand', brand).range(from, from + 999)
           if (error) throw error
           ex.push(...(data ?? []) as any); if (!data || data.length < 1000) break
         }
@@ -29,7 +29,7 @@ export default function LibraryImport({ onClose, onDone }: { onClose: () => void
           for (const r of hit) {
             const finishes = [...new Set((it.variants ?? []).map(v => v.sub))].join(', ')
             const pages = [...new Set((it.variants ?? []).map(v => v.page).filter(Boolean))].join(', ')
-            const { error } = await supabase.from('materials').update({ variants: it.variants, attrs: { ...r.attrs, finishes, catalog_page: pages, catalog_name: it.name, specs_from: 'Catalog Formica 2021/22' } }).eq('id', r.id)
+            const { error } = await supabase.from('materials').update({ variants: it.variants, ...(!r.name && it.name ? { name: it.name } : {}), attrs: { ...r.attrs, ...(it.attrs ?? {}), finishes, catalog_page: pages, catalog_name: it.name, specs_from: 'Catalog Formica (2021/22, Incanto 2024, DecoMetal 2022)' } }).eq('id', r.id)
             if (error) throw new Error('Lưu quy cách lỗi: ' + error.message)
             n++
           }
@@ -49,7 +49,7 @@ export default function LibraryImport({ onClose, onDone }: { onClose: () => void
           if (error && !/already exists|Duplicate/i.test(error.message)) throw new Error('Tải ảnh lỗi: ' + error.message)
           rows.push({ brand, source_id: 'map/' + x.key, product_code: x.code, name: x.name || null, line: x.pattern, kind: 'wood', url: null, image_url: null,
             tex_url: supabase.storage.from('materials').getPublicUrl(path).data.publicUrl,
-            attrs: { family: FAM[x.line] ?? x.line, pattern: x.pattern, source_file: x.file }, variants: [], updated_at: new Date().toISOString() })
+            attrs: { family: FAM[x.line] ?? x.line, pattern: x.pattern, source_file: x.file, ...Object.fromEntries(Object.entries(x.extra ?? {}).filter(([, v]) => v)) }, variants: [], updated_at: new Date().toISOString() })
         }))
         done = Math.min(man.length, i + 8); setPct(Math.round(done / man.length * 100)); setMsg(`Đã tải ${done}/${man.length} ảnh…`)
       }
