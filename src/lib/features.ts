@@ -3,4 +3,5 @@
 export const FEATURES: { key: string; label: string }[] = [
   { key: 'concept', label: 'Dàn trang concept' },
   { key: 'library', label: 'Thư viện vật liệu' },
+  { key: 'suggest', label: 'Vật liệu đề xuất (nối thư viện vào danh mục)' },
 ]

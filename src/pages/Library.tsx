@@ -32,12 +32,12 @@ export const GROUPS: { kind: string; label: string }[] = [
   { kind: 'moulding', label: 'Phào chỉ & ốp trang trí' },
   { kind: 'sanitary', label: 'Thiết bị vệ sinh' },
 ]
-const COLORS = ['Trắng', 'Be', 'Xám', 'Đen', 'Nâu', 'Vàng', 'Đỏ', 'Xanh']
+export const COLORS = ['Trắng', 'Be', 'Xám', 'Đen', 'Nâu', 'Vàng', 'Đỏ', 'Xanh']
 const STEP = 120
 const cmp = (a: string, b: string) => a.localeCompare(b, 'vi')
 type Sel = { kind: string; brand: string; fam: string }
 
-async function loadAll(): Promise<Mat[]> {
+export async function loadAll(): Promise<Mat[]> {
   const out: Mat[] = []
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase.from('materials').select(COLS).order('product_code').range(from, from + 999)
@@ -145,7 +145,7 @@ export default function Library() {
   )
 }
 
-export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void; onPick?: (m: Mat, v: Var | null) => void }) {
+export function MatDetail({ m, onClose, onPick, pickLabel }: { m: Mat; onClose: () => void; onPick?: (m: Mat, v: Var | null) => void; pickLabel?: string }) {
   const [vars, setVars] = useState<Mat['variants']>(m.variants)
   const [sub, setSub] = useState(''), [size, setSize] = useState(''), [th, setTh] = useState(''), [sel, setSel] = useState('')
   useEffect(() => { if (!m.variants) supabase.from('materials').select('variants').eq('id', m.id).single().then(({ data }) => setVars((data as any)?.variants ?? [])) }, [m])
@@ -159,6 +159,11 @@ export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void;
   const coded = (vars ?? []).filter(v => v.code)
   const sizesTxt = coded.length ? [...new Set(coded.map(v => v.size).filter(Boolean))].join(', ') : fmtSizes(A.sizes)
   const pick = coded.find(v => v.code === sel) ?? null
+  const strSizes = !(vars ?? []).length ? normSizes(A.sizes) : []
+  const [asz, setAsz] = useState('')
+  const result: Var | null = pick ?? chosen ?? (asz ? { sub: '', size: asz, th: '' } : null)
+  // khi chọn vào danh mục: mẫu có nhiều kích thước thì BẮT BUỘC chọn đúng 1 kích thước
+  const need = coded.length > 1 ? 'kích thước / mã' : !coded.length && sizes.some(Boolean) && !chosen ? 'kích thước' + (ths.some(Boolean) ? ' và độ dày' : '') : strSizes.length > 1 && !asz ? 'kích thước' : ''
   return (
     <div className="modal-bg center" onMouseDown={onClose}>
       <div className="modal" style={{ width: 'min(760px, 96vw)', maxHeight: '90vh', overflow: 'auto' }} onMouseDown={e => e.stopPropagation()}>
@@ -192,8 +197,14 @@ export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void;
             {ths.some(Boolean) && <select value={th} onChange={e => setTh(e.target.value)}><option value="">Độ dày (mm)</option>{ths.filter(Boolean).map(s => <option key={s}>{s}</option>)}</select>}
           </div>
         </div>}
+        {strSizes.length > 1 && <div className="card" style={{ marginTop: 8 }}>
+          <b>Kích thước</b>
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 6 }}>{strSizes.map(z => <button key={z} className={'btn sm' + (asz === z ? ' primary' : '')} onClick={() => setAsz(asz === z ? '' : z)}>{z}</button>)}</div>
+        </div>}
         {edge && <div className="small" style={{ marginTop: 6 }}>Mã nẹp cạnh: <b>{edge}</b></div>}
-        {onPick && <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}><button className="btn primary" onClick={() => onPick(m, pick ?? chosen)}>Chọn mã này</button></div>}
+        {onPick && <div className="row" style={{ justifyContent: 'flex-end', gap: 8, alignItems: 'center', marginTop: 8 }}>
+          {need && <span className="small" style={{ color: '#b45309' }}>Hãy chọn {need} để đưa vào danh mục (danh mục chỉ ghi đúng kích thước đã chọn)</span>}
+          <button className="btn primary" disabled={!!need} onClick={() => onPick(m, result)}>{pickLabel ?? 'Chọn mã này'}</button></div>}
       </div>
     </div>
   )

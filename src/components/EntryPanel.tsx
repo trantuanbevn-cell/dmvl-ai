@@ -18,6 +18,7 @@ import { locationsOf } from '../lib/locations'
 import OccCrop from './OccCrop'
 import { useAuth } from '../lib/auth'
 import { useOnline, colorOf } from '../lib/presence'
+import MaterialSuggest from './MaterialSuggest'
 import { fixCategory, type Issue } from '../lib/checks'
 
 type F = keyof Entry
@@ -43,7 +44,8 @@ function Field({ e, k, label, area, onSaved, type = 'text', bad }: { e: Entry; k
 }
 
 export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectData; entry: Entry; onClose: () => void; issues?: Issue[] }) {
-  const { canEdit, isAdmin, session } = useAuth()
+  const { canEdit, isAdmin, session, can } = useAuth()
+  const [sug, setSug] = useState(false)
   const online = useOnline()
   const others = isAdmin ? online.filter(o => o.entry === entry.id && o.act && o.id !== session.user.id) : []
   const [busy, setBusy] = useState('')
@@ -153,6 +155,8 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
       <button className="btn sm" disabled={!!busy} onClick={rewrite}>{busy === 'enrich' ? 'Đang viết…' : '↻ Viết lại thông số theo mẫu'}</button>
 
       <h4>Mã thực tế</h4>
+      {canEdit && can('suggest') && <button className="btn primary sm" onClick={() => setSug(true)}>✨ Vật Liệu Đề Xuất</button>}
+      {sug && <MaterialSuggest entry={entry} used={d.entries.filter(x => x.brand && x.product_code).flatMap(x => x.product_code!.split('\n').map(c => ({ brand: x.brand!, code: c.replace(/^.*?:\s*/, '').trim() })))} onClose={() => setSug(false)} onDone={() => d.reload()} />}
       <div className="grid2">
         <Field bad={B('brand') || ('brand'.startsWith('qty') && B('qty'))} e={entry} k="brand" label="Hãng / thương hiệu" onSaved={saved} />
         <Field bad={B('product_code') || ('product_code'.startsWith('qty') && B('qty'))} e={entry} k="product_code" area label="Mã sản phẩm (nhiều mã: mỗi mã một dòng)" onSaved={saved} />
