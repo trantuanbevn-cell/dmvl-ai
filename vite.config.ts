@@ -18,5 +18,6 @@ export default defineConfig({
   plugins: [react(), versionFile()],
   base: './',
   define: { __BUILD_ID__: JSON.stringify(BUILD_ID) },
-  build: { chunkSizeWarningLimit: 3000 },
+  build: { chunkSizeWarningLimit: 3000, sourcemap: false },
+  esbuild: { drop: ['console', 'debugger'], legalComments: 'none' },
 })

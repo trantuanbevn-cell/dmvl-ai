@@ -35,7 +35,8 @@ function Shell({ session }: { session: Session }) {
       <button className="btn" onClick={out}>Đăng xuất</button></div>
   )
   return (
-    <div className="app">
+    <div className="app" onContextMenu={e => { if (!isAdmin && (e.target as HTMLElement).closest('img,canvas,.no-copy')) e.preventDefault() }} onDragStart={e => { if (!isAdmin && (e.target as HTMLElement).tagName === 'IMG') e.preventDefault() }}>
+      {!isAdmin && <Watermark text={(profile?.email || name) + ' · ' + new Date().toLocaleDateString('vi-VN')} />}
       <header className="topbar">
         <Link to="/" className="brand"><span className="brand-mark">DM</span> DMVL AI <small>Danh mục vật liệu hoàn thiện</small></Link>
         <nav>
@@ -70,6 +71,12 @@ function Shell({ session }: { session: Session }) {
       <Toaster />
     </div>
   )
+}
+
+/** Dấu mờ tên người xem phủ toàn màn hình (không chặn thao tác) – truy ra nguồn nếu bị chụp/rò rỉ */
+function Watermark({ text }: { text: string }) {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='360' height='220'><text x='20' y='120' transform='rotate(-25 180 110)' font-size='15' fill='rgba(90,90,90,0.13)' font-family='sans-serif'>${text.replace(/[<>&']/g, '')}</text></svg>`
+  return <div aria-hidden style={{ position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'none', backgroundImage: `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")` }} />
 }
 
 export default function App() {
