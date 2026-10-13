@@ -24,6 +24,7 @@ Quy tắc:
 - Chính tả Anh-Anh nhất quán (colour, grey, aluminium).
 - GIỮ NGUYÊN: tên hãng, mã sản phẩm/mã tham khảo, số, đơn vị, kích thước, tên riêng, từ viết tắt (MDF, PVC, LED, MEP, HVAC, BOH…).
 - Tên hạng mục: cụm danh từ ngắn (viết hoa chữ đầu). Thông số: giữ cấu trúc dòng “Nhãn: giá trị”, giữ xuống dòng, giữ gạch đầu dòng.
+- VĂN PHONG: như một kiến trúc sư/QS bản ngữ viết bảng đặc tả vật liệu – ngắn gọn, giản dị, thực dụng, TỰ NHIÊN. Cấm văn hoa, quảng cáo, từ bay bổng (exquisite, seamless, bespoke, meticulously, elevate, ambience, timeless…), cấm câu sáo rỗng và cấu trúc "AI viết". Ưu tiên cụm danh từ ghép (table frame, meeting room table, powder-coated steel frame) hơn chuỗi "with/of/for"; không dịch từng chữ theo trật tự tiếng Việt (KHÔNG "Table with meeting room", "Tile ceramic floor"). Thông số dùng câu rất ngắn / mệnh đề rút gọn, bỏ mạo từ khi viết kiểu đặc tả ("Powder-coated steel frame, matt finish."), nhưng vẫn đúng ngữ pháp. Không dịch lặp ý, không thêm chủ ngữ thừa. Với đoạn dài: giữ đúng số ý, mỗi ý một câu/dòng, đọc lên phải giống bản do người Anh/Mỹ viết.
 - Dịch sát nghĩa, KHÔNG thêm thông tin, KHÔNG giải thích, KHÔNG bỏ sót ý. Nếu có “draft” (bản nháp từ từ điển) thì chỉ tham khảo, sửa cho đúng nếu sai.
 - Chỉ trả về JSON đúng dạng {"items":[{"id":"...","en":"..."}]}, mỗi mục giữ nguyên id, không thêm chữ nào ngoài JSON.`
 

@@ -8,6 +8,8 @@ const NUMERIC = /^[\d.,×x*÷/\-–+±≥≤<>=%°²³µø~()]+[a-zµ²³]*$/i
 const strip = (w: string) => w.replace(/^[(\[]+|[).,;:!?\]]+$/g, '')
 // “3 chỗ” → 3-seater, “2 tầng” → 2-tier…
 const NUMUNIT: [string, string][] = [['ngăn kéo', '-drawer'], ['chỗ', '-seater'], ['người', '-seater'], ['tầng', '-tier'], ['hố', '-bowl'], ['ngăn', '-compartment'], ['cánh', '-door'], ['hướng thổi', '-way']]
+/** Bộ phận của món đồ: “bàn chân sắt” → table with steel legs */
+const PARTS = /^(mặt|chân|cánh|tay nắm|thân|hộc|ngăn kéo|lưng|đệm|đế|nắp|thùng|tay vịn|bánh xe|quai|ruột|lõi)(\s|$)/
 const rank: Record<string, number> = { A: 1, C: 2, M: 3, U: 3.5, Y: 4 }
 
 type Item = { tag: Tag | 'U' | 'D'; en: string; vi: string }
@@ -42,7 +44,9 @@ function renderNP(items: Item[]): string {
   const mods = items.filter(x => x !== head && x.tag !== 'T' && x.tag !== 'D' && x.tag !== 'K')
   // sắp xếp: nhóm theo hạng (A, C, M/U, Y) – A và C đảo thứ tự gốc (tiếng Việt: danh từ + tính từ), M/U/Y giữ thứ tự
   const by = (r: number) => mods.filter(x => (rank[x.tag] ?? 3) === r)
-  const ordered = [...by(1).reverse(), ...by(2).reverse(), ...by(3), ...by(3.5), ...by(4)]
+  // danh từ bổ nghĩa (N phụ) đứng sát danh từ chính và đảo thứ tự: nhà ăn nhân viên → staff canteen
+  const nmods = by(3).filter(x => x.tag === 'N').reverse()
+  const ordered = [...by(1).reverse(), ...by(2).reverse(), ...by(3).filter(x => x.tag !== 'N'), ...by(3.5), ...by(4), ...nmods]
   const parts = [...nums.map(x => x.en), ...ordered.map(x => x.en), head?.en ?? ''].filter(Boolean)
   return [...parts, ...trail].join(' ')
 }
@@ -55,7 +59,8 @@ function clause(text: string, unknown: string[]): { en: string; splits: number }
   for (const it of items) {
     if (haveHead && it.vi.toLowerCase() === 'sơn') { segs.push({ conn: 'painted', items: [] }); haveHead = false; continue }
     if (it.tag === 'P') { segs.push({ conn: it.en, items: [] }); haveHead = false; continue }
-    if (it.tag === 'N' && haveHead) { segs.push({ conn: 'with', items: [it] }); continue }   // danh từ thứ hai → “with …”
+    // Danh từ thứ hai liền sau danh từ chính: bộ phận (mặt, chân, cánh…) → “… with …”; còn lại là danh từ bổ nghĩa đứng TRƯỚC danh từ chính (bàn phòng họp → meeting room table, khung bàn → table frame)
+    if (it.tag === 'N' && haveHead && PARTS.test(it.vi.toLowerCase())) { segs.push({ conn: 'with', items: [it] }); continue }
     if (it.tag === 'N') haveHead = true
     segs[segs.length - 1].items.push(it)
   }
