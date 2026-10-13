@@ -5,6 +5,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 const API = (Deno.env.get('ANTHROPIC_BASE_URL') ?? 'https://api.anthropic.com') + '/v1/messages'
 const MODEL = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-sonnet-5-5'
 const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.8-flash'
+const GEMINI_FALLBACK = Deno.env.get('GEMINI_FALLBACK_MODEL') ?? 'gemini-2.5-flash'
 const GEMINI_BASE = Deno.env.get('GEMINI_BASE_URL') ?? 'https://generativelanguage.googleapis.com'
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -50,12 +51,17 @@ Deno.serve(async (req) => {
     if (provider() === 'gemini') {
       const key = Deno.env.get('GEMINI_API_KEY')
       if (!key) return json({ error: 'Chưa cấu hình GEMINI_API_KEY' }, 500)
-      const r = await fetch(`${GEMINI_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent`, {
-        method: 'POST', headers: { 'x-goog-api-key': key, 'content-type': 'application/json' },
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM }] }, contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 16000 } }),
-      })
-      if (!r.ok) return json({ error: `Gemini ${r.status}: ${(await r.text()).slice(0, 500)}` }, 502)
-      const j = await r.json()
+      // Gemini hay báo 503/429 khi quá tải tạm thời → thử lại nhiều lần, rồi đổi sang model dự phòng
+      const body = JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM }] }, contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 16000 } })
+      const models = [GEMINI_MODEL, GEMINI_MODEL, GEMINI_MODEL, GEMINI_FALLBACK, GEMINI_FALLBACK]
+      let r: Response | null = null
+      for (let k = 0; k < models.length; k++) {
+        r = await fetch(`${GEMINI_BASE}/v1beta/models/${models[k]}:generateContent`, { method: 'POST', headers: { 'x-goog-api-key': key, 'content-type': 'application/json' }, body })
+        if (r.ok || ![429, 500, 502, 503, 504].includes(r.status)) break
+        await new Promise(res => setTimeout(res, 1500 * (k + 1)))
+      }
+      if (!r!.ok) return json({ error: `Gemini ${r!.status}: ${(await r!.text()).slice(0, 500)}` }, 502)
+      const j = await r!.json()
       text = (j.candidates?.[0]?.content?.parts ?? []).filter((p: any) => !p.thought).map((p: any) => p.text ?? '').join('')
     } else {
       const key = Deno.env.get('ANTHROPIC_API_KEY')

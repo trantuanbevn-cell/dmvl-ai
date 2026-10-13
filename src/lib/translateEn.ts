@@ -67,13 +67,19 @@ export async function fillByAI(d: ProjectData, items: TrItem[], log: (s: string)
   await autoBackup(d.project ?? { id: d.entries[0]?.project_id }, 'Tự động trước khi AI dịch tiếng Anh', { minGapMs: 30 * 60_000 })
   await loadEnglish()
   const ctx = d.project?.name ? `Dự án: ${d.project.name}` : undefined
-  let n = 0
-  for (let i = 0; i < todo.length; i += 25) {
-    const part = todo.slice(i, i + 25)
+  let n = 0, lastErr = ''
+  const B = 15
+  for (let i = 0; i < todo.length; i += B) {
+    const part = todo.slice(i, i + B)
     log(`AI đang dịch ${i + 1}–${i + part.length}/${todo.length}…`)
-    const res = await callTranslate(ctx, part.map((p, k) => ({ id: String(k), kind: p.field.replace('_en', ''), vi: p.vi, draft: p.draft && p.draft !== p.vi ? p.draft : undefined })))
+    let res: { id: string; en: string }[] = []
+    for (let t = 0; t < 3; t++) {   // quá tải tạm thời → thử lại, lỗi một đợt không làm mất các đợt còn lại
+      try { res = await callTranslate(ctx, part.map((p, k) => ({ id: String(k), kind: p.field.replace('_en', ''), vi: p.vi, draft: p.draft && p.draft !== p.vi ? p.draft : undefined }))); lastErr = ''; break }
+      catch (e) { lastErr = String((e as Error).message ?? e); await new Promise(r => setTimeout(r, 4000 * (t + 1))) }
+    }
     for (const x of res) { const it = part[Number(x.id)]; if (it && x.en?.trim()) { await put(it, polish(x.en.trim(), it.field)); n++ } }
   }
+  if (!n && lastErr) throw new Error(lastErr)
   return n
 }
 
