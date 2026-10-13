@@ -130,6 +130,7 @@ export default function Library() {
                 <div style={{ fontWeight: 600, marginTop: 5, fontSize: 13 }}>{m.product_code}</div>
                 <div className="small">{m.name}</div>
                 <div className="small muted">{m.line}{m.attrs.color ? ' · ' + m.attrs.color : ''}</div>
+                {m.attrs.image_kind === 'render' && <div className="small" style={{ color: '#b45309' }}>⚠ chỉ có ảnh phối cảnh</div>}
               </div>
             ))}
           </div>
