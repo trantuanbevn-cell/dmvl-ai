@@ -1,65 +1,121 @@
-// Thư viện vật liệu: tra cứu mã/ảnh/thông số các hãng đã đọc từ web công khai (chỉ người có quyền 'library').
+// Thư viện vật liệu: tra cứu mã/map vật liệu/thông số các hãng đọc từ web công khai (chỉ người có quyền 'library').
+// Cây: Nhóm vật liệu → Thương hiệu → Dòng nhóm sản phẩm; bên phải là lưới map vật liệu.
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 export type Mat = { id: string; brand: string; product_code: string; name: string | null; line: string | null; kind: string; url: string | null; image_url: string | null; tex_url: string | null; attrs: Record<string, string | null>; variants?: { sub: string; size: string; th: string }[] }
-const COLS = 'id,brand,product_code,name,line,kind,url,image_url,tex_url,attrs'
-const PAGE = 60
+const COLS = 'id,brand,product_code,name,line,kind,url,image_url,attrs'
+export const GROUPS: { kind: string; label: string }[] = [
+  { kind: 'wood', label: 'Gỗ & bề mặt gỗ công nghiệp' },
+  { kind: 'floor', label: 'Sàn gỗ' },
+  { kind: 'stone', label: 'Đá tự nhiên' },
+  { kind: 'tile', label: 'Gạch ốp lát' },
+  { kind: 'paint', label: 'Sơn' },
+]
+const COLORS = ['Trắng', 'Be', 'Xám', 'Đen', 'Nâu', 'Vàng', 'Đỏ', 'Xanh']
+const STEP = 120
+const cmp = (a: string, b: string) => a.localeCompare(b, 'vi')
+type Sel = { kind: string; brand: string; fam: string }
+
+async function loadAll(): Promise<Mat[]> {
+  const out: Mat[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase.from('materials').select(COLS).order('product_code').range(from, from + 999)
+    if (error) throw error
+    out.push(...((data ?? []) as Mat[]))
+    if (!data || data.length < 1000) break
+  }
+  return out
+}
 
 export default function Library() {
-  const [q, setQ] = useState(''), [brand, setBrand] = useState(''), [fam, setFam] = useState(''), [color, setColor] = useState('')
-  const [rows, setRows] = useState<Mat[]>([]), [total, setTotal] = useState(0), [page, setPage] = useState(0), [busy, setBusy] = useState(false)
-  const [facets, setFacets] = useState<{ brands: string[]; fams: string[] }>({ brands: [], fams: [] })
+  const [all, setAll] = useState<Mat[]>([]), [loading, setLoading] = useState(true), [err, setErr] = useState('')
+  const [sel, setSel] = useState<Sel>({ kind: 'wood', brand: '', fam: '' })
+  const [line, setLine] = useState(''), [color, setColor] = useState(''), [q, setQ] = useState(''), [shown, setShown] = useState(STEP)
   const [open, setOpen] = useState<Mat | null>(null)
-  useEffect(() => { // danh sách hãng + dòng sản phẩm
-    supabase.from('materials').select('brand,attrs->>family').limit(5000).then(({ data }) => {
-      const d = (data ?? []) as any[]
-      setFacets({ brands: [...new Set(d.map(x => x.brand))].sort(), fams: [...new Set(d.map(x => x.family).filter(Boolean))].sort() })
-    })
-  }, [])
-  useEffect(() => { setPage(0) }, [q, brand, fam, color])
-  useEffect(() => {
-    let dead = false
-    const t = setTimeout(async () => {
-      setBusy(true)
-      let qq = supabase.from('materials').select(COLS, { count: 'exact' })
-      if (brand) qq = qq.eq('brand', brand)
-      if (fam) qq = qq.eq('attrs->>family', fam)
-      if (color) qq = qq.eq('attrs->>color', color)
-      const s = q.trim().replace(/[%,()]/g, ' ')
-      if (s) qq = qq.or(`product_code.ilike.%${s}%,name.ilike.%${s}%,line.ilike.%${s}%`)
-      const { data, count } = await qq.order('product_code').range(page * PAGE, page * PAGE + PAGE - 1)
-      if (!dead) { setRows((data ?? []) as Mat[]); setTotal(count ?? 0); setBusy(false) }
-    }, 250)
-    return () => { dead = true; clearTimeout(t) }
-  }, [q, brand, fam, color, page])
-  const COLORS = ['Trắng', 'Be', 'Xám', 'Đen', 'Nâu', 'Vàng', 'Đỏ', 'Xanh']
+  const [fold, setFold] = useState<Record<string, boolean>>({})
+  useEffect(() => { loadAll().then(setAll).catch(e => setErr(String(e.message ?? e))).finally(() => setLoading(false)) }, [])
+  useEffect(() => { setShown(STEP) }, [sel, line, color, q])
+  useEffect(() => { setLine('') }, [sel])
+
+  // đếm cho cây
+  const tree = useMemo(() => {
+    const t = new Map<string, Map<string, Map<string, number>>>()
+    for (const m of all) {
+      const b = t.get(m.kind) ?? new Map(); t.set(m.kind, b)
+      const f = b.get(m.brand) ?? new Map(); b.set(m.brand, f)
+      const fam = m.attrs.family || 'Khác'; f.set(fam, (f.get(fam) ?? 0) + 1)
+    }
+    return t
+  }, [all])
+  const inSel = useMemo(() => all.filter(m => m.kind === sel.kind && (!sel.brand || m.brand === sel.brand) && (!sel.fam || (m.attrs.family || 'Khác') === sel.fam)), [all, sel])
+  const lines = useMemo(() => { const c = new Map<string, number>(); inSel.forEach(m => { const l = m.line || '—'; c.set(l, (c.get(l) ?? 0) + 1) }); return [...c.entries()].sort((a, b) => cmp(a[0], b[0])) }, [inSel])
+  const list = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    return inSel.filter(m => (!line || (m.line || '—') === line) && (!color || m.attrs.color === color) && (!s || `${m.product_code} ${m.name ?? ''}`.toLowerCase().includes(s)))
+  }, [inSel, line, color, q])
+  const gl = GROUPS.find(g => g.kind === sel.kind)?.label ?? ''
+  const crumb = [gl, sel.brand, sel.fam].filter(Boolean).join(' › ')
+
   return (
     <div className="page">
       <h1>Thư viện vật liệu</h1>
-      <p className="muted small">Dữ liệu đọc từ website công khai của hãng (mã, ảnh, thông số, kích thước/độ dày, link). Mọi mã đều kèm link gốc để đối chiếu.</p>
-      <div className="card row" style={{ gap: 8, flexWrap: 'wrap' }}>
-        <input placeholder="Tìm mã hoặc tên (vd MS 325, Oak, trắng…)" value={q} onChange={e => setQ(e.target.value)} style={{ flex: '1 1 260px' }} />
-        <select value={brand} onChange={e => setBrand(e.target.value)}><option value="">Mọi hãng</option>{facets.brands.map(b => <option key={b}>{b}</option>)}</select>
-        <select value={fam} onChange={e => setFam(e.target.value)}><option value="">Mọi dòng</option>{facets.fams.map(b => <option key={b}>{b}</option>)}</select>
-        <select value={color} onChange={e => setColor(e.target.value)}><option value="">Mọi màu</option>{COLORS.map(b => <option key={b}>{b}</option>)}</select>
-        <span className="muted small">{busy ? 'Đang tìm…' : `${total} mã`}</span>
-      </div>
-      <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
-        {rows.map(m => (
-          <div key={m.id} className="card" style={{ cursor: 'pointer', padding: 8 }} onClick={() => setOpen(m)}>
-            <img src={m.image_url ?? ''} alt="" loading="lazy" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 6, background: '#eee' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
-            <div style={{ fontWeight: 600, marginTop: 6 }}>{m.product_code}</div>
-            <div className="small">{m.name}</div>
-            <div className="small muted">{m.brand} · {m.attrs.family}{m.attrs.color ? ' · ' + m.attrs.color : ''}</div>
+      <p className="muted small">Dữ liệu đọc từ website công khai của hãng (mã, map vật liệu, thông số, kích thước/độ dày, link gốc để đối chiếu).</p>
+      {err && <div className="note warn">⚠ {err}</div>}
+      <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: 14, alignItems: 'start' }}>
+        <div className="card" style={{ padding: 8, position: 'sticky', top: 8, maxHeight: '88vh', overflow: 'auto' }}>
+          {GROUPS.map(g => {
+            const brands = tree.get(g.kind), n = brands ? [...brands.values()].reduce((a, f) => a + [...f.values()].reduce((x, y) => x + y, 0), 0) : 0
+            const on = sel.kind === g.kind
+            return (
+              <div key={g.kind} style={{ marginBottom: 4 }}>
+                <div onClick={() => { setSel({ kind: g.kind, brand: '', fam: '' }); setFold({ ...fold, [g.kind]: false }) }} style={{ cursor: 'pointer', padding: '6px 8px', borderRadius: 6, fontWeight: 700, background: on && !sel.brand ? 'var(--brown)' : 'transparent', color: on && !sel.brand ? '#fff' : undefined, opacity: n ? 1 : .5 }}>
+                  {g.label} <span className="cnt">{n}</span>
+                </div>
+                {on && !fold[g.kind] && brands && [...brands.entries()].sort((a, b) => cmp(a[0], b[0])).map(([b, fams]) => {
+                  const bn = [...fams.values()].reduce((x, y) => x + y, 0), bon = sel.brand === b
+                  return (
+                    <div key={b} style={{ marginLeft: 10 }}>
+                      <div onClick={() => setSel({ kind: g.kind, brand: b, fam: '' })} style={{ cursor: 'pointer', padding: '4px 8px', borderRadius: 6, fontWeight: 600, background: bon && !sel.fam ? '#e9dccb' : 'transparent' }}>{b} <span className="cnt">{bn}</span></div>
+                      {bon && [...fams.entries()].sort((a, b) => cmp(a[0], b[0])).map(([f, c]) => (
+                        <div key={f} onClick={() => setSel({ kind: g.kind, brand: b, fam: f })} style={{ cursor: 'pointer', marginLeft: 12, padding: '3px 8px', borderRadius: 6, fontSize: 13, background: sel.fam === f ? '#e9dccb' : 'transparent' }}>{f} <span className="muted">({c})</span></div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+          <div className="small muted" style={{ padding: 8 }}>Đá tự nhiên, gạch, sơn: sẽ bổ sung khi đọc xong các hãng.</div>
+        </div>
+        <div>
+          <div className="card row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <b>{crumb}</b>
+            <span className="muted small">{loading ? 'Đang tải…' : `${list.length} mã`}</span>
+            <span style={{ flex: 1 }} />
+            <input placeholder="Tìm mã / tên (MS 325, Oak…)" value={q} onChange={e => setQ(e.target.value)} style={{ width: 220 }} />
+            <select value={color} onChange={e => setColor(e.target.value)}><option value="">Mọi màu</option>{COLORS.map(b => <option key={b}>{b}</option>)}</select>
           </div>
-        ))}
+          {lines.length > 1 && <div className="row" style={{ gap: 6, flexWrap: 'wrap', margin: '8px 0' }}>
+            <span className={'chip' + (!line ? ' on' : '')} onClick={() => setLine('')}>Tất cả dòng</span>
+            {lines.map(([l, c]) => <span key={l} className={'chip' + (line === l ? ' on' : '')} onClick={() => setLine(l)}>{l} <span className="cnt">{c}</span></span>)}
+          </div>}
+          <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10 }}>
+            {list.slice(0, shown).map(m => (
+              <div key={m.id} className="card" style={{ cursor: 'pointer', padding: 6 }} onClick={() => setOpen(m)}>
+                <div style={{ aspectRatio: '2/1', borderRadius: 6, background: '#eee', overflow: 'hidden' }}>
+                  <img src={m.image_url ?? ''} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
+                </div>
+                <div style={{ fontWeight: 600, marginTop: 5, fontSize: 13 }}>{m.product_code}</div>
+                <div className="small">{m.name}</div>
+                <div className="small muted">{m.line}{m.attrs.color ? ' · ' + m.attrs.color : ''}</div>
+              </div>
+            ))}
+          </div>
+          {list.length > shown && <div style={{ textAlign: 'center', margin: 12 }}><button className="btn" onClick={() => setShown(shown + STEP)}>Xem thêm ({list.length - shown})</button></div>}
+          {!loading && !list.length && <div className="card muted">Không có mã nào.</div>}
+        </div>
       </div>
-      {total > PAGE && <div className="row" style={{ gap: 8, justifyContent: 'center', margin: 12 }}>
-        <button className="btn sm" disabled={page === 0} onClick={() => setPage(page - 1)}>‹ Trước</button>
-        <span className="small">Trang {page + 1}/{Math.ceil(total / PAGE)}</span>
-        <button className="btn sm" disabled={(page + 1) * PAGE >= total} onClick={() => setPage(page + 1)}>Sau ›</button>
-      </div>}
       {open && <MatDetail m={open} onClose={() => setOpen(null)} />}
     </div>
   )
@@ -80,7 +136,7 @@ export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void;
       <div className="modal" style={{ width: 'min(760px, 96vw)', maxHeight: '90vh', overflow: 'auto' }} onMouseDown={e => e.stopPropagation()}>
         <div className="row between"><h3>{m.product_code} — {m.name}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
         <div className="row" style={{ gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <img src={m.tex_url || m.image_url || ''} alt="" style={{ width: 260, maxWidth: '100%', borderRadius: 8, background: '#eee' }} />
+          <img src={m.image_url ?? ''} alt="" referrerPolicy="no-referrer" style={{ width: 340, maxWidth: '100%', aspectRatio: '2/1', objectFit: 'cover', borderRadius: 8, background: '#eee' }} />
           <div style={{ flex: '1 1 260px' }} className="small">
             <div><b>Hãng:</b> {m.brand}</div><div><b>Dòng:</b> {m.line}</div>
             {A.pattern && <div><b>Loại vân:</b> {A.pattern}</div>}{A.color && <div><b>Màu:</b> {A.color}</div>}{A.finish && <div><b>Bề mặt:</b> {A.finish}</div>}
