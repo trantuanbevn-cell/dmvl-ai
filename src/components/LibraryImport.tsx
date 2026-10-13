@@ -21,8 +21,8 @@ export default function LibraryImport({ onClose, onDone }: { onClose: () => void
           const ent = zip.file(`img/${x.key}.jpg`); if (!ent) return
           const blob = await ent.async('blob')
           const path = `${slug}/map_${x.key}.jpg`
-          const { error } = await supabase.storage.from('materials').upload(path, blob, { contentType: 'image/jpeg', upsert: true })
-          if (error) throw error
+          const { error } = await supabase.storage.from('materials').upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+          if (error && !/already exists|Duplicate/i.test(error.message)) throw new Error('Tải ảnh lỗi: ' + error.message)
           rows.push({ brand, source_id: 'map/' + x.key, product_code: x.code, name: x.name || null, line: x.pattern, kind: 'wood', url: null, image_url: null,
             tex_url: supabase.storage.from('materials').getPublicUrl(path).data.publicUrl,
             attrs: { family: FAM[x.line] ?? x.line, pattern: x.pattern, source_file: x.file }, variants: [], updated_at: new Date().toISOString() })
@@ -31,7 +31,7 @@ export default function LibraryImport({ onClose, onDone }: { onClose: () => void
       }
       for (let i = 0; i < rows.length; i += 100) {
         const { error } = await supabase.from('materials').upsert(rows.slice(i, i + 100), { onConflict: 'brand,source_id' })
-        if (error) throw error
+        if (error) throw new Error('Lưu danh sách lỗi: ' + error.message)
       }
       setMsg(`✅ Xong: nhập ${rows.length} mã ${brand}.`); onDone()
     } catch (e: any) { setMsg('⚠ ' + String(e.message ?? e)) }
