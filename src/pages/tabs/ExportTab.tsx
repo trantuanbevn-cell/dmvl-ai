@@ -49,6 +49,7 @@ export default function ExportTab({ d }: { d: ProjectData }) {
         <label className="row sm-gap"><input type="checkbox" checked={o.includePending} onChange={e => set({ includePending: e.target.checked })} /> Gồm cả mã chưa duyệt ({pend}) – bản nháp nội bộ</label>
         <label className="row sm-gap"><input type="checkbox" checked={o.renumber} onChange={e => set({ renumber: e.target.checked })} /> Đánh lại số liên tục (bỏ khoảng trống do mã bị loại)</label>
         <label className="row sm-gap"><input type="checkbox" checked={o.roomSheet} onChange={e => set({ roomSheet: e.target.checked })} /> Thêm sheet “Theo phòng”</label>
+        <label className="row sm-gap"><input type="checkbox" checked={!!o.legend} onChange={e => set({ legend: e.target.checked })} /> Thêm sheet “Chú giải ký hiệu”</label>
         <label className="row sm-gap"><input type="checkbox" checked={o.quote} onChange={e => set({ quote: e.target.checked })} /> Thêm cột báo giá (Số lượng · Đơn giá · Thành tiền, có tổng cộng)</label>
       </div>
 

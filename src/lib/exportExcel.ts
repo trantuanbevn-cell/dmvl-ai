@@ -201,8 +201,8 @@ export async function exportExcel(d: ExportData, o: ExportOpts) {
       row.height = 48
     })
   }
-  // 3) Chú giải ký hiệu (chuẩn viết tắt tiếng Anh) – chỉ các nhóm có trong file
-  {
+  // 3) Chú giải ký hiệu (chuẩn viết tắt tiếng Anh) – chỉ các nhóm có trong file; mặc định KHÔNG xuất, người dùng tích chọn
+  if (o.legend) {
     const used = PREFIXES.filter(p => list.some(e => p.groups.includes(e.group_code)))
     const ls = wb.addWorksheet(L === 'en' ? 'Legend' : 'Chú giải ký hiệu')
     ls.getRow(1).values = [h('KÍ HIỆU', 'CODE'), h('Tên tiếng Anh', 'English name'), h('Tên tiếng Việt', 'Vietnamese name'), h('Bao gồm', 'Includes')]

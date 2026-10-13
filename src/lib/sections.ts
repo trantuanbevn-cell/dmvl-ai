@@ -289,10 +289,10 @@ export function exportSymbols(list: Entry[], renumber: boolean) {
 // ---- Kế hoạch xuất: gộp tất cả vào 1 sheet hay tách từng mục ra sheet riêng
 export type SheetTarget = 'main' | 'own' | 'c1' | 'c2'
 export type ExportOpts = {
-  lang: Lang; includePending: boolean; renumber: boolean; roomSheet: boolean; quote: boolean
+  lang: Lang; includePending: boolean; renumber: boolean; roomSheet: boolean; legend: boolean; quote: boolean
   assign: Record<string, SheetTarget>; names: { main: string; c1: string; c2: string }
 }
-export const defaultOpts = (): ExportOpts => ({ lang: 'both', includePending: false, renumber: true, roomSheet: true, quote: false, assign: {}, names: { main: 'DMVL', c1: 'Nội thất', c2: 'Thiết bị' } })
+export const defaultOpts = (): ExportOpts => ({ lang: 'both', includePending: false, renumber: true, roomSheet: true, legend: false, quote: false, assign: {}, names: { main: 'DMVL', c1: 'Nội thất', c2: 'Thiết bị' } })
 export const PRESETS: { key: string; label: string; make: () => Record<string, SheetTarget> }[] = [
   { key: 'one', label: 'Gộp tất cả vào 1 sheet', make: () => ({}) },
   { key: 'loose', label: 'Tách riêng đồ rời', make: () => ({ loose: 'own' }) },
