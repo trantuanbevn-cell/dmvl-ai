@@ -441,3 +441,4 @@ input[data-lang="en"], textarea[data-lang="en"] { font-style: italic }
 .mk-miss { display: inline-block; width: 3px; height: 1.1em; background: #e53935; vertical-align: text-bottom; margin: 0 1px; border-radius: 1px }
 .sug-btn { display: block; margin-top: 4px; padding: 2px 6px; font-size: 11px; white-space: nowrap }
 @media print { .no-export { display: none !important } }
+.page-tile { position: relative }

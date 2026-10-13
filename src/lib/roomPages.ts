@@ -24,3 +24,6 @@ export function rectBg(url: string, p: Page, r: Rect, ar = 16 / 9): CSSPropertie
   const py = ih > ch ? ((ch / 2 - (r.y + r.h / 2) * ih) / (ch - ih)) * 100 : 0
   return { backgroundImage: `url("${url}")`, backgroundRepeat: 'no-repeat', backgroundSize: `${iw * 100}% ${(ih / ch) * 100}%`, backgroundPosition: `${Math.max(0, Math.min(100, px))}% ${Math.max(0, Math.min(100, py))}%` }
 }
+
+/** Trang phối cảnh / chưa phân loại mà chưa thuộc phòng nào → bắt buộc người làm xếp phòng (tránh sót phòng) */
+export const orphanPages = (pages: Page[]) => pages.filter(p => !p.room_id && (p.kind === 'render' || p.kind === 'unknown'))

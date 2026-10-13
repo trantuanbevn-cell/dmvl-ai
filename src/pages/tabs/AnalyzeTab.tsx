@@ -10,6 +10,7 @@ import { roomTypeLabel } from '../../lib/codes'
 import type { ProjectData } from '../../lib/useProject'
 import { analyzePlans } from '../../lib/planPipeline'
 import { roomStats, heroStyle } from '../../lib/progress'
+import { orphanPages } from '../../lib/roomPages'
 import Bar from '../../components/Bar'
 import LogBox, { useLog } from '../../components/LogBox'
 
@@ -22,6 +23,7 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
   const [busy, setBusy] = useState(false)
   const log = useLog(setLines)
   const nav = useNavigate()
+  const orphans = orphanPages(d.pages)
   const [info, setInfo] = useState<{ provider: string; model: string } | null>(null)
   useEffect(() => { aiInfo().then(setInfo) }, [])
 
@@ -59,11 +61,12 @@ export default function AnalyzeTab({ d }: { d: ProjectData }) {
   return (
     <fieldset className="plain stack" disabled={!isAdmin}>
       {!isAdmin && <div className="card warn-text">Chỉ quản trị viên mới được chạy phân tích (để tránh ghi đè dữ liệu mọi người đang chỉnh). Bạn vẫn xem được trạng thái từng phòng.</div>}
+      {orphans.length > 0 && <div className="card" style={{ background: '#fdeceb', border: '2px solid #c0392b' }}><b style={{ color: '#c0392b' }}>⚠ Còn {orphans.length} trang phối cảnh chưa xếp vào phòng nào (Tr.{orphans.map(x => x.page_no).join(', ')}) – các trang này sẽ bị bỏ qua khi phân tích.</b> <button className="btn sm" onClick={() => nav(`/p/${p.id}/upload`)}>← Quay lại xếp phòng</button></div>}
       <div className="card">
         <div className="row between"><h3>Phân tích bằng AI</h3><span className="pill">{info ? `AI: ${info.provider === 'gemini' ? 'Google Gemini' : 'Anthropic Claude'} · ${info.model}` : 'AI: đang kiểm tra…'}</span></div>
         <p className="muted small"><b>AI chỉ nhìn ảnh phối cảnh</b> và liệt kê vật liệu/đồ đạc kèm khung vị trí (Gemini Flash, trong hạn mức miễn phí). Mọi thứ còn lại do phần mềm tự làm. Dự án này cần khoảng <b>{renders} lần gọi AI</b>, giãn cách vài giây giữa các lần.</p>
         <div className="row gap">
-          <button className="btn primary" disabled={busy || !d.rooms.length} onClick={() => doRooms(d.rooms.map(r => r.id))}>▶ Phân tích tất cả phòng</button>
+          <button className="btn primary" disabled={busy || !d.rooms.length || orphans.length > 0} title={orphans.length ? 'Xếp hết trang chưa thuộc phòng trước' : undefined} onClick={() => doRooms(d.rooms.map(r => r.id))}>▶ Phân tích tất cả phòng</button>
           <button className="btn" disabled={busy || !d.rooms.length} onClick={doPlans} title="Đọc diện tích, đếm ghế/bàn trên mặt bằng và định vị camera của từng ảnh phối cảnh – không dùng AI">Phân tích mặt bằng & camera (không AI)</button>
           <button className="btn" disabled={busy || !d.entries.length} onClick={reapply}>Áp lại quy tắc & viết lại thông số (không AI)</button>
           {busy && <span className="spinner" />}

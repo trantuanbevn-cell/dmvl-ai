@@ -8,7 +8,7 @@ import type { ProjectData } from '../../lib/useProject'
 import { roomStats, heroStyle } from '../../lib/progress'
 import LogBox, { useLog } from '../../components/LogBox'
 import FloorPlans from '../../components/FloorPlans'
-import { roomPages } from '../../lib/roomPages'
+import { roomPages, orphanPages } from '../../lib/roomPages'
 import { syncSharedPages } from '../../lib/roomSplit'
 import { toast } from '../../lib/toast'
 import RoomSplit from '../../components/RoomSplit'
@@ -25,6 +25,20 @@ export default function UploadTab({ d }: { d: ProjectData }) {
   const nav = useNavigate()
   const [splitId, setSplitId] = useState<string | null>(null)
   const splits = suggestSplits(d.rooms, d.pages)
+  const orphans = orphanPages(d.pages)
+  const [sel, setSel] = useState<Set<string>>(new Set()), [newFor, setNewFor] = useState<string | null>(null), [newName, setNewName] = useState('')
+  const toggle = (id: string) => setSel(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  /** Tạo phòng mới (gõ tên trực tiếp) và gán luôn trang này + các trang đang tích chọn */
+  const createRoomFor = async (pageId: string) => {
+    const name = newName.trim(); if (!name) return
+    const used = new Set(d.rooms.map(r => r.code)); let n = d.rooms.length + 1, code = ''
+    do { code = `R${String(n++).padStart(2, '0')}` } while (used.has(code))
+    const { data, error } = await supabase.from('rooms').insert({ project_id: p.id, code, name_vn: name, sort: d.rooms.length + 1 }).select().single()
+    if (error) return alert(error.message)
+    await supabase.from('pages').update({ room_id: data.id }).in('id', [pageId, ...sel])
+    setNewFor(null); setNewName(''); setSel(new Set()); d.reload()
+  }
+  const assignSel = async (roomId: string) => { if (!roomId || !sel.size) return; await supabase.from('pages').update({ room_id: roomId }).in('id', [...sel]); setSel(new Set()); d.reload() }
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true)
@@ -53,7 +67,7 @@ export default function UploadTab({ d }: { d: ProjectData }) {
           <label className="btn primary" style={isAdmin ? undefined : { opacity: .5, pointerEvents: 'none' }} title={isAdmin ? undefined : 'Chỉ quản trị viên'}>{d.pages.length ? 'Tải file khác' : 'Chọn file PDF'}<input type="file" accept="application/pdf" hidden disabled={busy || !isAdmin} onChange={e => onFile(e.target.files?.[0])} /></label>
           {d.pages.length > 0 && <button className="btn" disabled={busy || !isAdmin} title={isAdmin ? undefined : 'Chỉ quản trị viên'} onClick={() => run(() => classifyLocalPages(p, log))}>Phân loại lại (không AI)</button>}
           {d.pages.length > 0 && <button className="btn ghost" disabled={busy || !isAdmin} title="Chỉ quản trị viên · chỉ cần cho PDF scan không có chữ – dùng hạn mức AI" onClick={() => run(() => classifyPages(p, log))}>AI phân loại (PDF scan)</button>}
-          {d.rooms.length > 0 && <button className="btn" onClick={() => nav(`/p/${p.id}/analyze`)}>Tiếp: Phân tích →</button>}
+          {d.rooms.length > 0 && <button className="btn" disabled={orphans.length > 0} title={orphans.length ? 'Còn trang chưa xếp phòng' : undefined} onClick={() => nav(`/p/${p.id}/analyze`)}>Tiếp: Phân tích →</button>}
           {busy && <span className="spinner" />}
         </div>
         <LogBox lines={lines} />
@@ -88,21 +102,32 @@ export default function UploadTab({ d }: { d: ProjectData }) {
       {d.pages.length > 0 && (
         <div className="card">
           <h3>Trang ({d.pages.length}) – kiểm tra phân loại, đổi phòng nếu AI gom sai</h3>
+          {orphans.length > 0 && <div style={{ background: '#fdeceb', border: '2px solid #c0392b', borderRadius: 8, padding: 10, margin: '8px 0' }}>
+            <b style={{ color: '#c0392b' }}>⚠ {orphans.length} trang phối cảnh chưa thuộc phòng nào (Tr.{orphans.map(x => x.page_no).join(', ')}).</b>
+            <div className="small">Phần mềm không đọc được tên phòng ở các trang này. Bắt buộc xếp vào một phòng có sẵn hoặc chọn “＋ Phòng mới…” rồi gõ tên – nếu bỏ sót, phòng sẽ không được phân tích. Có thể tích nhiều trang rồi gán cùng lúc.</div>
+            {sel.size > 0 && <div className="row gap sm-gap" style={{ marginTop: 6 }}><b>{sel.size} trang đã tích →</b>
+              <select value="" onChange={e => assignSel(e.target.value)}><option value="">Gán vào phòng…</option>{d.rooms.map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}</select></div>}
+          </div>}
           <div className="page-grid">
-            {d.pages.map(pg => (
-              <div key={pg.id} className={'page-tile kind-' + pg.kind}>
+            {d.pages.map(pg => {
+              const bad = !pg.room_id && (pg.kind === 'render' || pg.kind === 'unknown')
+              return (
+              <div key={pg.id} className={'page-tile kind-' + pg.kind} style={bad ? { borderColor: '#c0392b', borderWidth: 3, background: '#fdeceb' } : undefined}>
                 {pg.room_id && <span className="rc-code tile-code">{d.rooms.find(r => r.id === pg.room_id)?.code}</span>}
+                {bad && <label className="small" style={{ position: 'absolute', top: 4, left: 6, zIndex: 2, background: '#fff', padding: '0 4px', borderRadius: 4 }}><input type="checkbox" checked={sel.has(pg.id)} onChange={() => toggle(pg.id)} /> chọn</label>}
                 <img src={d.urls[pg.thumb_path ?? pg.image_path]} alt="" loading="lazy" />
                 <div className="row gap sm-gap">
                   <b>Tr.{pg.page_no}</b>
                   <select value={pg.kind} onChange={e => setPage(pg.id, { kind: e.target.value })}>{Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
                 </div>
-                <select value={pg.room_id ?? ''} onChange={e => setPage(pg.id, { room_id: e.target.value || null })}>
-                  <option value="">— không thuộc phòng —</option>
+                <select value={pg.room_id ?? ''} style={bad ? { borderColor: '#c0392b', color: '#c0392b', fontWeight: 600 } : undefined} onChange={e => { if (e.target.value === '__new') { setNewFor(pg.id); setNewName('') } else setPage(pg.id, { room_id: e.target.value || null }) }}>
+                  <option value="">{bad ? '⚠ CHƯA XẾP PHÒNG – bắt buộc chọn' : '— không thuộc phòng —'}</option>
                   {d.rooms.map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}
+                  <option value="__new">＋ Phòng mới…</option>
                 </select>
-              </div>
-            ))}
+                {newFor === pg.id && <div className="row gap sm-gap"><input autoFocus placeholder="Gõ tên phòng mới" value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createRoomFor(pg.id)} /><button className="btn sm primary" onClick={() => createRoomFor(pg.id)}>Tạo</button><button className="btn ghost sm" onClick={() => setNewFor(null)}>✕</button></div>}
+              </div>)
+            })}
           </div>
         </div>
       )}
