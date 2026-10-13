@@ -15,7 +15,7 @@ export function normSizes(s?: string | null): string[] {
   const tail = /\b(cm|mm)\b/i.exec(s)?.[1]?.toLowerCase()
   for (const m of s.matchAll(re)) {
     const a = parseFloat(m[1].replace(',', '.')), b = parseFloat(m[2].replace(',', '.'))
-    const u = (m[3] ?? tail ?? (Math.max(a, b) <= 200 ? 'cm' : 'mm')).toLowerCase(), k = u === 'cm' ? 10 : 1
+    const u = (m[3] ?? tail ?? (m[0].includes('*') || Math.max(a, b) > 200 ? 'mm' : 'cm')).toLowerCase(), k = u === 'cm' ? 10 : 1
     out.push(`${Math.round(a * k * 10) / 10}×${Math.round(b * k * 10) / 10} mm`)
   }
   return [...new Set(out)]
