@@ -30,6 +30,7 @@ export const GROUPS: { kind: string; label: string }[] = [
   { kind: 'tile', label: 'Gạch ốp lát' },
   { kind: 'paint', label: 'Sơn hiệu ứng' },
   { kind: 'moulding', label: 'Phào chỉ & ốp trang trí' },
+  { kind: 'sanitary', label: 'Thiết bị vệ sinh' },
 ]
 const COLORS = ['Trắng', 'Be', 'Xám', 'Đen', 'Nâu', 'Vàng', 'Đỏ', 'Xanh']
 const STEP = 120
@@ -169,6 +170,7 @@ export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void;
             {A.pattern && <div><b>Loại vân:</b> {A.pattern}</div>}{A.species && <div><b>Loại gỗ:</b> {A.species}</div>}{A.material && <div><b>Vật liệu:</b> {A.material}</div>}{A.color && <div><b>Màu:</b> {A.color}</div>}{A.finish && <div><b>Bề mặt:</b> {A.finish}</div>}
             {A.special && <div><b>Tính năng:</b> {A.special}</div>}{A.solution && <div><b>Giải pháp:</b> {A.solution}</div>}{A.price_group && <div><b>Nhóm giá:</b> {A.price_group}</div>}
             {(sizesTxt || A.sizes) && <div><b>Kích thước tấm:</b> {sizesTxt || A.sizes}</div>}
+            {A.dims && <div><b>Kích thước SP:</b> {A.dims}</div>}{A.price && <div><b>Giá niêm yết:</b> {A.price}</div>}
             {A.thickness && <div><b>Độ dày:</b> {A.thickness}</div>}{A.grain && <div><b>Kiểu vân:</b> {A.grain}</div>}
             {A.finishes && <div><b>Bề mặt có sẵn:</b> {A.finishes}</div>}{A.usage && <div><b>Ứng dụng:</b> {A.usage}</div>}{A.worktop && <div><b>Mặt bàn:</b> {A.worktop}</div>}
             {A.alt_codes && <div><b>Mã khác cùng bộ sưu tập (màu/khổ khác):</b> {A.alt_codes}</div>}
