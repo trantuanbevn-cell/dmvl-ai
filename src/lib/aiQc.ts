@@ -6,8 +6,8 @@ import type { ProjectData } from './useProject'
 import type { Entry } from './types'
 
 export type Finding = { id: string; project_id: string; entry_id: string | null; code: string | null; kind: string; field: string | null; current_text: string | null; suggestion: string | null; message: string; confidence: number | null; related: string[]; status: 'open' | 'accepted' | 'dismissed'; run_id: string | null; created_at: string }
-export const KIND_LABEL: Record<string, string> = { typo: 'Chính tả', mismatch: 'Việt ≠ Anh / tự mâu thuẫn', wrong: 'Thông tin sai', duplicate: 'Nghi trùng', rule: 'Vi phạm quy định vận hành', render: 'Lệch phân tích phối cảnh', missing: 'Thiếu thông tin' }
-const FIELDS = ['name_vn', 'name_en', 'material_vn', 'material_en', 'desc_vn', 'desc_en', 'part_vn', 'part_en', 'brand', 'product_code', 'origin'] as const
+export const KIND_LABEL: Record<string, string> = { typo: 'Chính tả', english: 'Tiếng Anh (ngữ pháp / văn phong)', mismatch: 'Việt ≠ Anh / tự mâu thuẫn', wrong: 'Thông tin sai', duplicate: 'Nghi trùng', rule: 'Vi phạm quy định vận hành', render: 'Lệch phân tích phối cảnh', missing: 'Thiếu thông tin' }
+const FIELDS = ['name_vn', 'name_en', 'material_vn', 'material_en', 'desc_vn', 'desc_en', 'part_vn', 'part_en', 'perf_vn', 'perf_en', 'note_vn', 'note_en', 'brand', 'product_code', 'origin'] as const
 const cut = (s: string | null | undefined, n: number) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n) + '…' : t }
 
 async function callQc(payload: unknown): Promise<{ issues?: any[] }> {
@@ -31,20 +31,20 @@ export async function runAiQc(d: ProjectData, onProgress: (msg: string) => void)
   const byCode = new Map(live.map(e => [S(e), e]))
   const rooms = d.rooms.map(r => `${r.code}|${r.name_vn}|${r.name_en ?? ''}|${r.room_type}`)
   const rules = d.rules.map(r => `${r.id.slice(0, 6)}|${r.room_ids.map(id => d.rooms.find(x => x.id === id)?.code).filter(Boolean).join(',')}|${r.elements.map(e => EL_VN[e] ?? e).join(',')}|${cut(r.title_vn || r.title_en, 120)}: ${cut(r.body_vn || r.body_en, 500)}`)
-  const index = live.map(e => `${S(e)}|${e.group_code}|${cut(e.name_vn, 60)}|${cut(e.material_vn, 70)}`)
+  const index = live.map(e => `${S(e)}|${e.group_code}|${cut(e.name_vn, 60)}|${cut(e.name_en, 60)}|${cut(e.material_vn, 70)}`)
   const rowOf = (e: Entry) => {
     const occ = d.occ.filter(o => o.entry_id === e.id)
     const rm = [...new Set(occ.filter(o => o.room_id).map(o => d.rooms.find(r => r.id === o.room_id)?.code).filter(Boolean))]
     const notes = [...new Set(occ.map(o => cut(o.note, 160)).filter(Boolean))].slice(0, 3)
     const rl = rulesFor(d, e.id).map(h => h.rule.id.slice(0, 6))
     const o: Record<string, unknown> = { code: S(e), group: e.group_code, rooms: rm.join(','), source: e.source }
-    for (const f of FIELDS) { const v = (e as any)[f]; if (v && String(v).trim()) o[f] = cut(v, 600) }
+    for (const f of FIELDS) { const v = (e as any)[f]; if (v && String(v).trim()) o[f] = cut(v, 1500) }
     if (notes.length) o.render_note = notes.join(' / ')
     if (rl.length) o.rule_ids = rl.join(',')
     return o
   }
   const rows = live.map(rowOf)
-  const CH = 30, runId = new Date().toISOString()
+  const CH = 20, runId = new Date().toISOString()
   const found: Omit<Finding, 'id' | 'created_at'>[] = []
   const seen = new Set<string>()
   for (let i = 0; i < rows.length; i += CH) {
