@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import LibraryImport from '../components/LibraryImport'
 
-export type Mat = { id: string; brand: string; product_code: string; name: string | null; line: string | null; kind: string; url: string | null; image_url: string | null; tex_url: string | null; attrs: Record<string, string | null>; variants?: { sub: string; size: string; th: string }[] }
+export type Mat = { id: string; brand: string; product_code: string; name: string | null; line: string | null; kind: string; url: string | null; image_url: string | null; tex_url: string | null; attrs: Record<string, string | null>; variants?: { sub: string; size: string; th: string; edge?: string | null; page?: number }[] }
 const COLS = 'id,brand,product_code,name,line,kind,url,image_url,tex_url,attrs'
 export const GROUPS: { kind: string; label: string }[] = [
   { kind: 'wood', label: 'Gỗ & bề mặt gỗ công nghiệp' },
@@ -126,7 +126,7 @@ export default function Library() {
   )
 }
 
-export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void; onPick?: (m: Mat, v: { sub: string; size: string; th: string } | null) => void }) {
+export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void; onPick?: (m: Mat, v: { sub: string; size: string; th: string; edge?: string | null; page?: number } | null) => void }) {
   const [vars, setVars] = useState<Mat['variants']>(m.variants)
   const [sub, setSub] = useState(''), [size, setSize] = useState(''), [th, setTh] = useState('')
   useEffect(() => { if (!m.variants) supabase.from('materials').select('variants').eq('id', m.id).single().then(({ data }) => setVars((data as any)?.variants ?? [])) }, [m])
@@ -134,7 +134,8 @@ export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void;
   useEffect(() => { if (subs.length && !subs.includes(sub)) setSub(subs[0]) }, [subs]) // eslint-disable-line
   const ofSub = (vars ?? []).filter(v => v.sub === sub)
   const sizes = [...new Set(ofSub.map(v => v.size))], ths = [...new Set(ofSub.filter(v => !size || v.size === size).map(v => v.th))].sort((a, b) => +a - +b)
-  const chosen = ofSub.find(v => v.size === size && v.th === th) ?? null
+  const chosen = ofSub.find(v => v.size === size && v.th === th) ?? (!sizes.some(Boolean) ? ofSub[0] : null) ?? null
+  const edge = [...new Set(ofSub.map(v => v.edge).filter(Boolean))].join(', ')
   const A = m.attrs
   return (
     <div className="modal-bg center" onMouseDown={onClose}>
@@ -147,17 +148,19 @@ export function MatDetail({ m, onClose, onPick }: { m: Mat; onClose: () => void;
             {A.pattern && <div><b>Loại vân:</b> {A.pattern}</div>}{A.color && <div><b>Màu:</b> {A.color}</div>}{A.finish && <div><b>Bề mặt:</b> {A.finish}</div>}
             {A.special && <div><b>Tính năng:</b> {A.special}</div>}{A.solution && <div><b>Giải pháp:</b> {A.solution}</div>}{A.price_group && <div><b>Nhóm giá:</b> {A.price_group}</div>}
             {A.sizes && <div><b>Kích thước tấm:</b> {A.sizes} mm</div>}
+            {A.finishes && <div><b>Bề mặt có sẵn:</b> {A.finishes}</div>}{A.catalog_page && <div><b>Trang catalog:</b> {A.catalog_page}</div>}
             {m.url && <div style={{ marginTop: 6 }}><a href={m.url} target="_blank" rel="noreferrer">🔗 Xem trên website hãng</a></div>}
           </div>
         </div>
         {subs.length > 0 && <div className="card" style={{ marginTop: 8 }}>
-          <b>Chọn quy cách</b>
+          <b>Chọn quy cách{ofSub.some(v => !v.th) ? ' / bề mặt' : ''}</b>
           <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
             <select value={sub} onChange={e => { setSub(e.target.value); setSize(''); setTh('') }}>{subs.map(s => <option key={s}>{s}</option>)}</select>
-            <select value={size} onChange={e => { setSize(e.target.value); setTh('') }}><option value="">Kích thước (mm)</option>{sizes.map(s => <option key={s}>{s}</option>)}</select>
-            <select value={th} onChange={e => setTh(e.target.value)}><option value="">Độ dày (mm)</option>{ths.map(s => <option key={s}>{s}</option>)}</select>
+            {sizes.some(Boolean) && <select value={size} onChange={e => { setSize(e.target.value); setTh('') }}><option value="">Kích thước (mm)</option>{sizes.filter(Boolean).map(s => <option key={s}>{s}</option>)}</select>}
+            {ths.some(Boolean) && <select value={th} onChange={e => setTh(e.target.value)}><option value="">Độ dày (mm)</option>{ths.filter(Boolean).map(s => <option key={s}>{s}</option>)}</select>}
           </div>
         </div>}
+        {edge && <div className="small" style={{ marginTop: 6 }}>Mã nẹp cạnh: <b>{edge}</b></div>}
         {onPick && <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}><button className="btn primary" onClick={() => onPick(m, chosen)}>Chọn mã này</button></div>}
       </div>
     </div>
