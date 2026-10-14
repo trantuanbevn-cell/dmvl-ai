@@ -9,6 +9,7 @@ import { projectStats, roomStats } from '../lib/progress'
 import CommentLayer from '../components/CommentLayer'
 import LiveCursors from '../components/LiveCursors'
 import Bar from '../components/Bar'
+import UndoBar from '../components/UndoBar'
 import Overview from './tabs/Overview'
 import UploadTab from './tabs/UploadTab'
 import AnalyzeTab from './tabs/AnalyzeTab'
@@ -48,6 +49,7 @@ export default function ProjectPage() {
       <CommentLayer d={data} />
       <div className="proj-head">
         <div><h1>{data.project.name}</h1><div className="muted small">{data.project.location}</div></div>
+        <UndoBar d={data} />
         <div className="proj-prog"><div className="small"><b>{ps.pct}%</b> đã xác nhận · {ps.approved}/{ps.total} mã · {data.rooms.length} phòng</div><Bar approved={ps.approved} pending={ps.pending + ps.review} total={ps.total} /></div>
       </div>
       <nav className="steps">

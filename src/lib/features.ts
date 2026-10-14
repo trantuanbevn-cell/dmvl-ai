@@ -4,6 +4,7 @@
 export const FEATURES: { key: string; label: string; editorDefault?: boolean }[] = [
   { key: 'concept', label: 'Dàn trang concept' },
   { key: 'library', label: 'Thư viện vật liệu' },
+  { key: 'undo', label: 'Hoàn tác / lịch sử thay đổi (quay lại bước trước)' },
   { key: 'suggest', label: 'Vật liệu đề xuất (nối thư viện vào danh mục)', editorDefault: true },
 ]
 export const editorHas = (key: string) => !!FEATURES.find(f => f.key === key)?.editorDefault
