@@ -20,12 +20,15 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
   const [copy, setCopy] = useState<{ from?: string; to: string; cats?: string[]; fixedCat?: string } | null>(null)
   const [edit, setEdit] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [zoom, setZoom] = useState<Room | null>(null)
   const run = async (f: () => Promise<unknown>, ok?: string) => { try { await f(); await d.reload(); if (ok) toast(ok, 'ok') } catch (e) { alert(String((e as Error).message ?? e)) } }
 
   const live = rows.filter(r => r.state !== 'none')
   const full = live.filter(r => !r.missing.length && r.total > 0).length
   const cnt = { all: rows.length, missing: live.filter(r => r.missing.length).length, norender: rows.filter(r => r.state === 'norender').length, none: rows.filter(r => r.state === 'none').length }
   const shown = rows.filter(r => flt === 'all' ? true : flt === 'missing' ? r.state !== 'none' && r.missing.length > 0 : r.state === flt)
+  const hasPlans = rows.some(r => r.room.plan_img)
+  const imgSrc = (r: Room) => `${import.meta.env.BASE_URL}${r.plan_img}`
   const hasFloors = rows.some(r => r.room.floor)
   const cats = CATEGORIES.filter(c => rows.some(r => r.cells.get(c.key)?.length) || rows.some(r => r.need.includes(c.key)))
 
@@ -77,6 +80,9 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
                       <button className="btn ghost sm danger" title="Xoá phòng" disabled={!canEdit} onClick={() => delRoom(r)}>🗑</button>
                     </span>
                   </div>
+                  {hasPlans && (r.room.plan_img
+                    ? <img className="mx-plan" src={imgSrc(r.room)} alt={'Mặt bằng ' + r.room.name_vn} loading="lazy" title="Bấm để phóng to – vòng tròn xanh = vị trí phòng trên bản vẽ" onClick={() => setZoom(r.room)} />
+                    : <div className="mx-plan none" title="Chưa tìm thấy phòng này trên bộ mặt bằng khách sạn – cần kiểm tra có đúng / thừa không">Chưa có mặt bằng</div>)}
                   <div className="small"><button className="btn ghost sm" disabled={!canEdit} onClick={() => setCopy({ to: r.room.id })}>⧉ Sao chép từ phòng khác…</button></div>
                 </td>
                 <td className="mx-st"><State r={r} /></td>
@@ -93,6 +99,7 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
         </table>
       </div>
 
+      {zoom && <Modal title={`${zoom.code} ${zoom.name_vn} – mặt bằng`} onClose={() => setZoom(null)} w={900}><img src={imgSrc(zoom)} alt="" style={{ width: '100%', background: '#fff' }} /><p className="small muted">Cắt từ bộ mặt bằng khách sạn (PDF); vòng tròn xanh = vị trí phòng. Chỉ để đối chiếu đúng / thừa / thiếu.</p></Modal>}
       {cell && <CellDialog d={d} sym={sym} row={rows.find(r => r.room.id === cell.roomId)!} cat={cell.cat} canEdit={canEdit} run={run} onCopy={() => setCopy({ to: cell.roomId, cats: [cell.cat], fixedCat: cell.cat })} onClose={() => setCell(null)} />}
       {copy && <CopyDialog d={d} rows={rows} init={copy} run={run} onClose={() => setCopy(null)} />}
       {edit && <RoomDialog d={d} room={d.rooms.find(r => r.id === edit)!} run={run} onClose={() => setEdit(null)} />}
