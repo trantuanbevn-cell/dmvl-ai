@@ -16,6 +16,7 @@ import Bar from '../../components/Bar'
 import PlanMap from '../../components/PlanMap'
 import RoomSections from '../../components/RoomSections'
 import RoomSuggest from '../../components/RoomSuggest'
+import AssignBox from '../../components/AssignBox'
 import AddMaterial, { type AddPreset } from '../../components/AddMaterial'
 import type { Lang } from '../../lib/sections'
 import { roomPages } from '../../lib/roomPages'
@@ -41,6 +42,9 @@ export default function RoomView({ d }: { d: ProjectData }) {
   const online = useOnline()
   const [add, setAdd] = useState({ group: 'DC', name: '', category: 'decor' })
   const [dlg, setDlg] = useState<AddPreset | null>(null)
+  const [newMode, setNewMode] = useState(false)   // khoanh vùng mới để gán vật liệu
+  const [pendBox, setPendBox] = useState<{ box: number[]; pageId: string } | null>(null)
+  const [assignOpen, setAssignOpen] = useState(false)
   const imgRef = useRef<HTMLDivElement>(null)
 
   const pages = roomPages(d.pages, roomId).filter(p => p.kind === 'render' || p.kind === 'plan')
@@ -66,12 +70,22 @@ export default function RoomView({ d }: { d: ProjectData }) {
     return { x: (ev.clientX - r.left) / r.width, y: (ev.clientY - r.top) / r.height }
   }
   const finishDraw = async () => {
-    if (!drag || !selOcc || !page) return
+    if (!drag || !page || (!selOcc && !newMode)) return
     const x = Math.min(drag.x0, drag.x1), y = Math.min(drag.y0, drag.y1), w = Math.abs(drag.x1 - drag.x0), h = Math.abs(drag.y1 - drag.y0)
     setDrag(null); setDraw(false)
-    if (w < 0.01 || h < 0.01) return
+    if (w < 0.01 || h < 0.01) { setNewMode(false); return }
+    if (newMode) { setNewMode(false); setPendBox({ box: [x, y, w, h], pageId: page.id }); setAssignOpen(true); return }
     await supabase.from('occurrences').update({ bbox: [x, y, w, h], page_id: page.id }).eq('id', selOcc)
     d.reload()
+  }
+  // Gán vật liệu có sẵn cho vùng vừa khoanh: cập nhật dòng "chưa có vị trí" của phòng nếu có, không thì thêm vị trí mới (origin manual – không bị quét lại ghi đè). Bảng theo danh mục tự cập nhật cột Vị trí.
+  const assign = async (e: Entry, category: string) => {
+    if (!pendBox || !roomId) return
+    const patch = { bbox: pendBox.box, page_id: pendBox.pageId, category }
+    const free = d.occ.find(o => o.room_id === roomId && o.entry_id === e.id && !o.bbox)
+    const { error } = free ? await supabase.from('occurrences').update(patch).eq('id', free.id) : await supabase.from('occurrences').insert({ entry_id: e.id, room_id: roomId, origin: 'manual', ...patch })
+    if (error) return alert(error.message)
+    setAssignOpen(false); setPendBox(null); await d.reload(); setSel(e.id); setSelOcc(null)
   }
   const approveAll = async () => {
     const ids = [...new Set(occ.map(o => o.entry_id))].filter(id => entryById.get(id)?.status === 'pending' && entryById.get(id)?.source === 'image')
@@ -124,7 +138,8 @@ export default function RoomView({ d }: { d: ProjectData }) {
             <div className="row between">
               <div className="page-strip">{pages.map((p, i) => <button key={p.id} className={'ps-tile' + (i === pageIdx ? ' on' : '')} onClick={() => setPageIdx(i)}><img src={d.urls[p.thumb_path ?? p.image_path]} alt="" /><span>Tr.{p.page_no}{p.kind === 'plan' ? ' · MB' : ''}</span></button>)}</div>
               <div className="row gap sm-gap">
-                {canEdit && selOcc && <button className={'btn sm' + (draw ? ' primary' : '')} onClick={() => setDraw(!draw)}>{draw ? 'Kéo chuột trên ảnh để khoanh…' : '✎ Khoanh lại vùng cho mục đang chọn'}</button>}
+                {canEdit && <button className={'btn sm' + (newMode ? ' primary' : '')} title="Khoanh một vùng trên ảnh rồi chọn vật liệu có sẵn trong danh mục để gán – dùng khi phòng bị thiếu vật liệu" onClick={() => { setNewMode(!newMode); setDraw(!newMode) }}>{newMode ? 'Kéo chuột trên ảnh để khoanh vùng…' : '✚ Khoanh & gán vật liệu'}</button>}
+                {canEdit && selOcc && !newMode && <button className={'btn sm' + (draw ? ' primary' : '')} onClick={() => setDraw(!draw)}>{draw ? 'Kéo chuột trên ảnh để khoanh…' : '✎ Khoanh lại vùng cho mục đang chọn'}</button>}
               </div>
             </div>
             {(() => {
@@ -190,7 +205,18 @@ export default function RoomView({ d }: { d: ProjectData }) {
         </div>
       </div>
 
-      {dlg && room && <AddMaterial d={d} room={room} preset={dlg} onClose={() => setDlg(null)} onDone={id => { setDlg(null); setSel(id); setSelOcc(null) }} />}
+      {assignOpen && roomId && <AssignBox d={d} roomId={roomId} symLabel={e => symbolOf(e, lang, undefined, symMap)} onPick={assign} onClose={() => { setAssignOpen(false); setPendBox(null) }}
+        onNew={() => { setAssignOpen(false); setDlg({ group: add.group, category: add.category, name: '', hint: 'Vật liệu mới sẽ được gán luôn vào vùng bạn vừa khoanh.' }) }} />}
+      {dlg && room && <AddMaterial d={d} room={room} preset={dlg} onClose={() => { setDlg(null); setPendBox(null) }} onDone={async id => {
+        setDlg(null); setSel(id); setSelOcc(null)
+        if (pendBox) {   // vật liệu mới tạo từ vùng khoanh: gắn vùng vào vị trí của phòng
+          const mine = d.occ.find(o => o.room_id === roomId && o.entry_id === id && !o.bbox)
+          const patch = { bbox: pendBox.box, page_id: pendBox.pageId }
+          if (mine) await supabase.from('occurrences').update(patch).eq('id', mine.id)
+          else { const { data: fresh } = await supabase.from('occurrences').select('id').eq('room_id', roomId!).eq('entry_id', id).is('bbox', null).limit(1); if (fresh?.[0]) await supabase.from('occurrences').update(patch).eq('id', fresh[0].id); else await supabase.from('occurrences').insert({ entry_id: id, room_id: roomId, origin: 'manual', ...patch }) }
+          setPendBox(null); d.reload()
+        }
+      }} />}
       {selEntry && !hidePanel && <EntryPanel d={d} entry={selEntry} onClose={() => { setSel(null); setSelOcc(null) }} />}
       {pop && <MaterialPopup d={d} entryId={pop} lang={lang} onClose={() => setPop(null)} onDetail={id => { setPop(null); setSel(id); setHidePanel(false) }} />}
     </div>
