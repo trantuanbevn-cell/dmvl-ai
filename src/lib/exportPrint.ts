@@ -4,7 +4,7 @@ import { signedUrls } from './supabase'
 import { matMontage, extraPaths } from './matImages'
 import { viewCanvas, regionCanvas } from './crop'
 import { locationsOf, locationLines } from './locations'
-import { filterEntries, ExportData } from './exportExcel'
+import { filterEntries, ExportData, exportBaseName } from './exportExcel'
 import { entryCells, pair, hostOf, type Seg } from './biText'
 import { STATUS_VN, STATUS_EN } from './types'
 
@@ -12,14 +12,20 @@ const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&am
 
 /** Mở trang in (A3 ngang) – người dùng chọn "Lưu dưới dạng PDF" */
 export async function printSchedule(d: ExportData, o: ExportOpts) {
+  const w = window.open('', '_blank')
+  if (!w) throw new Error('Trình duyệt chặn cửa sổ mới – hãy cho phép popup.')
+  w.document.write('<p style="font-family:sans-serif">Đang dựng trang in…</p>')
+  const html = await buildScheduleHtml(d, o, true)
+  w.document.open(); w.document.write(html); w.document.close()
+}
+
+/** Dựng HTML bảng danh mục – dùng cho in/PDF (print=true) và xem trước trong phần mềm (print=false) */
+export async function buildScheduleHtml(d: ExportData, o: ExportOpts, print: boolean): Promise<string> {
   const L = o.lang, vn = L !== 'en', includePending = o.includePending
   const h = (a: string, b: string) => (L === 'vn' ? a : L === 'en' ? b : `${a} / ${b}`)
   const both = L === 'both'
   const html1 = (ls: Seg[]) => ls.map(l => `<div class="${both ? l.k : 'n'}">${esc(l.t)}</div>`).join('')   // song ngữ: VN đậm trên, EN nghiêng dưới
   const hd = (a: string, b: string) => (both ? `<div class="vn">${esc(a)}</div><div class="en">${esc(b)}</div>` : esc(L === 'en' ? b : a))
-  const w = window.open('', '_blank')
-  if (!w) throw new Error('Trình duyệt chặn cửa sổ mới – hãy cho phép popup.')
-  w.document.write('<p style="font-family:sans-serif">Đang dựng trang in…</p>')
   const list = filterEntries(d.entries, includePending)
   const pageById = new Map(d.pages.map(p => [p.id, p]))
   const urls = await signedUrls([...new Set([...d.pages.map(p => p.image_path), ...d.occ.map(x => x.view?.img), ...d.entries.map(x => x.mat_view?.img), ...d.entries.flatMap(x => extraPaths(x))].filter(Boolean) as string[])])
@@ -54,7 +60,7 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
     }
   }
   }
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>DMVL – ${esc(d.project.name)}</title><style>
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(exportBaseName(d.project))}</title><style>
   @page { size: A3 landscape; margin: 10mm }
   body { font-family: Arial, sans-serif; font-size: 9px; color:#222 }
   h1 { font-size: 16px; color:#6B3A1F; margin:0 } h1 .en { font-size: 13px } .sub { color:#555; margin:2px 0 8px }
@@ -68,6 +74,6 @@ export async function printSchedule(d: ExportData, o: ExportOpts) {
   <div class="sub">${h('Dự án', 'Project')}: ${esc(d.project.name)}${d.project.location ? ' · ' + esc(d.project.location) : ''} · ${new Date().toLocaleDateString(vn ? 'vi-VN' : 'en-GB')}</div>
   <table><colgroup><col style="width:2.2%"><col style="width:5.5%"><col style="width:6.5%"><col style="width:7.5%"><col style="width:14%"><col style="width:14%"><col style="width:26%"><col style="width:10.5%"><col style="width:8.5%"><col style="width:5.3%"></colgroup>
   <thead><tr>${H.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>
-  <script>window.onload=()=>setTimeout(()=>window.print(),400)</script></body></html>`
-  w.document.open(); w.document.write(html); w.document.close()
+  ${print ? '<script>window.onload=()=>setTimeout(()=>window.print(),400)</script>' : ''}</body></html>`
+  return html
 }

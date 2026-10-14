@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { syncEnglish } from '../../lib/translateEn'
 import { useAuth } from '../../lib/auth'
-import { exportExcel, filterEntries } from '../../lib/exportExcel'
-import { printSchedule } from '../../lib/exportPrint'
+import { exportExcel, filterEntries, exportBaseName } from '../../lib/exportExcel'
+import { printSchedule, buildScheduleHtml } from '../../lib/exportPrint'
+import { supabase } from '../../lib/supabase'
 import { allSections, bandTitle, PRESETS, defaultOpts, groupBySection, planSheets, type ExportOpts, type SheetTarget, type Lang } from '../../lib/sections'
 import type { ProjectData } from '../../lib/useProject'
 
 const TARGETS: [SheetTarget, string][] = [['main', 'Sheet chính'], ['own', 'Sheet riêng'], ['c1', 'Sheet phụ 1'], ['c2', 'Sheet phụ 2']]
+const sameAssign = (a: Record<string, SheetTarget>, b: Record<string, SheetTarget>) => Object.keys({ ...a, ...b }).every(k => (a[k] ?? 'main') === (b[k] ?? 'main'))
 
 export default function ExportTab({ d }: { d: ProjectData }) {
   const key = 'dmvl-export-' + d.project!.id
@@ -36,10 +38,41 @@ export default function ExportTab({ d }: { d: ProjectData }) {
     setBusy('')
   }
   const set = (p: Partial<ExportOpts>) => setO({ ...o, ...p })
+  // Thông tin dự án (sửa được ngay tại đây)
+  const pj = d.project!
+  const [info, setInfo] = useState({ name: pj.name ?? '', location: pj.location ?? '', client: pj.client ?? '', item_name: pj.item_name ?? '' })
+  useEffect(() => { setInfo({ name: pj.name ?? '', location: pj.location ?? '', client: pj.client ?? '', item_name: pj.item_name ?? '' }) }, [pj.id, pj.name, pj.location, pj.client, pj.item_name])
+  const dirty = info.name !== (pj.name ?? '') || info.location !== (pj.location ?? '') || info.client !== (pj.client ?? '') || info.item_name !== (pj.item_name ?? '')
+  const saveInfo = async () => {
+    if (!info.name.trim()) return alert('Tên dự án không được để trống')
+    const { error } = await supabase.from('projects').update({ name: info.name.trim(), location: info.location.trim() || null, client: info.client.trim() || null, item_name: info.item_name.trim() || null }).eq('id', pj.id)
+    if (error) return alert(error.message)
+    await d.reload()
+  }
+  // Xem trước ngay trong phần mềm (bản HTML giống bản PDF)
+  const [prev, setPrev] = useState<{ html: string } | 'loading' | null>(null)
+  const preview = async () => {
+    setPrev('loading')
+    try {
+      if (o.lang !== 'vn' && canEdit) { const r = await syncEnglish(d); if (r.done) { await d.reload(); await new Promise(res => setTimeout(res, 300)) } }
+      setPrev({ html: await buildScheduleHtml(mk(dRef.current), o, false) })
+    } catch (e) { alert(String(e)); setPrev(null) }
+  }
+  const shown = allSections().filter(s => (groups.find(g => g.section.key === s.key)?.items.length ?? 0) > 0)
   let lastBand = ''
   return (
     <div className="card stack">
       <h3>Xuất bảng danh mục</h3>
+      <div className="card" style={{ background: 'var(--bg2, #faf6f1)' }}>
+        <div className="row between"><h4 style={{ margin: 0 }}>Thông tin dự án</h4>{dirty && canEdit && <button className="btn primary sm" onClick={saveInfo}>💾 Lưu thông tin</button>}</div>
+        <div className="row gap small" style={{ marginTop: 6, flexWrap: 'wrap' }}>
+          <label>Tên dự án <input value={info.name} disabled={!canEdit} onChange={e => setInfo({ ...info, name: e.target.value })} style={{ width: 240 }} /></label>
+          <label>Hạng mục <input value={info.item_name} disabled={!canEdit} onChange={e => setInfo({ ...info, item_name: e.target.value })} placeholder="vd: Nhà hàng tầng 5" style={{ width: 200 }} /></label>
+          <label>Địa chỉ <input value={info.location} disabled={!canEdit} onChange={e => setInfo({ ...info, location: e.target.value })} style={{ width: 280 }} /></label>
+          <label>Chủ đầu tư <input value={info.client} disabled={!canEdit} onChange={e => setInfo({ ...info, client: e.target.value })} style={{ width: 200 }} /></label>
+        </div>
+        <div className="small muted" style={{ marginTop: 4 }}>Tên file xuất: <b>{exportBaseName({ name: info.name, item_name: info.item_name })}.xlsx</b></div>
+      </div>
       <p className="muted">Phần mềm <b>tổng hợp mọi phòng</b> lại: vật liệu giống nhau ở nhiều phòng chỉ là một dòng, cột "Vị trí" liệt kê đủ các phòng và trang concept, và <b>ký hiệu được đánh số đồng bộ</b> trong cả file. Các mục xếp đúng thứ tự như bảng DMVL của công ty (sàn – tường – trần trước, rồi vật liệu khác, nội thất, thiết bị, decor, artwork).</p>
       {roomsMissing > 0 && <div className="note">⚠ Còn {roomsMissing} phòng chưa có hạng mục nào – kiểm tra lại bước “Theo phòng” trước khi xuất.</div>}
 
@@ -55,19 +88,20 @@ export default function ExportTab({ d }: { d: ProjectData }) {
 
       <div className="card" style={{ background: 'var(--bg2, #faf6f1)' }}>
         <div className="row between"><h4 style={{ margin: 0 }}>Gộp hay tách sheet</h4><span className="small muted">Sẽ tạo {sheets.length} sheet: {sheets.map(s => s.name).join(' · ')}</span></div>
-        <div className="chips" style={{ margin: '8px 0' }}>{PRESETS.map(p => <button key={p.key} className="chip" onClick={() => set({ assign: p.make() })}>{p.label}</button>)}</div>
+        <div className="chips" style={{ margin: '8px 0' }}>{PRESETS.map(p => <button key={p.key} className={'chip' + (sameAssign(o.assign, p.make()) ? ' on' : '')} onClick={() => set({ assign: p.make() })}>{p.label}</button>)}</div>
         <div className="row gap small" style={{ marginBottom: 6 }}>
           <label>Tên sheet chính <input value={o.names.main} onChange={e => set({ names: { ...o.names, main: e.target.value } })} style={{ width: 130 }} /></label>
           <label>Sheet phụ 1 <input value={o.names.c1} onChange={e => set({ names: { ...o.names, c1: e.target.value } })} style={{ width: 130 }} /></label>
           <label>Sheet phụ 2 <input value={o.names.c2} onChange={e => set({ names: { ...o.names, c2: e.target.value } })} style={{ width: 130 }} /></label>
         </div>
         <table className="tbl"><tbody>
-          {allSections().map(s => {
+          {shown.map(s => {
             const cnt = groups.find(g => g.section.key === s.key)?.items.length ?? 0
             const band = s.band !== lastBand ? s.band : null; lastBand = s.band
+            const cur = o.assign[s.key] ?? 'main'
             return [band && <tr key={'b' + s.band}><td colSpan={3} className="small" style={{ background: '#f1e8de', fontWeight: 700 }}>{bandTitle(s.band, 'vn')}</td></tr>,
-              <tr key={s.key} style={cnt ? undefined : { opacity: .45 }}><td>{s.vn} <span className="muted small">/ {s.en}</span></td><td style={{ width: 60 }}>{cnt} mã</td>
-                <td style={{ width: 150 }}><select value={o.assign[s.key] ?? 'main'} onChange={e => set({ assign: { ...o.assign, [s.key]: e.target.value as SheetTarget } })}>{TARGETS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td></tr>]
+              <tr key={s.key}><td>{s.vn} <span className="muted small">/ {s.en}</span></td><td style={{ width: 60 }}>{cnt} mã</td>
+                <td><div className="chips">{TARGETS.map(([k, l]) => <button key={k} className={'chip' + (cur === k ? ' on' : '')} onClick={() => set({ assign: { ...o.assign, [s.key]: k } })}>{l}</button>)}</div></td></tr>]
           })}
         </tbody></table>
         <p className="small muted">“Sheet riêng” = mục đó thành một sheet độc lập (vd tách Nội thất rời để lập danh mục/báo giá riêng cho chủ đầu tư). “Sheet phụ 1/2” = gộp nhiều mục vào cùng một sheet phụ (vd Nội thất liền tường + rời). Lựa chọn được nhớ cho dự án này.</p>
@@ -75,10 +109,18 @@ export default function ExportTab({ d }: { d: ProjectData }) {
 
       <div className="small">Sẽ xuất <b>{n}</b> mã{!o.includePending && pend > 0 ? ` (còn ${pend} mã chờ duyệt không được xuất)` : ''}.</div>
       <div className="row gap">
+        <button className="btn" disabled={!!busy || !n || prev === 'loading'} onClick={preview}>👁 Xem trước</button>
         <button className="btn primary" disabled={!!busy || !n} onClick={() => go('xlsx', data => exportExcel(data, o))}>⬇ Xuất Excel</button>
         <button className="btn" disabled={!!busy || !n} onClick={() => go('pdf', data => printSchedule(data, o))}>🖨 Xuất PDF</button>
         {busy && <span className="spinner" />}
       </div>
+      {prev && <div className="modal-bg" style={{ zIndex: 80 }} onMouseDown={e => { if (e.target === e.currentTarget && prev !== 'loading') setPrev(null) }}>
+        <div className="modal" style={{ width: '95vw', maxWidth: 'none', height: '90vh', display: 'flex', flexDirection: 'column' }}>
+          <div className="row between"><h3 style={{ margin: 0 }}>Xem trước bảng danh mục ({n} mã)</h3><button className="btn ghost sm" onClick={() => setPrev(null)}>✕ Đóng</button></div>
+          {prev === 'loading' ? <div className="row gap" style={{ padding: 30 }}><span className="spinner" /> Đang dựng bản xem trước…</div>
+            : <iframe title="preview" srcDoc={prev.html} style={{ flex: 1, border: '1px solid #ddd', borderRadius: 8, background: '#fff', marginTop: 8 }} />}
+          <div className="small muted" style={{ marginTop: 6 }}>Bản xem trước theo dạng bảng giống file PDF; file Excel có cùng nội dung, bố cục sheet theo lựa chọn ở trên.</div>
+        </div></div>}
       <p className="small muted">PDF: trang in mở ra trong tab mới → chọn “Lưu dưới dạng PDF”, khổ A3 ngang; mỗi sheet bắt đầu ở một trang mới.</p>
     </div>
   )

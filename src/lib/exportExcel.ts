@@ -166,6 +166,13 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
   ws.pageSetup.printTitlesRow = '4:5'
 }
 
+/** Tên file xuất: NămThángNgày_Tên dự án_Hạng mục_Danh mục VLTH */
+export function exportBaseName(project: { name: string; item_name?: string | null }) {
+  const n = new Date(), ymd = `${n.getFullYear()}${String(n.getMonth() + 1).padStart(2, '0')}${String(n.getDate()).padStart(2, '0')}`
+  const clean = (t: string) => t.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return [ymd, clean(project.name), clean(project.item_name ?? ''), 'Danh mục VLTH'].filter(Boolean).join('_')
+}
+
 export async function exportExcel(d: ExportData, o: ExportOpts) {
   const L = o.lang
   const h = (a: string, b: string) => (L === 'vn' ? a : L === 'en' ? b : `${a}\n${b}`)
@@ -215,7 +222,7 @@ export async function exportExcel(d: ExportData, o: ExportOpts) {
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
-  a.download = `DMVL_${d.project.name.replace(/[^\p{L}\p{N}]+/gu, '_')}_${L === 'both' ? 'VN-EN' : L.toUpperCase()}.xlsx`
+  a.download = exportBaseName(d.project) + '.xlsx'
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 5000)
 }
