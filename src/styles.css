@@ -468,5 +468,5 @@ input[data-lang="en"], textarea[data-lang="en"] { font-style: italic }
 .mx-grip { cursor: grab; color: var(--muted); padding: 0 4px; font-size: 16px; line-height: 1.6; user-select: none } .mx-grip:active { cursor: grabbing }
 
 .mx tr.mx-floor td { background: var(--brown); color: #fff; padding: 6px 10px; position: sticky; left: 0; font-size: 14px } .mx tr.mx-floor .muted { color: #e8dccd }
-.mx-plan { display: block; width: 100%; max-width: 250px; margin: 6px 0 2px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: zoom-in } .mx-plan.none { cursor: default; padding: 14px 6px; text-align: center; font-size: 12px; color: var(--muted); border-style: dashed }
+.mx-plan { display: block; width: 100%; max-width: 125px; margin: 6px 0 2px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: zoom-in } .mx-plan.none { cursor: default; padding: 8px 4px; text-align: center; font-size: 11px; color: var(--muted); border-style: dashed }
 .mx .mx-room { min-width: 260px !important }
