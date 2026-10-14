@@ -10,6 +10,24 @@ export const KIND_LABEL: Record<string, string> = { typo: 'Chính tả', english
 const FIELDS = ['name_vn', 'name_en', 'material_vn', 'material_en', 'desc_vn', 'desc_en', 'part_vn', 'part_en', 'perf_vn', 'perf_en', 'note_vn', 'note_en', 'brand', 'product_code', 'origin'] as const
 const cut = (s: string | null | undefined, n: number) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n) + '…' : t }
 
+const normT = (t: string | null | undefined) => String(t ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+const toks = (t: string | null | undefined) => new Set(normT(t).split(' ').filter(w => w.length > 1))
+const jac = (a: Set<string>, b: Set<string>) => { if (!a.size || !b.size) return 0; let n = 0; for (const x of a) if (b.has(x)) n++; return n / (a.size + b.size - n) }
+type Sig = Pick<Finding, 'entry_id' | 'code' | 'kind' | 'field' | 'current_text' | 'suggestion' | 'message' | 'related'>
+/** Gợi ý mới `n` có phải là điều đã được xử lý ở gợi ý cũ `r` không (cùng mã, cùng loại, cùng ô, cùng đoạn chữ hoặc cùng ý) */
+export function isRepeat(r: Sig & { status?: string }, n: Sig): boolean {
+  if ((r.entry_id ?? r.code) !== (n.entry_id ?? n.code) || r.kind !== n.kind) return false
+  if (r.field && n.field && r.field !== n.field) return false
+  const a = normT(r.current_text), b = normT(n.current_text)
+  if (a && b && (a === b || (Math.min(a.length, b.length) >= 6 && (a.includes(b) || b.includes(a))))) return true
+  if (normT(r.suggestion) && normT(r.suggestion) === normT(n.suggestion)) return true
+  if (n.kind === 'duplicate' && (r.related ?? []).some(c => (n.related ?? []).includes(c))) return true
+  if (jac(toks(r.message), toks(n.message)) >= 0.5) return true
+  // đã bấm “AI sai – bỏ” cho một điểm không có đoạn trích (thiếu / lệch phối cảnh / vi phạm quy định…): không báo lại cùng loại ở cùng mã
+  if (r.status === 'dismissed' && !a && !b) return true
+  return false
+}
+
 async function callQc(payload: unknown): Promise<{ issues?: any[] }> {
   const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch(`${FUNCTIONS_URL}/qc`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY }, body: JSON.stringify({ payload }) })
@@ -66,11 +84,12 @@ export async function runAiQc(d: ProjectData, onProgress: (msg: string) => void)
       found.push({ project_id: e.project_id, entry_id: e.id, code: S(e), kind: String(it.kind), field, current_text: cur, suggestion: sug, message: String(it.message), confidence: Number(it.confidence), related, status: 'open', run_id: runId })
     }
   }
-  // Giữ lại các gợi ý đã xử lý (để không báo lại); thay thế các gợi ý còn mở bằng lần chạy mới
+  // Giữ lại các gợi ý đã xử lý (đã áp dụng / đã xác nhận đúng / AI sai) để KHÔNG báo lại – so khớp mờ vì AI mỗi lần có thể diễn đạt khác
   const pid = d.project!.id
   const old = await loadFindings(pid)
-  const done = new Set(old.filter(f => f.status !== 'open').map(f => [f.code, f.kind, f.field, f.current_text ?? f.message.slice(0, 40)].join('|')))
-  const fresh = found.filter(f => !done.has([f.code, f.kind, f.field, f.current_text ?? f.message.slice(0, 40)].join('|')))
+  const resolved = old.filter(f => f.status !== 'open')
+  const fresh = found.filter(f => !resolved.some(r => isRepeat(r, f)))
+  if (found.length > fresh.length) onProgress(`Đã bỏ ${found.length - fresh.length} gợi ý trùng với lần bạn đã xử lý…`)
   await supabase.from('qc_findings').delete().eq('project_id', pid).eq('status', 'open')
   if (fresh.length) { const { error } = await supabase.from('qc_findings').insert(fresh); if (error) throw new Error(error.message) }
   return fresh.length
