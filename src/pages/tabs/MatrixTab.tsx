@@ -6,7 +6,7 @@ import { CATEGORIES, ROOM_TYPES, roomTypeLabel } from '../../lib/codes'
 import { symbolMap } from '../../lib/sections'
 import { useAuth } from '../../lib/auth'
 import { toast } from '../../lib/toast'
-import { buildMatrix, copyCells, addToCell, removeFromCell, shotsIn, createRoom, updateRoom, type Row } from '../../lib/roomMatrix'
+import { buildMatrix, copyCells, addToCell, removeFromCell, shotsIn, createRoom, updateRoom, moveRoomRow, deleteRoom, type Row } from '../../lib/roomMatrix'
 
 type Filter = 'all' | 'missing' | 'norender' | 'none'
 const catVn = (k: string) => CATEGORIES.find(c => c.key === k)?.vn ?? k
@@ -28,8 +28,16 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
   const shown = rows.filter(r => flt === 'all' ? true : flt === 'missing' ? r.state !== 'none' && r.missing.length > 0 : r.state === flt)
   const cats = CATEGORIES.filter(c => rows.some(r => r.cells.get(c.key)?.length) || rows.some(r => r.need.includes(c.key)))
 
+  const delRoom = (r: Row) => {
+    const n = d.occ.filter(o => o.room_id === r.room.id), shots = n.filter(o => o.page_id || o.view).length
+    const only = r.cells.size ? [...r.cells.values()].flat().filter(e => !d.occ.some(o => o.entry_id === e.id && o.room_id && o.room_id !== r.room.id)).length : 0
+    if (!confirm(`Xoá phòng ${r.room.code} ${r.room.name_vn}?\n\n• ${r.total} mã vật liệu bị bỏ khỏi phòng này${shots ? `, kèm ${shots} ảnh khoanh` : ''}${only ? `\n• ${only} mã chỉ nằm ở phòng này sẽ thành "chưa gán phòng" (vẫn giữ trong danh mục)` : ''}\n• Các trang concept của phòng chỉ bị bỏ gán phòng\n\nCó thể hoàn tác bằng nút ↶ ở đầu trang.`)) return
+    run(() => deleteRoom(r.room.id), `Đã xoá phòng ${r.room.code}`)
+  }
   const onDrop = (e: React.DragEvent, toRoom: string, toCat: string | null) => {
     e.preventDefault(); if (!canEdit) return
+    const mv = e.dataTransfer.getData('application/x-mx-row')
+    if (mv) { if (mv !== toRoom) run(() => moveRoomRow(rows, mv, rows.findIndex(r => r.room.id === toRoom))); return }
     let src: { room: string; cat: string | null }; try { src = JSON.parse(e.dataTransfer.getData('text/plain')) } catch { return }
     if (!src?.room || src.room === toRoom) return
     if (src.cat && toCat && src.cat !== toCat) { toast(`Chỉ kéo sang đúng cột “${catVn(src.cat)}”.`); return }
@@ -54,12 +62,18 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
         <table className="mx">
           <thead><tr><th className="mx-room">Phòng · Room</th><th className="mx-st">Hiện trạng</th>{cats.map(c => <th key={c.key}>{c.vn}<br /><span className="en">{c.en}</span></th>)}</tr></thead>
           <tbody>
-            {shown.map(r => (
+            {shown.map(r => { const i = rows.indexOf(r); return (
               <tr key={r.room.id} className={r.state === 'none' ? 'mx-none' : ''}>
                 <td className="mx-room" draggable={canEdit && r.total > 0} onDragStart={e => e.dataTransfer.setData('text/plain', JSON.stringify({ room: r.room.id, cat: null }))} onDragOver={e => canEdit && e.preventDefault()} onDrop={e => onDrop(e, r.room.id, null)}>
                   <div className="row between" style={{ gap: 6, alignItems: 'flex-start' }}>
                     <div><b>{r.room.code}</b> {r.room.name_vn}<div className="en">{r.room.name_en}</div><div className="small muted">{roomTypeLabel(r.room.room_type)}</div></div>
-                    <button className="btn ghost sm" title="Sửa tên / loại / hiện trạng" disabled={!canEdit} onClick={() => setEdit(r.room.id)}>✎</button>
+                    <span className="row" style={{ gap: 0, flexShrink: 0 }}>
+                      <span className="mx-grip" title="Kéo để đổi vị trí phòng trong bảng này (không ảnh hưởng các bảng khác)" draggable={canEdit} onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData('application/x-mx-row', r.room.id) }}>⠿</span>
+                      <button className="btn ghost sm" title="Lên" disabled={!canEdit || i === 0} onClick={() => run(() => moveRoomRow(rows, r.room.id, i - 1))}>▲</button>
+                      <button className="btn ghost sm" title="Xuống" disabled={!canEdit || i === rows.length - 1} onClick={() => run(() => moveRoomRow(rows, r.room.id, i + 1))}>▼</button>
+                      <button className="btn ghost sm" title="Sửa tên / loại / hiện trạng" disabled={!canEdit} onClick={() => setEdit(r.room.id)}>✎</button>
+                      <button className="btn ghost sm danger" title="Xoá phòng" disabled={!canEdit} onClick={() => delRoom(r)}>🗑</button>
+                    </span>
                   </div>
                   <div className="small"><button className="btn ghost sm" disabled={!canEdit} onClick={() => setCopy({ to: r.room.id })}>⧉ Sao chép từ phòng khác…</button></div>
                 </td>
@@ -71,7 +85,7 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
                     {!es.length && r.need.includes(c.key) && r.state !== 'none' && <span className="mx-hint">thiếu</span>}
                   </td>
                 })}
-              </tr>))}
+              </tr>) })}
             {!shown.length && <tr><td colSpan={cats.length + 2} className="muted" style={{ padding: 16 }}>Không có phòng nào ở bộ lọc này.</td></tr>}
           </tbody>
         </table>

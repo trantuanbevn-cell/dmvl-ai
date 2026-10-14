@@ -22,7 +22,8 @@ export function buildMatrix(d: ProjectData): Row[] {
   const byId = new Map(d.entries.filter(e => e.status !== 'rejected').map(e => [e.id, e]))
   const occByRoom = new Map<string, Occurrence[]>()
   for (const o of d.occ) if (o.room_id) occByRoom.set(o.room_id, [...(occByRoom.get(o.room_id) ?? []), o])
-  return d.rooms.map(room => {
+  const ord = (r: Room) => r.matrix_sort ?? 1e6 + (r.sort ?? 0)   // thứ tự riêng của bảng này; phòng mới chưa xếp thì xuống cuối theo thứ tự gốc
+  return [...d.rooms].sort((a, b) => ord(a) - ord(b)).map(room => {
     const cells = new Map<string, Entry[]>()
     for (const o of occByRoom.get(room.id) ?? []) {
       const e = byId.get(o.entry_id); if (!e) continue
@@ -69,3 +70,14 @@ export async function createRoom(d: ProjectData, v: { name_vn: string; name_en: 
   return room
 }
 export const updateRoom = async (id: string, patch: Partial<Room>) => { const { error } = await supabase.from('rooms').update(patch).eq('id', id); if (error) throw new Error(error.message) }
+
+/** Đổi thứ tự phòng CHỈ trong bảng Tổng hợp phòng (cột matrix_sort) – không đụng rooms.sort của các bảng khác */
+export async function moveRoomRow(rows: Row[], id: string, toIndex: number) {
+  const ids = rows.map(r => r.room.id), from = ids.indexOf(id); if (from < 0) return
+  ids.splice(from, 1); ids.splice(Math.max(0, Math.min(ids.length, toIndex)), 0, id)
+  const changed = ids.map((rid, i) => ({ rid, i })).filter(({ rid, i }) => rows.find(r => r.room.id === rid)!.room.matrix_sort !== i)
+  const res = await Promise.all(changed.map(({ rid, i }) => supabase.from('rooms').update({ matrix_sort: i }).eq('id', rid)))
+  const bad = res.find(r => r.error); if (bad?.error) throw new Error(bad.error.message)
+}
+/** Xoá phòng (kéo theo các vị trí vật liệu / ảnh khoanh của phòng; trang concept chỉ bị bỏ gán phòng). Hoàn tác được bằng nút ↶ */
+export async function deleteRoom(id: string) { const { error } = await supabase.from('rooms').delete().eq('id', id); if (error) throw new Error(error.message) }
