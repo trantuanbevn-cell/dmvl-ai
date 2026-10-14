@@ -2,6 +2,7 @@
 //  • Dấu câu / khoảng trắng / viết hoa đầu câu: sửa bằng luật.
 //  • Tiếng Việt: kiểm âm tiết theo luật ghép vần (viSyllable), chuẩn hoá vị trí dấu thanh, sửa lỗi gõ sai khi chắc chắn.
 //  • Tiếng Anh: từ điển Hunspell en_US (nspell) nạp lười từ /dict, sửa khi chỉ có một gợi ý cách 1 chữ.
+import { addIgnore, isIgnored } from './qcIgnore'
 import { checkVi, suggestVi } from './viSyllable'
 
 export type FixKind = 'unicode' | 'space' | 'punct' | 'case' | 'tone' | 'spell' | 'dup'
@@ -38,13 +39,11 @@ export const englishReady = () => !!en
 export const _setEnglishForTest = (sp: typeof en) => { en = sp }
 
 // ---------- Từ điển riêng + từ của dự án ----------
-const UK = 'dmvl-dict'
-let userWords = new Set<string>()
-try { userWords = new Set(JSON.parse(localStorage.getItem(UK) ?? '[]')) } catch { /* */ }
+// Từ điển riêng nay lưu chung trong DB (qcIgnore, kind 'word') – dùng cho mọi dự án, mọi người
 let projWords = new Set<string>()
-export const addUserWord = (w: string) => { userWords.add(w.toLowerCase()); try { localStorage.setItem(UK, JSON.stringify([...userWords])) } catch { /* */ } }
+export const addUserWord = (w: string) => { void addIgnore('word', w.toLowerCase(), null) }
 export const setProjectWords = (words: string[]) => { projWords = new Set(words.map(w => w.toLowerCase())) }
-const known = (w: string) => userWords.has(w.toLowerCase()) || projWords.has(w.toLowerCase())
+const known = (w: string) => isIgnored('word', w.toLowerCase()) || projWords.has(w.toLowerCase())
 
 // ---------- Dấu câu & khoảng trắng ----------
 const L = '\\p{L}'

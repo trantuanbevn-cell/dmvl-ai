@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ProjectData } from '../lib/useProject'
-import { applySpell, addSkip, type SpellItem } from '../lib/spellScan'
+import { applySpell, confirmNotError, type SpellItem } from '../lib/spellScan'
 import { addUserWord } from '../lib/spell'
 import { toast } from '../lib/toast'
 import { MarkedBefore } from './MarkedText'
@@ -14,14 +14,14 @@ export default function SpellReview({ d, items, onClose, onOpenEntry }: { d: Pro
   const auto = list.filter(i => i.after !== i.before)
   const val = (i: SpellItem) => edit[i.key] ?? i.after
   const done = async (i: SpellItem, text: string) => { await applySpell(d, i, text); setGone(g => [...g, i.key]) }
-  const save = async (i: SpellItem) => { setBusy(true); try { await done(i, val(i)); d.reload() } catch (e) { toast(String(e)) } setBusy(false) }
+  const save = async (i: SpellItem) => { setBusy(true); try { if (val(i) === i.before) { await confirmNotError(i, d.project!.id); setGone(g => [...g, i.key]) } else { await done(i, val(i)); d.reload() } } catch (e) { toast(String(e)) } setBusy(false) }
   const all = async () => {
     setBusy(true)
     try { for (const i of auto) await done(i, val(i)); toast(`Đã sửa ${auto.length} mục`, 'ok'); await d.reload() } catch (e) { toast(String(e)) }
     setBusy(false)
   }
   const pick = (i: SpellItem, w: string, s: string) => setEdit(x => ({ ...x, [i.key]: val(i).replace(new RegExp(`(?<![\\p{L}])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u'), s) }))
-  const skip = (i: SpellItem) => { addSkip(i.key); setGone(g => [...g, i.key]) }
+  const skip = (i: SpellItem) => { void confirmNotError(i, d.project!.id); setGone(g => [...g, i.key]); toast('Đã ghi nhớ: không phải lỗi – từ nay không báo lại', 'ok') }
   const ignoreWord = (i: SpellItem, w: string) => { addUserWord(w); toast(`Đã thêm “${w}” vào từ điển riêng`, 'ok'); setEdit(x => ({ ...x })); setGone(g => [...g, i.key]) }
   return (
     <div className="modal-bg center" onMouseDown={onClose}>
@@ -35,13 +35,13 @@ export default function SpellReview({ d, items, onClose, onOpenEntry }: { d: Pro
         {list.map(i => (
           <div key={i.key} className="sp-item">
             <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}><div><b>{i.label}</b> <span className="chk-tag chk-info">{i.fieldLabel}</span></div>
-              <div className="row gap">{i.kind === 'entry' && <button className="btn ghost sm" onClick={() => onOpenEntry(i.id)}>Mở & sửa</button>}<button className="btn ghost sm" onClick={() => skip(i)}>Bỏ qua</button></div></div>
+              <div className="row gap">{i.kind === 'entry' && <button className="btn ghost sm" onClick={() => onOpenEntry(i.id)}>Mở & sửa</button>}<button className="btn ghost sm" title="Xác nhận đây không phải lỗi: ẩn mục này và coi các từ bị nghi là đúng – dùng lại ở bất kỳ đâu cũng không báo nữa (lưu chung cho cả nhóm)" onClick={() => skip(i)}>✓ Không phải lỗi</button></div></div>
             <MarkedBefore before={i.before} after={i.after} flags={i.flags.map(f => f.word).filter(w => !w.startsWith('⚠'))} />
             {i.after !== i.before && <div className="sp-diff small"><span className="sp-arrow">Sau khi sửa →</span><span className="sp-new">{i.after}</span></div>}
             <textarea data-lang={i.lang === 'vi' ? 'vn' : i.lang === 'en' ? 'en' : 'name'} rows={Math.min(5, Math.max(1, Math.ceil(val(i).length / 90)))} value={val(i)} onChange={e => setEdit(x => ({ ...x, [i.key]: e.target.value }))} />
             {i.flags.length > 0 && <div className="sp-flags small">{i.flags.map(f => (
               <span key={f.word} className="sp-flag"><b>{f.word}</b>{f.suggestions.length ? ' → ' : ' (không có gợi ý) '}{f.suggestions.slice(0, 4).map(s => <a key={s} onClick={() => pick(i, f.word, s)}>{s}</a>)}<a className="sp-ign" title="Từ đúng (tên riêng, thuật ngữ) – thêm vào từ điển riêng" onClick={() => ignoreWord(i, f.word)}>✓ đúng</a></span>))}</div>}
-            <div className="row gap" style={{ justifyContent: 'flex-end' }}><button className="btn primary sm" disabled={busy} onClick={() => save(i)}>{val(i) === i.before ? 'Giữ nguyên & ẩn' : '✓ Lưu bản sửa'}</button></div>
+            <div className="row gap" style={{ justifyContent: 'flex-end' }}><button className="btn primary sm" disabled={busy} onClick={() => save(i)}>{val(i) === i.before ? 'Giữ nguyên – không phải lỗi' : '✓ Lưu bản sửa'}</button></div>
           </div>))}
       </div>
     </div>)

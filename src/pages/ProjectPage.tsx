@@ -5,6 +5,7 @@ import { syncLibrary } from '../lib/matLibrary'
 import { useAuth } from '../lib/auth'
 import { useProject } from '../lib/useProject'
 import { setProjectWords } from '../lib/spell'
+import { loadIgnores } from '../lib/qcIgnore'
 import { projectStats, roomStats } from '../lib/progress'
 import CommentLayer from '../components/CommentLayer'
 import LiveCursors from '../components/LiveCursors'
@@ -24,6 +25,7 @@ export default function ProjectPage() {
   const { canEdit } = useAuth()
   // mở dự án → đồng bộ các mã vào thư viện công ty (một lần mỗi lần mở)
   const synced = useRef(false)
+  useEffect(() => { if (id) loadIgnores(id) }, [id])
   // Slide đã tách phòng: tự gán ô ảnh cho đúng phòng để ảnh đại diện khớp ở mọi màn hình
   useEffect(() => { if (canEdit && !synced.current && !data.loading && data.project && data.pages.length && data.occ.length) { synced.current = true; syncSharedPages(data).then(n => { if (n) data.reload() }).catch(() => {}) } }, [canEdit, data.loading, data.pages.length, data.occ.length]) // eslint-disable-line
   // từ của dự án (hãng, xuất xứ, tên sản phẩm, mã, tên phòng) coi là đúng chính tả

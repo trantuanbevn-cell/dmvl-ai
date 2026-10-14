@@ -18,6 +18,7 @@ import { cleanEntries, sameNumbers, sameThing } from '../../lib/qc'
 import { runAiQc, loadFindings, resolveFinding, KIND_LABEL, type Finding } from '../../lib/aiQc'
 import { saveEntry } from '../../lib/entryLink'
 import { applyFinishFix, dismissFinish } from '../../lib/finishCheck'
+import { addIgnore, isIgnored, pairKey, useIgnoreVersion } from '../../lib/qcIgnore'
 import { MarkedField } from '../../components/MarkedText'
 
 function Side({ d, e, tag, onKeep, busy, label }: { d: ProjectData; e: Entry; tag: string; onKeep?: () => void; busy: boolean; label?: string }) {
@@ -39,27 +40,27 @@ function Side({ d, e, tag, onKeep, busy, label }: { d: ProjectData; e: Entry; ta
 
 export default function CheckView({ d }: { d: ProjectData }) {
   const { canEdit, isAdmin } = useAuth()
-  const [skip, setSkip] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('dmvl-dup-skip') ?? '[]') } catch { return [] } })
+  const igv = useIgnoreVersion()   // đổi khi tải/ghi thêm điểm đã xác nhận (lưu chung qua DB)
+  const ign = (kind: 'dup' | 'link', a: string, b: string) => isIgnored(kind, pairKey(a, b)) || isIgnored(kind, a + b) || isIgnored(kind, b + a)
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState<string | null>(null) // khoá cặp đang xem chi tiết
   const [lang, setLang] = useState<Lang>('vn')
   const [sel, setSel] = useState<string | null>(null)
   const [lopen, setLopen] = useState<string | null>(null) // khoá cặp liên kết đang xem chi tiết
-  const [lskip, setLskip] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('dmvl-link-skip') ?? '[]') } catch { return [] } })
   const issues = useMemo(() => checkEntries(d, lang), [d.entries, d.occ, lang])
   const nErr = issues.filter(r => r.issues.some(i => i.kind === 'err')).length
   /* So trùng/liên kết trên bản đã bỏ mã vật liệu nội bộ khỏi ô mã SP (tránh báo “trùng mã” giả), rồi map về dòng gốc */
   const clean = useMemo(() => cleanEntries(d.entries), [d.entries])
   const orig = useMemo(() => new Map(d.entries.map(e => [e.id, e])), [d.entries])
-  const sugg = useMemo(() => linkSuggestions(clean).map(x => ({ ...x, a: orig.get(x.a.id)!, b: orig.get(x.b.id)! })).filter(x => !lskip.includes(x.a.id + x.b.id)), [clean, orig, lskip])
+  const sugg = useMemo(() => linkSuggestions(clean).map(x => ({ ...x, a: orig.get(x.a.id)!, b: orig.get(x.b.id)! })).filter(x => !ign('link', x.a.id, x.b.id)), [clean, orig, igv]) // eslint-disable-line
   const conflicts = useMemo(() => linkConflicts(d.entries), [d.entries])
   const selEntry = d.entries.find(e => e.id === sel)
   const keyOf = (p: DupPair) => p.keep.id + p.dup.id
   const txt = (e: Entry) => `${e.name_vn} ${e.material_vn ?? ''} ${e.desc_vn ?? ''}`
   // Chỉ coi là trùng khi thông số (kích thước, số hộc…) giống nhau – khác số là hai món khác nhau
-  const dups = useMemo(() => findDuplicates(clean).filter(p => sameNumbers(txt(p.keep), txt(p.dup)) && sameThing(p.keep, p.dup)).map(p => ({ ...p, keep: orig.get(p.keep.id)!, dup: orig.get(p.dup.id)! })).filter(p => !skip.includes(keyOf(p))), [clean, orig, skip])
+  const dups = useMemo(() => findDuplicates(clean).filter(p => sameNumbers(txt(p.keep), txt(p.dup)) && sameThing(p.keep, p.dup)).map(p => ({ ...p, keep: orig.get(p.keep.id)!, dup: orig.get(p.dup.id)! })).filter(p => !ign('dup', p.keep.id, p.dup.id)), [clean, orig, igv]) // eslint-disable-line
   const cur = dups.findIndex(p => keyOf(p) === open), pair = cur >= 0 ? dups[cur] : null
-  const dismiss = (p: DupPair) => { const n = [...skip, keyOf(p)]; setSkip(n); try { localStorage.setItem('dmvl-dup-skip', JSON.stringify(n)) } catch { /* */ } }
+  const dismiss = (p: DupPair) => { void addIgnore('dup', pairKey(p.keep.id, p.dup.id), d.project!.id) }
   const merge = async (keep: Entry, dup: Entry) => {
     setBusy(true)
     try { await mergeEntries(keep, dup, d.entries); toast(`Đã gộp ${dup.code} vào ${keep.code}`, 'ok'); setOpen(null) } catch (e) { toast(String(e)) }
@@ -72,7 +73,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
   const [tick, setTick] = useState(0)
   const [stamp, setStamp] = useState<Date | null>(null)
   useEffect(() => { loadEnglish().then(() => setTick(t => t + 1)) }, [])
-  const spellItems = useMemo(() => spellScan(d), [d.entries, d.rooms, tick]) // eslint-disable-line
+  const spellItems = useMemo(() => spellScan(d), [d.entries, d.rooms, tick, igv]) // eslint-disable-line
   const spellAuto = spellItems.filter(i => i.after !== i.before).length
   const [finds, setFinds] = useState<Finding[]>([])
   const [aiMsg, setAiMsg] = useState<string | null>(null)
@@ -115,7 +116,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
     if (!first) toast(pending === 'all' ? '✓ Tất cả đạt – sẵn sàng xuất file' : '✓ Đạt – không có điểm sai khác', 'ok')
     else openCard(first)
   }, [pending]) // eslint-disable-line
-  const linkSkip = (a: Entry, b: Entry) => { const n = [...lskip, a.id + b.id]; setLskip(n); try { localStorage.setItem('dmvl-link-skip', JSON.stringify(n)) } catch { /* */ } }
+  const linkSkip = (a: Entry, b: Entry) => { void addIgnore('link', pairKey(a.id, b.id), d.project!.id) }
   const lkey = (x: { a: Entry; b: Entry }) => x.a.id + x.b.id
   const lcur = sugg.findIndex(x => lkey(x) === lopen), lpair = lcur >= 0 ? sugg[lcur] : null
   const lnext = () => { const n = sugg[lcur + 1] ?? sugg[lcur - 1]; setLopen(n ? lkey(n) : null) }

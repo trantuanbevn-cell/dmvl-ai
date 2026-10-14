@@ -1,6 +1,7 @@
 // Quét chính tả + dấu câu toàn bộ nội dung dự án (hạng mục, tên phòng) – dùng cho thẻ "Chính tả" ở tab QC.
 import { supabase } from './supabase'
 import { saveEntry } from './entryLink'
+import { addIgnore, addIgnores, isIgnored } from './qcIgnore'
 import { fixText, type Fix, type Flag, type SpellLang } from './spell'
 import type { ProjectData } from './useProject'
 
@@ -11,15 +12,17 @@ const ENTRY_FIELDS: [string, string, SpellLang, boolean][] = [
   ['note_vn', 'Ghi chú', 'vi', true], ['note_en', 'Remarks', 'en', true], ['perf_vn', 'Tính chất', 'vi', true], ['perf_en', 'Properties', 'en', true],
   ['brand', 'Thương hiệu', null, false], ['origin', 'Xuất xứ', null, false], ['product_name', 'Tên sản phẩm', null, false],
 ]
-const SK = 'dmvl-spell-skip'
-export const loadSkips = (): string[] => { try { return JSON.parse(localStorage.getItem(SK) ?? '[]') } catch { return [] } }
-export const addSkip = (key: string) => { try { localStorage.setItem(SK, JSON.stringify([...loadSkips(), key])) } catch { /* */ } }
+/** Xác nhận một mục KHÔNG phải lỗi: ẩn mục này và coi các từ bị nghi trong đó là đúng (toàn công ty) – từ nay dùng lại ở đâu cũng không báo */
+export async function confirmNotError(it: SpellItem, projectId: string) {
+  await addIgnore('spell', it.key, projectId)
+  await addIgnores('word', it.flags.map(f => f.word).filter(w => !w.startsWith('⚠') && w.length > 1).map(w => w.toLowerCase()), null)
+}
 
 export function spellScan(d: ProjectData): SpellItem[] {
-  const skips = new Set(loadSkips()), out: SpellItem[] = []
+  const out: SpellItem[] = []
   const run = (kind: 'entry' | 'room', id: string, label: string, field: string, fieldLabel: string, lang: SpellLang, cap: boolean, v: unknown) => {
     const before = String(v ?? ''); if (!before.trim()) return
-    const key = `${id}:${field}:${before}`; if (skips.has(key)) return
+    const key = `${id}:${field}:${before}`; if (isIgnored('spell', key)) return
     const r = fixText(before, lang, { cap })
     if (r.text !== before || r.flags.length) out.push({ key, kind, id, label, field, fieldLabel, lang, cap, before, after: r.text, fixes: r.fixes, flags: r.flags })
   }
