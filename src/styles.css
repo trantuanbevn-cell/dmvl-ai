@@ -445,3 +445,18 @@ input[data-lang="en"], textarea[data-lang="en"] { font-style: italic }
 .bb.done rect { fill: rgba(46,139,87,.08); stroke: #2e8b57 } .bb.done.on rect { fill: rgba(46,139,87,.25); stroke: #1f7a4a }
 .bb-label.done { background: #2e8b57 } .bb-label.done.on { background: #1f7a4a }
 .undo-bar { display: flex; gap: 6px; align-items: center; margin: 0 12px }
+
+/* Tổng hợp phòng (ma trận) */
+.mx-wrap { overflow: auto; max-height: 72vh; border: 1px solid var(--line); border-radius: 10px; background: #fff }
+.mx { border-collapse: separate; border-spacing: 0; font-size: 12px; min-width: 100% }
+.mx th { position: sticky; top: 0; z-index: 3; background: var(--brown); color: #fff; padding: 8px 6px; text-align: center; font-weight: 600; min-width: 96px; border-right: 1px solid #8a6a52 }
+.mx th .en, .mx .en { font-weight: 400; font-size: 11px; opacity: .8 }
+.mx td { border-bottom: 1px solid #efe6db; border-right: 1px solid #f3ece2; padding: 5px 6px; vertical-align: top }
+.mx .mx-room { position: sticky; left: 0; z-index: 2; background: #fff; min-width: 230px; max-width: 260px; text-align: left; border-right: 2px solid var(--line) }
+.mx th.mx-room { z-index: 4; background: var(--brown) }
+.mx .mx-st { min-width: 170px }
+.mx-c { cursor: pointer; min-width: 96px } .mx-c:hover { background: #fbf7f2 }
+.mx-miss { background: #fff4d6 } .mx-hint { color: #b45309; font-size: 11px }
+.mx-none td { opacity: .55 }
+.mx-chip { display: inline-block; border: 1px solid #d9cdbd; background: #f7f1e9; border-radius: 5px; padding: 1px 6px; margin: 0 4px 3px 0; font-weight: 600; font-size: 11.5px; white-space: nowrap }
+.mx-chip.approved { background: #e4f3e6; border-color: #a9d3ae } .mx-chip.review { background: #fde8d3; border-color: #efc190 }

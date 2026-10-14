@@ -18,11 +18,12 @@ import RoomView from './tabs/RoomView'
 import MaterialView from './tabs/MaterialView'
 import CheckView from './tabs/CheckView'
 import ExportTab from './tabs/ExportTab'
+import MatrixTab from './tabs/MatrixTab'
 
 export default function ProjectPage() {
   const { id = '', tab = 'overview' } = useParams()
   const data = useProject(id)
-  const { canEdit } = useAuth()
+  const { canEdit, can } = useAuth()
   // mở dự án → đồng bộ các mã vào thư viện công ty (một lần mỗi lần mở)
   const synced = useRef(false)
   useEffect(() => { if (id) loadIgnores(id) }, [id])
@@ -40,6 +41,7 @@ export default function ProjectPage() {
     ['overview', '🏠', 'Tổng quan'],
     ['upload', '📄', 'Hồ sơ & phòng', `${data.rooms.length} phòng`],
     ['analyze', '✨', 'Phân tích', `${analyzed}/${data.rooms.length}`],
+    ...(can('matrix') ? [['matrix', '🗂', 'Tổng hợp phòng', `${data.rooms.length} phòng`] as [string, string, string, string?]] : []),
     ['rooms', '🛋', 'Theo phòng', ps.pending + ps.review ? `${ps.pending + ps.review} chờ` : undefined],
     ['materials', '🧱', 'Theo vật liệu', `${ps.total} mã`],
     ['check', '✅', 'QC cuối'],
@@ -64,6 +66,7 @@ export default function ProjectPage() {
       {tab === 'overview' && <Overview d={data} />}
       {tab === 'upload' && <UploadTab d={data} />}
       {tab === 'analyze' && <AnalyzeTab d={data} />}
+      {tab === 'matrix' && can('matrix') && <MatrixTab d={data} />}
       {tab === 'rooms' && <RoomView d={data} />}
       {tab === 'materials' && <MaterialView d={data} />}
       {tab === 'check' && <CheckView d={data} />}

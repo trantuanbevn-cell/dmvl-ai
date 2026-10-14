@@ -4,6 +4,7 @@
 export const FEATURES: { key: string; label: string; editorDefault?: boolean }[] = [
   { key: 'concept', label: 'Dàn trang concept' },
   { key: 'library', label: 'Thư viện vật liệu' },
+  { key: 'matrix', label: 'Tổng hợp phòng (ma trận vật liệu theo phòng, thêm phòng, sao chép vật liệu)' },
   { key: 'undo', label: 'Hoàn tác / lịch sử thay đổi (quay lại bước trước)' },
   { key: 'suggest', label: 'Vật liệu đề xuất (nối thư viện vào danh mục)', editorDefault: true },
 ]
