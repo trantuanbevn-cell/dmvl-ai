@@ -5,12 +5,14 @@ import type { FMat } from './suggest'
 
 export type AiPick = { m: FMat; confidence: number; reason: string }
 const COLS = 5, ROWS = 8, PER = COLS * ROWS, TW = 240, TH = 120
+import { supabase as _sb } from './supabase'
+import { validPat, type Pat } from './patMatch'
 
 async function tile(m: FMat): Promise<CanvasImageSource | null> {
   try { return await loadImage(m.tex_url!) } catch { return null }
 }
 /** Ghép các mẫu thành bảng (5×8 ô, mỗi ô 2:1, có số ở góc) */
-async function sheetOf(ms: FMat[], from: number): Promise<string> {
+async function sheetOf(ms: FMat[], from: number, COLS = 5, ROWS = 8, TW = 240, TH = 120): Promise<string> {
   const c = document.createElement('canvas'); c.width = COLS * TW; c.height = ROWS * TH
   const x = c.getContext('2d')!; x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height)
   const ims = await Promise.all(ms.map(tile))
@@ -49,4 +51,54 @@ export async function aiPickByPattern(key: string, query: HTMLCanvasElement, can
   }
   memo.set(key, out)
   return out
+}
+
+async function callFn(name: string, body: unknown) {
+  const { data: { session } } = await _sb.auth.getSession()
+  const res = await fetch(`${FUNCTIONS_URL}/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY }, body: JSON.stringify(body) })
+  const j = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(j.error ?? `${name} lỗi ${res.status}`)
+  return j
+}
+
+/** AI đọc hồ sơ vân của vùng khoanh trong phối cảnh */
+export async function tagQuery(query: HTMLCanvasElement, hint?: string): Promise<Pat | null> {
+  const j = await callFn('pattern-tag', { mode: 'query', img: query.toDataURL('image/jpeg', 0.9).split(',')[1], hint })
+  const t = j.tags?.[0]; return validPat(t) ? t : null
+}
+/** AI xếp lại thứ tự một nhóm ứng viên nhỏ (đã lọc bằng hồ sơ vân) bằng cách NHÌN vân thật */
+export async function aiPickAmong(key: string, query: HTMLCanvasElement, cands: FMat[], hint?: string): Promise<AiPick[]> {
+  return aiPickByPattern(key, query, cands.slice(0, 20), hint)
+}
+
+/** Admin: AI đọc hồ sơ vân cho các mã thư viện chưa có (24 mẫu / lần gọi; dừng và chạy tiếp được) */
+export async function tagLibrary(onProgress: (done: number, total: number, msg?: string) => void, stop: () => boolean, limit = Infinity): Promise<number> {
+  const { count } = await _sb.from('materials').select('id', { count: 'exact', head: true }).is('pat', null).not('tex_url', 'is', null)
+  const total = Math.min(count ?? 0, limit); let done = 0, fails = 0
+  const C = 4, R = 6, PERB = C * R
+  while (!stop() && done < total) {
+    const { data, error } = await _sb.from('materials').select('id,tex_url').is('pat', null).not('tex_url', 'is', null).order('id').limit(PERB * 2)
+    if (error) throw error
+    if (!data?.length) break
+    const batches = [data.slice(0, PERB), data.slice(PERB)].filter(b => b.length)
+    await Promise.all(batches.map(async b => {
+      if (stop()) return
+      try {
+        const img = await sheetOf(b as unknown as FMat[], 1, C, R, 300, 150)
+        const j = await callFn('pattern-tag', { mode: 'lib', img, from: 1, count: b.length })
+        const got = new Map<number, Pat>(); for (const t of (j.tags ?? [])) if (validPat(t)) got.set((t as any).n, t)
+        for (let i = 0; i < b.length; i++) {
+          const t = got.get(i + 1)
+          await _sb.from('materials').update({ pat: t ? { family: t.family, pattern: t.pattern, direction: t.direction, scale: t.scale, contrast: t.contrast, tone: t.tone, gloss: t.gloss, desc: t.desc ?? '' } : { err: 1 } }).eq('id', b[i].id)   // thiếu → {err:1} để khỏi lặp
+        }
+        done += b.length; fails = 0
+      } catch (e: any) {
+        fails++; onProgress(done, total, 'Lỗi: ' + String(e.message ?? e).slice(0, 160))
+        if (fails >= 3) throw e
+        await new Promise(r => setTimeout(r, 4000 * fails))
+      }
+    }))
+    onProgress(done, total)
+  }
+  return done
 }

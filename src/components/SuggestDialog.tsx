@@ -6,8 +6,9 @@ import type { Entry } from '../lib/types'
 import OccCrop from './OccCrop'
 import MaterialSuggest from './MaterialSuggest'
 import { MatDetail, type Mat } from '../pages/Library'
-import { bboxFeat, bboxQueryCanvas, loadFeatMats, ensureFeats, rank, shortlist, type Cand, type FMat } from '../lib/suggest'
-import { aiPickByPattern, type AiPick } from '../lib/aiMatch'
+import { bboxFeat, bboxQueryCanvas, loadFeatMats, ensureFeats, rank, rankByPat, taggedCount, shortlist, type Cand, type FMat } from '../lib/suggest'
+import { aiPickByPattern, tagQuery, type AiPick } from '../lib/aiMatch'
+import { PAT_LABEL, type Pat } from '../lib/patMatch'
 import { BASIC_SPECS, relevantSpecs, applyBasicSpec } from '../lib/basicSpecs'
 import { applyPicks, sizeText, type Pick } from '../lib/suggestApply'
 
@@ -19,7 +20,7 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
   const o = occs.find(x => x.id === oid) ?? occs[0]
   const [mats, setMats] = useState<FMat[] | null>(null)
   const [cands, setCands] = useState<Cand[] | null>(null)
-  const [ai, setAi] = useState<AiPick[] | null>(null), [aiBusy, setAiBusy] = useState(false), [aiErr, setAiErr] = useState(''), [aiTick, setAiTick] = useState(0)
+  const [ai, setAi] = useState<AiPick[] | null>(null), [aiBusy, setAiBusy] = useState(false), [aiErr, setAiErr] = useState(''), [aiTick, setAiTick] = useState(0), [qPat, setQPat] = useState<Pat | null>(null), [patCands, setPatCands] = useState<Cand[] | null>(null)
   const [open, setOpen] = useState<Mat | null>(null), [picks, setPicks] = useState<Pick[]>([]), [busy, setBusy] = useState(false), [browse, setBrowse] = useState(false), [err, setErr] = useState('')
   const [prog, setProg] = useState(''), [allBasic, setAllBasic] = useState(false), [appliedKey, setAppliedKey] = useState('')
   const basics = allBasic ? BASIC_SPECS : relevantSpecs(entry)
@@ -43,15 +44,22 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
     setCands(null)
     if (!mats || !o?.bbox || !url) { if (mats) setCands([]); return }
     let off = false
-    setAi(null); setAiErr('')
+    setAi(null); setAiErr(''); setQPat(null); setPatCands(null)
     bboxFeat(url, o.bbox).then(f => {
       if (off) return
       setCands(rank(f, mats, entry.group_code))
       // AI nhìn vân: chỉ chạy khi có quyền; lọc rộng bằng phần mềm rồi để AI chọn mẫu cùng vân
       if (!canAi) return
       setAiBusy(true)
-      bboxQueryCanvas(url, o.bbox!).then(qc => aiPickByPattern(`${o.id}|${bkey}|${entry.group_code}|${mats.length}|${aiTick}`, qc, shortlist(f, mats, entry.group_code), entry.name_vn))
-        .then(r => { if (!off) setAi(r) }).catch(e => { if (!off) setAiErr(String(e.message ?? e)) }).finally(() => { if (!off) setAiBusy(false) })
+      const key = `${o.id}|${bkey}|${entry.group_code}|${mats.length}|${aiTick}`
+      bboxQueryCanvas(url, o.bbox!).then(async qc => {
+        // Thư viện đã có hồ sơ vân (AI đọc 1 lần) → AI đọc vùng khoanh → phần mềm so hồ sơ → AI nhìn lại top 16 để chốt
+        if (taggedCount(mats) >= 50) {
+          const q = await tagQuery(qc, entry.name_vn); if (off) return []
+          if (q) { setQPat(q); const rp = rankByPat(q, f.f2, mats, entry.group_code, 24); setPatCands(rp); return aiPickByPattern(key, qc, rp.slice(0, 16).map(c => c.m), entry.name_vn) }
+        }
+        return aiPickByPattern(key, qc, shortlist(f, mats, entry.group_code), entry.name_vn)
+      }).then(r => { if (!off) setAi(r) }).catch(e => { if (!off) setAiErr(String(e.message ?? e)) }).finally(() => { if (!off) setAiBusy(false) })
     }).catch(e => { if (!off) { setErr(String(e.message ?? e)); setCands([]) } })
     return () => { off = true }
   }, [mats, url, bkey, entry.group_code, aiTick]) // eslint-disable-line
@@ -94,21 +102,22 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
             </div>}
             {canAi && <div style={{ marginBottom: 12 }}>
               <div className="row between"><b>🤖 AI so vân – mẫu cùng vân/hoa văn {ai ? `(${ai.length})` : ''}</b>{!aiBusy && <a className="small" style={{ cursor: 'pointer' }} onClick={() => setAiTick(t => t + 1)}>↻ so lại</a>}</div>
-              {aiBusy && <p className="muted small">Đang nhờ AI nhìn vân và so với ~200 mẫu thư viện gần nhất…</p>}
+              {aiBusy && <p className="muted small">Đang nhờ AI nhìn vân của vùng khoanh và so với thư viện…</p>}
+              {qPat && <p className="small">AI đọc vân vùng khoanh: <b>{PAT_LABEL[qPat.pattern] ?? qPat.pattern}</b> · hướng {qPat.direction} · chi tiết {qPat.scale} · tông {qPat.tone}{qPat.desc ? ` – ${qPat.desc}` : ''}</p>}
               {aiErr && <div className="note warn">⚠ {aiErr}</div>}
               {ai && !ai.length && !aiBusy && <p className="muted small">AI không thấy mẫu nào cùng vân trong nhóm ứng viên – xem danh sách phần mềm bên dưới hoặc tìm tay.</p>}
               <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 10, marginTop: 8 }}>
                 {(ai ?? []).map(({ m, confidence, reason }) => card(m, `AI ${Math.round(confidence * 100)}%`, reason))}
               </div>
             </div>}
-            <b>Vật liệu đề xuất theo màu + vân (phần mềm) {cands ? `(${cands.length})` : ''}</b>
+            <b>Vật liệu đề xuất theo {patCands ? 'hồ sơ vân' : 'màu + vân'} (phần mềm) {(patCands ?? cands) ? `(${(patCands ?? cands)!.length})` : ''}</b>
             {err && <div className="note warn">⚠ {err}</div>}
             {(!mats || (!cands && !err)) && <p className="muted">Đang so khớp…</p>}
             {prog && <p className="muted">{prog}</p>}
             {mats && !mats.length && !prog && <p className="muted">Thư viện đang được chuẩn bị tự động, vui lòng mở lại sau ít phút.</p>}
             {cands && !cands.length && mats?.length ? <p className="muted">Không có mẫu thư viện nào giống bề mặt này. Giữ thông tin hiện tại, người làm tự nhập mã/ảnh cho hạng mục này.</p> : null}
             <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 10, marginTop: 8 }}>
-              {(cands ?? []).filter(c => !ai?.some(a => a.m.id === c.m.id)).map(({ m, score }) => card(m, `${Math.round(score * 100)}%`))}
+              {(patCands ?? cands ?? []).filter(c => !ai?.some(a => a.m.id === c.m.id)).map(({ m, score }) => card(m, `${Math.round(score * 100)}%`))}
             </div>
           </div>
         </div>

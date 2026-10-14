@@ -4,6 +4,7 @@ import { cropCanvas, loadImage, clampBox } from './crop'
 import { normSizes, type Mat, type Var } from '../pages/Library'
 import { kindOfGroup, applyPicks, type Pick } from './suggestApply'
 import { windowsOf, descOfWindow, combineDesc, sim2, FEAT_N, FEAT_LEN } from './matchFeat'
+import { patScore, validPat, type Pat } from './patMatch'
 import type { Entry, Occurrence, Page, Project, Room } from './types'
 
 /** Ngưỡng tối thiểu tuyệt đối; ngoài ra chỉ giữ mẫu cách mẫu tốt nhất ≤ SUGGEST_BAND (so khớp theo hạng, không theo ngưỡng cố định) */
@@ -55,13 +56,13 @@ export function featOf2(src: CanvasImageSource, sw: number, sh: number, margin: 
   return combineDesc(ds)
 }
 export type QFeat = { f1: Feat; f2: number[] }
-export type FMat = Mat & { feat: Feat; feat2?: number[] | null }
+export type FMat = Mat & { feat: Feat; feat2?: number[] | null; pat?: Pat | null }
 let cache: FMat[] | null = null
 export async function loadFeatMats(force = false): Promise<FMat[]> {
   if (cache && !force) return cache
   const out: FMat[] = []
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await supabase.from('materials').select('id,brand,product_code,name,line,kind,url,image_url,tex_url,attrs,feat,feat2').not('tex_url', 'is', null).range(from, from + 999)
+    const { data, error } = await supabase.from('materials').select('id,brand,product_code,name,line,kind,url,image_url,tex_url,attrs,feat,feat2,pat').not('tex_url', 'is', null).range(from, from + 999)
     if (error) throw error
     out.push(...((data ?? []) as FMat[]).filter(m => m.feat?.length || m.feat2?.length === FEAT_LEN))
     if (!data || data.length < 1000) break
@@ -81,6 +82,15 @@ export async function bboxQueryCanvas(url: string, bbox: number[]): Promise<HTML
 }
 
 export type Cand = { m: FMat; score: number }
+/** Xếp hạng theo HỒ SƠ VÂN (AI đã đọc 1 lần): vân là chính; cộng chút điểm bề mặt cơ học để phân định các mẫu cùng vân */
+export function rankByPat(q: Pat, f2: number[] | null, mats: FMat[], groupCode?: string | null, n = 24): Cand[] {
+  const k = kindOfGroup(groupCode)
+  return mats.filter(m => validPat(m.pat)).map(m => {
+    const num = f2 && m.feat2?.length === FEAT_LEN ? sim2(f2, m.feat2).score : 0.5
+    return { m, score: Math.min(1, 0.88 * patScore(q, m.pat!) + 0.1 * num + (k && m.kind === k ? 0.02 : 0)) }
+  }).sort((a, b) => b.score - a.score).slice(0, n)
+}
+export const taggedCount = (mats: FMat[]) => mats.reduce((s, m) => s + (validPat(m.pat) ? 1 : 0), 0)
 /** Danh sách ứng viên RỘNG cho AI so vân: top theo điểm bề mặt + top theo gần màu (để không sót mẫu vân đúng nhưng điểm cơ học thấp) */
 export function shortlist(q: QFeat, mats: FMat[], groupCode?: string | null, n = 200): FMat[] {
   const k = kindOfGroup(groupCode)
