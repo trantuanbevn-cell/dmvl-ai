@@ -87,7 +87,7 @@ export function rankByPat(q: Pat, f2: number[] | null, mats: FMat[], groupCode?:
   const k = kindOfGroup(groupCode)
   return mats.filter(m => validPat(m.pat)).map(m => {
     const num = f2 && m.feat2?.length === FEAT_LEN ? sim2(f2, m.feat2).score : 0.5
-    return { m, score: Math.min(1, 0.88 * patScore(q, m.pat!) + 0.1 * num + (k && m.kind === k ? 0.02 : 0)) }
+    return { m, score: Math.min(1, 0.72 * patScore(q, m.pat!) + 0.26 * num + (k && m.kind === k ? 0.02 : 0)) }
   }).sort((a, b) => b.score - a.score).slice(0, n)
 }
 export const taggedCount = (mats: FMat[]) => mats.reduce((s, m) => s + (validPat(m.pat) ? 1 : 0), 0)

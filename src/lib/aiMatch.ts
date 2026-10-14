@@ -44,7 +44,7 @@ export async function aiPickByPattern(key: string, query: HTMLCanvasElement, can
     body: JSON.stringify({ query: query.toDataURL('image/jpeg', 0.9).split(',')[1], sheets, hint }),
   })
   const j = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(j.error ?? `AI so vân lỗi ${res.status}`)
+  if (!res.ok) throw new Error(friendly(j.error ?? `AI so vân lỗi ${res.status}`))
   const out: AiPick[] = []
   for (const p of (j.picks ?? []) as { n: number; confidence: number; reason?: string }[]) {
     const m = list[p.n - 1]; if (m && !out.some(o => o.m.id === m.id)) out.push({ m, confidence: Math.max(0, Math.min(1, +p.confidence || 0)), reason: p.reason ?? '' })
@@ -53,11 +53,12 @@ export async function aiPickByPattern(key: string, query: HTMLCanvasElement, can
   return out
 }
 
+const friendly = (m: string) => /429|spending cap|RESOURCE_EXHAUSTED/i.test(m) ? 'Google từ chối: dự án Gemini đã chạm Spend cap (hạn mức chi tiêu của DỰ ÁN, tách khỏi số dư billing). Mở https://ai.studio/spend → nâng Spend cap của dự án rồi bấm ↻ so lại.' : m
 async function callFn(name: string, body: unknown) {
   const { data: { session } } = await _sb.auth.getSession()
   const res = await fetch(`${FUNCTIONS_URL}/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY }, body: JSON.stringify(body) })
   const j = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(j.error ?? `${name} lỗi ${res.status}`)
+  if (!res.ok) throw new Error(friendly(j.error ?? `${name} lỗi ${res.status}`))
   return j
 }
 
