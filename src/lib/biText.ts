@@ -33,14 +33,14 @@ function descPairs(e: Entry, L: Lang): Seg[] {
   return pair(e.desc_vn || e.material_vn, e.desc_en || e.material_en, L)
 }
 export type EntryCells = { cat: Seg[]; loc: Seg[]; spec: Seg[]; brand: Seg[]; note: Seg[] }
-export function entryCells(e: Entry, L: Lang, occCats: string[], locs: { room: { name_vn: string; name_en: string | null } }[]): EntryCells {
+export function entryCells(e: Entry, L: Lang, occCats: string[], locs: { room: { name_vn: string; name_en: string | null } }[], fin: { vn: string; en: string }[] = []): EntryCells {
   const flat = (s: string | null | undefined) => (s ?? '').replace(/\n/g, ' ')
   const cat = occCats.flatMap(k => { const c = CATEGORIES.find(z => z.key === k); return c ? pair(c.vn, c.en, L) : one(k) })
   const loc = locs.length ? locs.flatMap(l => pair(flat(l.room.name_vn), flat(l.room.name_en), L)) : pair('(chưa gán phòng)', '(no room assigned)', L)
   const lab = (a: string, b: string, vn: string | null | undefined, en: string | null | undefined) => pair(vn ? `${a}: ${vn}` : '', vn || en ? `${b}: ${en || vn}` : '', L)
   // Không in dòng "Bộ phận": cột Hạng mục đã nêu rõ (sàn/tường/trần…)
   const noPart = (ls: Seg[]) => ls.filter(l => !/^\s*(bộ phận|part)\s*:/i.test(l.t))
-  const spec = [...pair(e.name_vn, e.name_en, L), ...noPart(descPairs(e, L)),
+  const spec = [...pair(e.name_vn, e.name_en, L), ...noPart(descPairs(e, L)), ...fin.flatMap(f => pair(f.vn, f.en, L)),
     ...(e.composition ? lab('Cấu tạo', 'Composition', e.composition, compEn(e.composition)) : [])]
   const o = (e.origin ?? '').trim(), b = (e.brand ?? '').trim()   // dòng 1: xuất xứ; dòng 2: hãng / thương hiệu – luôn kèm nhãn
   const brand = [...(o ? pair(`Xuất xứ: ${o}`, `Origin: ${o}`, L) : []), ...(b ? pair(`Thương hiệu: ${b}`, `Brand: ${b}`, L) : [])]

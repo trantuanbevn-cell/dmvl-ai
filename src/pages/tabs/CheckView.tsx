@@ -17,6 +17,7 @@ import { loadEnglish } from '../../lib/spell'
 import { cleanEntries, sameNumbers, sameThing } from '../../lib/qc'
 import { runAiQc, loadFindings, resolveFinding, KIND_LABEL, type Finding } from '../../lib/aiQc'
 import { saveEntry } from '../../lib/entryLink'
+import { applyFinishFix } from '../../lib/finishCheck'
 import { MarkedField } from '../../components/MarkedText'
 
 function Side({ d, e, tag, onKeep, busy, label }: { d: ProjectData; e: Entry; tag: string; onKeep?: () => void; busy: boolean; label?: string }) {
@@ -84,6 +85,9 @@ export default function CheckView({ d }: { d: ProjectData }) {
     try { await d.reload(); const n = await runAiQc(d, setAiMsg); toast(n ? `AI tìm được ${n} điểm cần xem` : '✓ AI không thấy điểm sai chắc chắn nào', n ? 'info' : 'ok'); setTick(t => t + 1); if (n) setModal('ai') } catch (e) { toast(String((e as Error).message ?? e)) }
     setAiMsg(null)
   }
+  const bulkFix = issues.flatMap(r => { const f = r.issues.find(i => i.finishFix?.bulk)?.finishFix; return f ? [{ e: r.e, f }] : [] })
+  const [fixBusy, setFixBusy] = useState(false)
+  const fixAll = async () => { if (!confirm(`Sửa ${bulkFix.length} mục lớp hoàn thiện (gắn mã sơn + bỏ chữ gõ tay)?`)) return; setFixBusy(true); try { for (const x of bulkFix) await applyFinishFix(x.e, x.f); await d.reload(); setTick(t => t + 1); toast(`Đã sửa ${bulkFix.length} mục`, 'ok') } catch (e) { toast(String((e as Error).message ?? e)) } setFixBusy(false) }
   const doFind = async (f: Finding, st: 'accepted' | 'dismissed') => { try { await resolveFinding(f.id, st); setFinds(x => x.map(y => (y.id === f.id ? { ...y, status: st } : y))) } catch (e) { toast(String(e)) } }
   const applyFind = async (f: Finding) => {
     const e = f.entry_id ? orig.get(f.entry_id) : null; if (!e || !f.field || !f.current_text || f.suggestion == null) return
@@ -150,7 +154,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
       {modal === 'issues' && (
         <div className="modal-bg center" onMouseDown={() => setModal(null)}>
           <div className="modal qc-modal" onMouseDown={e => e.stopPropagation()}>
-            <div className="row between"><h3 style={{ margin: 0 }}>📋 Mã sai hoặc thiếu thông tin ({issues.length})</h3><button className="btn ghost sm" onClick={() => setModal(null)}>✕</button></div>
+            <div className="row between"><h3 style={{ margin: 0 }}>📋 Mã sai hoặc thiếu thông tin ({issues.length})</h3>{canEdit && bulkFix.length > 0 && <button className="btn primary sm" disabled={fixBusy} title="Gắn mã sơn đã có và bỏ chữ gõ tay trùng – chỉ các mục chắc chắn" onClick={fixAll}>{fixBusy ? 'Đang sửa…' : `🎨 Sửa tất cả lớp hoàn thiện (${bulkFix.length})`}</button>}<button className="btn ghost sm" onClick={() => setModal(null)}>✕</button></div>
             {!issues.length ? <div className="ok-text">✓ Không còn mã nào sai hoặc thiếu thông tin.</div> : <div style={{ overflowX: 'auto' }}><table className="tbl small" style={{ width: '100%' }}>
             <thead><tr><th>Mã</th><th>Hạng mục</th><th>Vấn đề cần xử lý</th><th>Phòng</th><th /></tr></thead>
             <tbody>{issues.map(({ e, issues: is }) => (
@@ -159,7 +163,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
                 <td>{e.name_vn}</td>
                 <td>{is.map((i, k) => <span key={k} className={'chk-tag chk-' + i.kind}>{i.text}</span>)}</td>
                 <td className="small">{locationsOf(e.id, d.occ, d.rooms, d.pages).map(l => l.room.code).join(', ') || '—'}</td>
-                <td className="row gap sm-gap">{is.some(i => i.fix === 'category') && <button className="btn sm primary" title="Đặt “Bề mặt / mục” đúng theo nhóm mã" onClick={async () => { await fixCategory(e); await d.reload(); setTick(t => t + 1) }}>Tự sửa</button>}<button className="btn sm" onClick={() => setSel(e.id)}>Mở & sửa</button></td>
+                <td className="row gap sm-gap" style={{ flexWrap: 'wrap' }}>{canEdit && is.filter(i => i.finishFix).map((i, k) => <button key={k} className="btn sm primary" onClick={async () => { try { await applyFinishFix(e, i.finishFix!); await d.reload(); setTick(t => t + 1) } catch (err) { toast(String((err as Error).message ?? err)) } }}>🎨 {i.finishFix!.label}</button>)}{is.some(i => i.fix === 'category') && <button className="btn sm primary" title="Đặt “Bề mặt / mục” đúng theo nhóm mã" onClick={async () => { await fixCategory(e); await d.reload(); setTick(t => t + 1) }}>Tự sửa</button>}<button className="btn sm" onClick={() => setSel(e.id)}>Mở & sửa</button></td>
               </tr>))}</tbody>
           </table></div>}
           </div>

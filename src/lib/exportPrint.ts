@@ -5,6 +5,7 @@ import { matMontage, extraPaths } from './matImages'
 import { viewCanvas, regionCanvas } from './crop'
 import { locationsOf, locationLines } from './locations'
 import { filterEntries, ExportData, exportBaseName } from './exportExcel'
+import { finishLines } from './finishCheck'
 import { entryCells, pair, hostOf, type Seg } from './biText'
 import { STATUS_VN, STATUS_EN } from './types'
 
@@ -52,7 +53,7 @@ export async function buildScheduleHtml(d: ExportData, o: ExportOpts, print: boo
       if (!matUrl && mvSrc && (e.mat_view?.img || e.mat_view?.region)) { try { matUrl = (await regionCanvas(mvSrc, e.mat_view?.region, 300)).toDataURL('image/png') } catch { /* */ } }
       const map = matUrl ? `<img src="${matUrl}">` : e.product_image_url ? `<img src="${esc(e.product_image_url)}">` : ''
       const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
-      const cl = entryCells(e, L, [...new Set(occ.map(o => o.category ?? e.category).filter(Boolean) as string[])], locs)
+      const cl = entryCells(e, L, [...new Set(occ.map(o => o.category ?? e.category).filter(Boolean) as string[])], locs, finishLines(e, d.entries, y => symbolOf(y, L, sym.legacy, sym.en)))
       rows += `<tr class="${e.source === 'inferred' ? 'inf' : ''}"><td>${stt}</td><td class="code">${esc(symbolOf(e, L, sym.legacy, sym.en))}</td><td class="code">${esc(e.product_code ?? '').replace(/\n/g, '<br>')}</td><td>${html1(cl.cat)}</td><td>${html1(cl.loc)}</td><td class="im">${img}</td>
         <td>${html1(cl.spec)}</td>
         <td>${html1(cl.brand)}</td><td class="im">${map}${e.product_url ? `<div class="lk"><a href="${esc(e.product_url)}">🔗 ${esc(hostOf(e.product_url))}</a></div>` : ''}</td>

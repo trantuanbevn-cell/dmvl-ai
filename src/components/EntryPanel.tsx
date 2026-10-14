@@ -20,6 +20,7 @@ import { useAuth } from '../lib/auth'
 import { useOnline, colorOf } from '../lib/presence'
 import SuggestDialog from './SuggestDialog'
 import { fixCategory, type Issue } from '../lib/checks'
+import { isFinish, refsOf, finishCtx, finishLines, applyFinishFix } from '../lib/finishCheck'
 
 type F = keyof Entry
 function Field({ e, k, label, area, onSaved, type = 'text', bad }: { e: Entry; k: F; label: string; area?: boolean; onSaved: () => void; type?: string; bad?: boolean }) {
@@ -62,6 +63,8 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
   const occ = d.occ.filter(o => o.entry_id === entry.id)
   const pageById = new Map(d.pages.map(p => [p.id, p]))
   const roomById = new Map(d.rooms.map(r => [r.id, r]))
+  const smap = symbolMap(d.entries), fsym = (x: Entry) => smap.get(x.id) ?? x.code
+  const fctx = finishCtx(d, fsym), frefs = refsOf(entry, fctx), fline = finishLines(entry, d.entries, fsym)
   const children = d.entries.filter(x => x.parent_id === entry.id)
   const parent = d.entries.find(x => x.id === entry.parent_id)
 
@@ -88,7 +91,7 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
         <button className="btn ghost sm" onClick={onClose}>✕</button>
       </div>
       {!!issues?.length && <div className="issue-banner"><b>Cần sửa ({issues.length}) – các ô tô đỏ bên dưới:</b>
-        {issues.map((i, k) => <div key={k} className={'small ib-' + i.kind}>• {i.text}{i.fix === 'category' && canEdit && <button className="btn sm primary" style={{ marginLeft: 8 }} onClick={async () => { await fixCategory(entry); d.reload() }}>Tự sửa</button>}</div>)}</div>}
+        {issues.map((i, k) => <div key={k} className={'small ib-' + i.kind}>• {i.text}{i.finishFix && canEdit && <button className="btn sm primary" style={{ marginLeft: 8 }} onClick={async () => { try { await applyFinishFix(entry, i.finishFix!); d.reload() } catch (err) { alert(String((err as Error).message ?? err)) } }}>{i.finishFix.label}</button>}{i.fix === 'category' && canEdit && <button className="btn sm primary" style={{ marginLeft: 8 }} onClick={async () => { await fixCategory(entry); d.reload() }}>Tự sửa</button>}</div>)}</div>}
       {!!others.filter(o => o.act).length && <div className="note" style={{ borderLeft: '4px solid ' + colorOf(others[0].id) }}>👁 {others.map(o => <b key={o.id} style={{ color: colorOf(o.id) }}>{o.name} </b>)}{others.find(o => o.act)!.act}</div>}
       <OpRuleBadge d={d} entryId={entry.id} />
 
@@ -117,6 +120,13 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
         <span className="muted small">sửa {Object.values(SYNC_LABEL).join(', ').toLowerCase()} ở mã này thì các mã liên kết đổi theo.</span>
         {canEdit && <select className="loc-add" value="" onChange={async x => { const o = d.entries.find(y => y.id === x.target.value); if (!o) return; try { await linkEntries(entry, o, d.entries); d.reload() } catch (err) { alert(String((err as Error).message ?? err)) } }}><option value="">＋ liên kết với mã khác…</option>{d.entries.filter(y => y.id !== entry.id && y.status !== 'rejected' && !(entry.link_id && y.link_id === entry.link_id)).map(y => <option key={y.id} value={y.id}>{y.code} – {y.name_vn}</option>)}</select>}
       </div>
+      {!isFinish(entry) && <div className={'loc-box link-box' + (B('finish') ? ' flag-box' : '')} data-flag={B('finish') ? '1' : undefined}><b>🎨 Lớp hoàn thiện:</b>{' '}
+        {frefs.map(x => <span key={x.id} className="loc-tag">{fsym(x)} {x.name_vn}{canEdit && <a className="loc-x" title="Bỏ gắn" onClick={async () => { await saveEntry(entry, { finish_refs: frefs.filter(y => y.id !== x.id).map(y => y.id) }); d.reload() }}>✕</a>}</span>)}
+        {!frefs.length && <span className="muted small">chưa gắn – </span>}
+        <span className="muted small">gắn mã sơn (nhóm PT) để thông số hoàn thiện tự lấy từ mã đó, không gõ tay lại.</span>
+        {fline.map((l, k) => <div key={k} className="small">→ {l.vn}</div>)}
+        {canEdit && <select className="loc-add" value="" onChange={async x => { if (!x.target.value) return; await saveEntry(entry, { finish_refs: [...frefs.map(y => y.id), x.target.value] }); d.reload() }}><option value="">＋ gắn mã sơn / lớp hoàn thiện…</option>{fctx.paint.filter(y => !frefs.some(z => z.id === y.id)).map(y => <option key={y.id} value={y.id}>{fsym(y)} – {String(y.desc_vn ?? y.name_vn).replace(/^[-\s]+/, '').slice(0, 70)}</option>)}</select>}
+      </div>}
       <div className={'loc-box' + (B('loc') ? ' flag-box' : '')} data-flag={B('loc') ? '1' : undefined}><b>Vị trí:</b>{' '}
         {locationsOf(entry.id, d.occ, d.rooms, d.pages).map(l => <span key={l.room.id} className="loc-tag">{l.room.code} {l.room.name_vn}{l.pages.length ? ` · tr.${l.pages.join(',')}` : ''}</span>)}
         {!occ.some(o => o.room_id) && <span className="muted">chưa gán phòng</span>}

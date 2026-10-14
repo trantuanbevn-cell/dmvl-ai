@@ -20,6 +20,8 @@ export async function mergeEntries(keep: Entry, dup: Entry, all: Entry[]) {
     const re = new RegExp(`\\b${dup.code}\\b`, 'g')
     await must(supabase.from('entries').update({ composition: e.composition.replace(re, keep.code) }).eq('id', e.id))
   }
+  // các mục nền đang trỏ tới mã hoàn thiện bị gộp → trỏ sang mã giữ lại
+  for (const e of all) if (e.id !== dup.id && (e.finish_refs ?? []).includes(dup.id)) await must(supabase.from('entries').update({ finish_refs: [...new Set((e.finish_refs ?? []).map(x => (x === dup.id ? keep.id : x)))] }).eq('id', e.id))
   const patch: Record<string, unknown> = {}
   for (const k of ['name_en', 'part_vn', 'part_en', 'material_vn', 'material_en', 'color_hex', 'desc_vn', 'desc_en', 'brand', 'product_code', 'product_name', 'product_url', 'product_image_url', 'origin', 'note_vn', 'note_en', 'parent_id'] as const)
     if ((keep[k] == null || keep[k] === '') && dup[k]) patch[k] = dup[k]

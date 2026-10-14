@@ -7,9 +7,11 @@ import { CATEGORY_GROUPS } from './codes'
 import { supabase } from './supabase'
 import { SYNC_KEYS, SYNC_LABEL } from './entryLink'
 import { internalSet, realCodes } from './qc'
+import { finishCtx, finishIssues, type FinishFix } from './finishCheck'
+import { symbolMap } from './sections'
 
 /** keys = ô cần tô đỏ trong khung sửa: tên cột của mã (name_vn, product_code…) hoặc 'loc' | 'shot' | 'group' | 'category' | 'link' | 'qty' */
-export type Issue = { kind: 'err' | 'miss' | 'info'; text: string; keys: string[]; fix?: 'category' }
+export type Issue = { kind: 'err' | 'miss' | 'info'; text: string; keys: string[]; fix?: 'category'; finishFix?: FinishFix }
 export type EntryIssues = { e: Entry; issues: Issue[] }
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase()
 
@@ -29,6 +31,7 @@ export function checkEntries(d: ProjectData, lang: Lang): EntryIssues[] {
   const byCode = new Map<string, Entry[]>()
   for (const e of live) for (const c of realCodes(e, sets)) { const k = norm(c); if (k) byCode.set(k, [...(byCode.get(k) ?? []), e]) }
   const out: EntryIssues[] = []
+  const smap = symbolMap(d.entries), fctx = finishCtx(d, x => smap.get(x.id) ?? x.code)
   for (const e of live) {
     const issues: Issue[] = []
     const m = missingOf(e, lang)
@@ -44,6 +47,7 @@ export function checkEntries(d: ProjectData, lang: Lang): EntryIssues[] {
       const bad = SYNC_KEYS.filter(k => grp.some(x => norm(x[k]) !== norm(e[k])))
       if (bad.length) issues.push({ kind: 'err', text: `Lệch với mã liên kết (${bad.map(k => SYNC_LABEL[k].toLowerCase()).join(', ')}) – sửa cho giống nhau`, keys: ['link', ...bad] })
     }
+    for (const f of finishIssues(e, fctx)) issues.push({ kind: f.kind === 'err' ? 'err' : 'miss', text: '🎨 ' + f.text, keys: ['finish', 'desc_vn'], finishFix: f.fix })
     if (issues.length) out.push({ e, issues })
   }
   const w = (r: EntryIssues) => (r.issues.some(i => i.kind === 'err') ? 0 : 1)
