@@ -204,6 +204,24 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     const { error } = await supabase.from('occurrences').update({ note: text || null, origin: 'manual' }).eq('id', o.id)
     if (error) alert(error.message); else d.reload()
   }
+  /** Phòng thật = bỏ các dòng giả “Tất cả các khu vực…” */
+  const realRooms = () => d.rooms.filter(r => !/^\s*tất cả/i.test(r.name_vn ?? ''))
+  /** Gắn vật liệu vào MỌI phòng (vd sơn trắng): tạo vị trí cho từng phòng chưa có → đồng bộ với bảng tổng hợp, xuất file… */
+  const addAllLoc = async (e: Entry) => {
+    const have = new Set(d.occ.filter(o => o.entry_id === e.id).map(o => o.room_id))
+    const todo = realRooms().filter(r => !have.has(r.id))
+    if (!todo.length) return
+    if (!confirm(`Gắn ${e.code} ${e.name_vn} vào ${todo.length} phòng còn lại (tất cả ${realRooms().length} phòng của dự án)?\nPhòng thêm sau này cần gắn lại bằng cách chọn “Tất cả các phòng” lần nữa.`)) return
+    const cat = d.occ.find(o => o.entry_id === e.id)?.category ?? e.category ?? 'decor'
+    const { error } = await supabase.from('occurrences').insert(todo.map(r => ({ entry_id: e.id, room_id: r.id, category: cat, origin: 'manual' })))
+    if (error) { alert(error.message); return }
+    toast(`Đã gắn vào ${todo.length} phòng.`, 'ok'); d.reload()
+  }
+  const delAllLoc = async (e: Entry) => {
+    const ids = realRooms().map(r => r.id)
+    if (!confirm(`Bỏ ${e.code} ${e.name_vn} khỏi tất cả ${ids.length} phòng? (hình phối cảnh của các phòng cũng bị bỏ)`)) return
+    await supabase.from('occurrences').delete().eq('entry_id', e.id).in('room_id', ids); d.reload()
+  }
   const delLoc = async (e: Entry, r: Room) => {
     if (!confirm(`Bỏ ${e.code} ${e.name_vn} khỏi phòng ${r.code} ${r.name_vn}? (hình phối cảnh của phòng này cũng bị bỏ)`)) return
     await supabase.from('occurrences').delete().eq('entry_id', e.id).eq('room_id', r.id); d.reload()
@@ -263,8 +281,8 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                     <td className="c-vl"><CodeList e={e} miss={M('product_code')} /></td>
                     <td><select value={sectionOf(e).key} disabled={!canEdit} onClick={x => x.stopPropagation()} onChange={x => setSection(e, os, x.target.value)}>{bandKeys().map(b => <optgroup key={b} label={bandTitle(b, lang)}>{allSections().filter(x => x.band === b).map(x => <option key={x.key} value={x.key}>{sectionTitle(x, lang)}</option>)}</optgroup>)}</select>
                       {shortBi(e, 'part', 24, lang) ? <div className="ed-line bi"><Ed e={e} k="part_vn" ph="Bộ phận áp dụng" /><span className="bi-sl">/</span><Ed e={e} k="part_en" ph="Part (EN)" /></div> : pair('part', lang).map(k => <div key={String(k)} className={'ed-line' + (String(k).endsWith('_en') ? ' en' : '')}>{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} ph="Bộ phận áp dụng" /></div>)}</td>
-                    <td className="c-loc">{locs.map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room?.id ? ' here' : '')}>{roomName(l.room, lang)}{canEdit && <a className="loc-x" title="Bỏ vị trí này" onClick={ev => { ev.stopPropagation(); delLoc(e, l.room) }}>✕</a>}</span>)}
-                      {canEdit && <select className="loc-add" value="" onClick={x => x.stopPropagation()} onChange={x => addLoc(e, x.target.value)}><option value="">＋ thêm phòng…</option>{d.rooms.filter(r => !locs.some(l => l.room.id === r.id)).map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}</select>}</td>
+                    <td className="c-loc">{(() => { const real = realRooms(); const all = real.length > 1 && real.every(r => locs.some(l => l.room.id === r.id)); return all ? <span className="loc-tag all" title={`Áp dụng cho ${real.length} phòng`}>★ Tất cả các phòng ({real.length}){canEdit && <a className="loc-x" title="Bỏ khỏi tất cả các phòng" onClick={ev => { ev.stopPropagation(); delAllLoc(e) }}>✕</a>}</span> : null })()}{locs.filter(() => { const real = realRooms(); return !(real.length > 1 && real.every(r => locs.some(l => l.room.id === r.id))) }).map(l => <span key={l.room.id} className={'loc-tag' + (l.room.id === room?.id ? ' here' : '')}>{roomName(l.room, lang)}{canEdit && <a className="loc-x" title="Bỏ vị trí này" onClick={ev => { ev.stopPropagation(); delLoc(e, l.room) }}>✕</a>}</span>)}
+                      {canEdit && <select className="loc-add" value="" onClick={x => x.stopPropagation()} onChange={x => x.target.value === '__all' ? addAllLoc(e) : addLoc(e, x.target.value)}><option value="">＋ thêm phòng…</option>{realRooms().some(r => !locs.some(l => l.room.id === r.id)) && <option value="__all">★ Tất cả các phòng ({realRooms().length})</option>}{d.rooms.filter(r => !locs.some(l => l.room.id === r.id)).map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}</select>}</td>
                     <td className="c-img">{shown.length ? shown.map(o => <span key={o.id} className="shot-wrap" draggable={canEdit} title={canEdit ? 'Kéo thả sang vật liệu khác để chuyển ảnh (giữ Ctrl để sao chép)' : undefined} onDragStart={ev => { ev.dataTransfer.setData('text/dmvl-occ', o.id); ev.dataTransfer.effectAllowed = 'copyMove' }} onDragEnd={() => setDropId(null)}><OccCrop d={d} o={o} height={64} maxWidth={90} /><div className="shot-cap" title={o.note ?? ''} onClick={ev => { ev.stopPropagation(); if (canEdit) { setNoteTxt(o.note ?? ''); setShotNote(o) } }}>{o.room_id ? d.rooms.find(r => r.id === o.room_id)?.code : ''}{o.note ? ' · ' + o.note : canEdit ? ' ✎' : ''}</div>{canEdit && <a className="shot-x" title="Xoá hình này" onClick={ev => { ev.stopPropagation(); delShot(o) }}>✕</a>}</span>)
                       : null}
                     {(shots.length > shown.length || missRooms.length > 0) && <div className="small muted" style={{ cursor: 'pointer' }} title="Bấm vào dòng để xem đủ ảnh các phòng">＋ {shots.length > shown.length ? `${shots.length - shown.length} ảnh khác` : ''}{shots.length > shown.length && missRooms.length ? ' · ' : ''}{missRooms.length ? `${missRooms.length} phòng chưa khoanh` : ''} – bấm để xem đủ</div>}
