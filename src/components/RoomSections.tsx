@@ -21,6 +21,7 @@ import { StatusDot } from '../pages/tabs/MaterialView'
 import { useAuth } from '../lib/auth'
 import SuggestDialog from './SuggestDialog'
 import { missingOf, missText } from '../lib/missing'
+import { isFinish, refsOf, finishCtx, finishIssues, finishLines, applyFinishFix } from '../lib/finishCheck'
 
 type K = keyof Entry
 /** Ô sửa trực tiếp: lưu khi rời ô */
@@ -85,6 +86,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   const pageById = useMemo(() => new Map(d.pages.map(p => [p.id, p])), [d.pages])
   const legacy = useMemo(() => legacyCodes(d.entries), [d.entries])
   const symMap = useMemo(() => symbolMap(d.entries), [d.entries])
+  const fctx = useMemo(() => finishCtx(d, x => symMap.get(x.id) ?? x.code), [d.entries, d.occ, d.rooms, symMap]) // eslint-disable-line
   const occ = room ? d.occ.filter(o => o.room_id === room.id) : d.occ
   const ids = [...new Set(occ.map(o => o.entry_id))]
   let ents = d.entries.filter(e => (room ? ids.includes(e.id) : true) && e.status !== 'rejected')
@@ -271,6 +273,16 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                       {canEdit && <button className="btn ghost sm" title="Thêm hình phối cảnh" onClick={ev => { ev.stopPropagation(); setShotRoom(null); setShotFor(e) }}>＋ ảnh</button>}</td>
                     <td>{shortBi(e, 'name', 30, lang) && <div className="ed-line bi"><Ed e={e} k="name_vn" miss={M('name_vn' as any)} ph="Tên hạng mục" /><span className="bi-sl">/</span><Ed e={e} k="name_en" miss={M('name_en' as any)} ph="Item name (English)" /></div>}{[...(shortBi(e, 'name', 30, lang) ? [] : pair('name', lang)), ...pair('material', lang), ...pair('desc', lang)].map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} miss={M(k)} area={!String(k).startsWith('name')} ph={String(k).endsWith('_en') ? (String(k).startsWith('name') ? 'Item name (English – not translated yet)' : String(k).startsWith('material') ? 'Material / colour / finish' : 'Specification') : String(k).startsWith('name') ? 'Tên hạng mục' : String(k).startsWith('material') ? 'Vật liệu / màu / bề mặt' : 'Thông số kỹ thuật'} /></div>)}
                       <div className="ed-line lab"><i>{lang === 'en' ? 'Composition' : 'Cấu tạo'}</i><Ed e={e} k="composition" area ph={lang === 'en' ? 'Composition' : 'Cấu tạo (vật liệu thành phần)'} /></div>
+                      {!isFinish(e) && (() => {
+                        const fr = refsOf(e, fctx), fi = finishIssues(e, fctx), fl = finishLines(e, d.entries, x => symMap.get(x.id) ?? x.code)
+                        if (!fr.length && !fi.length && !(canEdit && ['ceiling', 'wall', 'feature_wall', 'base', 'joinery', 'artwork'].includes(e.category ?? ''))) return null
+                        return <div className="ed-line lab fin-box no-export" onClick={ev => ev.stopPropagation()}><i>🎨 {lang === 'en' ? 'Finish' : 'Lớp hoàn thiện'}</i>
+                          <div>{fr.map(x => <span key={x.id} className="loc-tag">{symMap.get(x.id) ?? x.code}{canEdit && <a className="loc-x" title="Bỏ gắn" onClick={async () => { await saveEntry(e, { finish_refs: fr.filter(y => y.id !== x.id).map(y => y.id) }); d.reload() }}>✕</a>}</span>)}
+                            {canEdit && <select className="loc-add" value="" onChange={async x => { if (!x.target.value) return; await saveEntry(e, { finish_refs: [...fr.map(y => y.id), x.target.value] }); d.reload() }}><option value="">＋ gắn mã sơn…</option>{fctx.paint.filter(y => !fr.some(z => z.id === y.id)).map(y => <option key={y.id} value={y.id}>{symMap.get(y.id) ?? y.code} – {String(y.desc_vn ?? y.name_vn).replace(/^[-\s]+/, '').slice(0, 60)}</option>)}</select>}</div>
+                          {fl.map((l, k) => <div key={k} className="small muted">→ {lang === 'en' ? l.en : l.vn}</div>)}
+                          {fi.map((i, k) => <div key={k} className="small"><span className={'chk-tag chk-' + i.kind}>{i.kind === 'err' ? 'Lỗi' : 'Nên sửa'}</span> {i.text}{canEdit && i.fix && <button className="btn sm primary" style={{ marginLeft: 6 }} onClick={async () => { try { await applyFinishFix(e, i.fix!); d.reload() } catch (err) { toast(String((err as Error).message ?? err)) } }}>{i.fix.label}</button>}</div>)}
+                        </div>
+                      })()}
                       </td>
                     <td className="c-brand"><div className="ed-pre"><b>{lang === 'en' ? 'Origin' : 'Xuất xứ'}:</b><Ed e={e} k="origin" ph="Xuất xứ" /></div><div className="ed-pre"><b>{lang === 'en' ? 'Brand' : 'Thương hiệu'}:</b><Ed e={e} k="brand" ph="Hãng / thương hiệu" /></div></td>
                     <td className="c-mat"><MatImage d={d} e={e} />
