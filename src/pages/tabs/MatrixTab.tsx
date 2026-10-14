@@ -99,7 +99,7 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
         </table>
       </div>
 
-      {zoom && <Modal title={`${zoom.code} ${zoom.name_vn} – mặt bằng`} onClose={() => setZoom(null)} w={900}><img src={imgSrc(zoom)} alt="" style={{ width: '100%', background: '#fff' }} /><p className="small muted">Cắt từ bộ mặt bằng khách sạn (PDF); vòng tròn xanh = vị trí phòng. Chỉ để đối chiếu đúng / thừa / thiếu.</p></Modal>}
+      {zoom && <Modal title={`${zoom.code} ${zoom.name_vn} – mặt bằng`} onClose={() => setZoom(null)} w={900}><img src={imgSrc(zoom).replace(/\.png$/, '-ctx.png')} alt="" style={{ width: '100%', background: '#fff' }} /><p className="small muted">Cắt từ bộ mặt bằng khách sạn (PDF) kèm khu vực xung quanh; khung xanh = vùng ảnh nhỏ, vòng tròn xanh = vị trí phòng. Chỉ để đối chiếu đúng / thừa / thiếu.</p></Modal>}
       {cell && <CellDialog d={d} sym={sym} row={rows.find(r => r.room.id === cell.roomId)!} cat={cell.cat} canEdit={canEdit} run={run} onCopy={() => setCopy({ to: cell.roomId, cats: [cell.cat], fixedCat: cell.cat })} onClose={() => setCell(null)} />}
       {copy && <CopyDialog d={d} rows={rows} init={copy} run={run} onClose={() => setCopy(null)} />}
       {edit && <RoomDialog d={d} room={d.rooms.find(r => r.id === edit)!} run={run} onClose={() => setEdit(null)} />}
