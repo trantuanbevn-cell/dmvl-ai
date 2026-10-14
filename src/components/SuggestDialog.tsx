@@ -6,7 +6,7 @@ import type { Entry } from '../lib/types'
 import OccCrop from './OccCrop'
 import MaterialSuggest from './MaterialSuggest'
 import { MatDetail, type Mat } from '../pages/Library'
-import { bboxFeat, loadFeatMats, ensureFeats, rank, SUGGEST_MIN, type Cand, type FMat } from '../lib/suggest'
+import { bboxFeat, loadFeatMats, ensureFeats, rank, type Cand, type FMat } from '../lib/suggest'
 import { BASIC_SPECS, relevantSpecs, applyBasicSpec } from '../lib/basicSpecs'
 import { applyPicks, sizeText, type Pick } from '../lib/suggestApply'
 
@@ -58,7 +58,7 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
             <b>Phối cảnh (vị trí được khoanh)</b>
             {occs.length > 1 && <div className="row" style={{ gap: 6, flexWrap: 'wrap', margin: '6px 0' }}>{occs.map(x => <span key={x.id} className={'chip' + (x.id === o?.id ? ' on' : '')} onClick={() => setOid(x.id)}>{d.rooms.find(r => r.id === x.room_id)?.code ?? 'Ảnh'}</span>)}</div>}
             {o ? <div style={{ marginTop: 8 }}><OccCrop d={d} o={o} height={420} maxWidth={560} /></div> : <p className="muted">Mã này chưa có ảnh phối cảnh để đối chiếu.</p>}
-            <p className="small muted">Phần mềm so màu và bề mặt của vùng khoanh với map vật liệu thư viện, chỉ hiện mẫu khớp từ {Math.round(SUGGEST_MIN * 100)}%.</p>
+            <p className="small muted">Phần mềm so màu, vân (hướng vân, độ dày vân, hoa văn) của vùng khoanh với toàn bộ map trong thư viện – không giới hạn theo loại vật liệu – rồi xếp mẫu giống nhất lên đầu.</p>
           </div>
           <div className="card" style={{ overflow: 'auto' }}>
             {(basics.length > 0 || !allBasic) && <div style={{ marginBottom: 12 }}>
@@ -76,7 +76,7 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
             {(!mats || (!cands && !err)) && <p className="muted">Đang so khớp…</p>}
             {prog && <p className="muted">{prog}</p>}
             {mats && !mats.length && !prog && <p className="muted">Thư viện đang được chuẩn bị tự động, vui lòng mở lại sau ít phút.</p>}
-            {cands && !cands.length && mats?.length ? <p className="muted">Không có mẫu thư viện nào khớp từ {Math.round(SUGGEST_MIN * 100)}%. Giữ thông tin hiện tại, người làm tự nhập mã/ảnh cho hạng mục này.</p> : null}
+            {cands && !cands.length && mats?.length ? <p className="muted">Không có mẫu thư viện nào giống bề mặt này. Giữ thông tin hiện tại, người làm tự nhập mã/ảnh cho hạng mục này.</p> : null}
             <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 10, marginTop: 8 }}>
               {(cands ?? []).map(({ m, score }) => {
                 const on = picks.some(p => p.m.id === m.id)

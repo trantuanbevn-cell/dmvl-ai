@@ -3,10 +3,12 @@ import { supabase } from './supabase'
 import { cropCanvas, loadImage, clampBox } from './crop'
 import { normSizes, type Mat, type Var } from '../pages/Library'
 import { kindOfGroup, applyPicks, type Pick } from './suggestApply'
+import { windowsOf, descOfWindow, combineDesc, sim2, FEAT_N, FEAT_LEN } from './matchFeat'
 import type { Entry, Occurrence, Page, Project, Room } from './types'
 
-/** Ngưỡng độ trùng khớp tối thiểu để được đề xuất */
-export const SUGGEST_MIN = 0.8
+/** Ngưỡng tối thiểu tuyệt đối; ngoài ra chỉ giữ mẫu cách mẫu tốt nhất ≤ SUGGEST_BAND (so khớp theo hạng, không theo ngưỡng cố định) */
+export const SUGGEST_MIN = 0.6
+export const SUGGEST_BAND = 0.12
 export type Feat = number[]   // [L,a,b, sdL,sda,sdb, edge, 8 ô histogram sáng]
 
 function lab(r: number, g: number, b: number): [number, number, number] {
@@ -44,47 +46,62 @@ export function similarity(a: Feat, b: Feat): number {
   return 0.65 * col + 0.1 * sdv + 0.1 * edg + 0.15 * hi
 }
 
-export type FMat = Mat & { feat: Feat }
+/** Đặc trưng v2: màu + VÂN (hướng, tỷ lệ chi tiết) trên các cửa sổ giữ đúng tỉ lệ ảnh; margin = phần viền bỏ đi (vùng khoanh có cạnh tấm/bóng) */
+export function featOf2(src: CanvasImageSource, sw: number, sh: number, margin: number): number[] {
+  const mx = sw * margin, my = sh * margin, w = sw - 2 * mx, h = sh - 2 * my
+  const c = document.createElement('canvas'); c.width = FEAT_N; c.height = FEAT_N
+  const x = c.getContext('2d', { willReadFrequently: true })!
+  const ds = windowsOf(w, h).map(([ox, oy, s]) => { x.drawImage(src, mx + ox, my + oy, s, s, 0, 0, FEAT_N, FEAT_N); return descOfWindow(x.getImageData(0, 0, FEAT_N, FEAT_N).data) })
+  return combineDesc(ds)
+}
+export type QFeat = { f1: Feat; f2: number[] }
+export type FMat = Mat & { feat: Feat; feat2?: number[] | null }
 let cache: FMat[] | null = null
 export async function loadFeatMats(force = false): Promise<FMat[]> {
   if (cache && !force) return cache
   const out: FMat[] = []
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await supabase.from('materials').select('id,brand,product_code,name,line,kind,url,image_url,tex_url,attrs,feat').not('feat', 'is', null).range(from, from + 999)
+    const { data, error } = await supabase.from('materials').select('id,brand,product_code,name,line,kind,url,image_url,tex_url,attrs,feat,feat2').not('tex_url', 'is', null).range(from, from + 999)
     if (error) throw error
-    out.push(...((data ?? []) as FMat[]))
+    out.push(...((data ?? []) as FMat[]).filter(m => m.feat?.length || m.feat2?.length === FEAT_LEN))
     if (!data || data.length < 1000) break
   }
   return (cache = out)
 }
 
 /** Đặc trưng của 1 vị trí trong ảnh phối cảnh (bbox 0..1 trên ảnh trang) */
-export async function bboxFeat(url: string, bbox: number[]): Promise<Feat> {
-  const c = await cropCanvas(url, clampBox(bbox), 160)
-  return featOf(c, c.width, c.height)
+export async function bboxFeat(url: string, bbox: number[]): Promise<QFeat> {
+  const c = await cropCanvas(url, clampBox(bbox), 256)
+  return { f1: featOf(c, c.width, c.height), f2: featOf2(c, c.width, c.height, 0.15) }
 }
 
 export type Cand = { m: FMat; score: number }
-export function rank(f: Feat, mats: FMat[], groupCode?: string | null, min = SUGGEST_MIN): Cand[] {
+/** Xếp hạng TOÀN thư viện theo độ giống bề mặt (màu + vân). Nhóm vật liệu chỉ cộng nhẹ điểm ưu tiên, không loại mẫu khác nhóm. */
+export function rank(q: QFeat, mats: FMat[], groupCode?: string | null, min = SUGGEST_MIN): Cand[] {
   const k = kindOfGroup(groupCode)
-  return mats.filter(m => !k || m.kind === k).map(m => ({ m, score: similarity(f, m.feat) })).filter(c => c.score >= min).sort((a, b) => b.score - a.score).slice(0, 24)
+  const all = mats.map(m => {
+    const s = m.feat2?.length === FEAT_LEN ? sim2(q.f2, m.feat2).score : m.feat?.length ? similarity(q.f1, m.feat) * 0.9 : 0
+    return { m, score: Math.min(1, s + (k && m.kind === k ? 0.03 : 0)) }
+  }).filter(c => c.score >= min).sort((a, b) => b.score - a.score)
+  if (!all.length) return []
+  return all.filter(c => c.score >= all[0].score - SUGGEST_BAND).slice(0, 24)
 }
 
 /** Admin: tính đặc trưng cho các mã thư viện chưa có (tiếp tục được nếu dừng giữa chừng) */
 export async function backfillFeats(onProgress: (done: number, total: number) => void, stop: () => boolean): Promise<number> {
-  const { count } = await supabase.from('materials').select('id', { count: 'exact', head: true }).is('feat', null).not('tex_url', 'is', null)
+  const { count } = await supabase.from('materials').select('id', { count: 'exact', head: true }).is('feat2', null).not('tex_url', 'is', null)
   const total = count ?? 0; let done = 0
   while (!stop()) {
-    const { data, error } = await supabase.from('materials').select('id,tex_url').is('feat', null).not('tex_url', 'is', null).limit(120)
+    const { data, error } = await supabase.from('materials').select('id,tex_url,feat').is('feat2', null).not('tex_url', 'is', null).limit(120)
     if (error) throw error
     if (!data?.length) break
     let i = 0
     await Promise.all(Array.from({ length: 8 }, async () => {
       while (i < data.length && !stop()) {
         const r = data[i++]
-        let feat: Feat | null = null
-        try { const im = await loadImage(r.tex_url!); feat = featOf(im, im.naturalWidth, im.naturalHeight) } catch { feat = [] }
-        await supabase.from('materials').update({ feat }).eq('id', r.id)   // ảnh lỗi → [] để khỏi lặp lại
+        let feat: Feat | null = (r as any).feat ?? null, feat2: number[] = []
+        try { const im = await loadImage(r.tex_url!); if (!feat?.length) feat = featOf(im, im.naturalWidth, im.naturalHeight); feat2 = featOf2(im, im.naturalWidth, im.naturalHeight, 0.04) } catch { /* ảnh lỗi → [] để khỏi lặp lại */ }
+        await supabase.from('materials').update({ feat: feat ?? [], feat2 }).eq('id', r.id)
         done++; if (done % 10 === 0) onProgress(done, total)
       }
     }))
@@ -124,7 +141,7 @@ export async function autoPickRoom(project: Project, room: Room, urlOf: (p: Page
       await applyPicks(e, [{ m: best.m, v: await singleVariant(best.m) } as Pick], false); n++
     } catch { /* bỏ qua mục lỗi ảnh */ }
   }
-  if (n) log(`  ${room.code} – tự chọn ${n} mẫu thư viện khớp nhất (≥ ${Math.round(SUGGEST_MIN * 100)}%)`)
+  if (n) log(`  ${room.code} – tự chọn ${n} mẫu thư viện khớp nhất (khớp bề mặt nhất)`)
   return n
 }
 
