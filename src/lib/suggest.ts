@@ -74,8 +74,27 @@ export async function bboxFeat(url: string, bbox: number[]): Promise<QFeat> {
   const c = await cropCanvas(url, clampBox(bbox), 256)
   return { f1: featOf(c, c.width, c.height), f2: featOf2(c, c.width, c.height, 0.15) }
 }
+/** Ảnh vùng khoanh (bỏ viền 8%) gửi cho AI so vân */
+export async function bboxQueryCanvas(url: string, bbox: number[]): Promise<HTMLCanvasElement> {
+  const [x, y, w, h] = clampBox(bbox), m = 0.08
+  return cropCanvas(url, [x + w * m, y + h * m, w * (1 - 2 * m), h * (1 - 2 * m)], 512)
+}
 
 export type Cand = { m: FMat; score: number }
+/** Danh sách ứng viên RỘNG cho AI so vân: top theo điểm bề mặt + top theo gần màu (để không sót mẫu vân đúng nhưng điểm cơ học thấp) */
+export function shortlist(q: QFeat, mats: FMat[], groupCode?: string | null, n = 200): FMat[] {
+  const k = kindOfGroup(groupCode)
+  const sc = mats.map(m => {
+    const has = m.feat2?.length === FEAT_LEN
+    const s = has ? sim2(q.f2, m.feat2!).score : m.feat?.length ? similarity(q.f1, m.feat) * 0.9 : 0
+    const dab = has ? Math.hypot(q.f2[1] - m.feat2![1], q.f2[2] - m.feat2![2]) : 99
+    return { m, s: s + (k && m.kind === k ? 0.03 : 0), dab }
+  })
+  const a = [...sc].sort((x, y) => y.s - x.s).slice(0, Math.round(n * 0.7))
+  const seen = new Set(a.map(x => x.m.id))
+  const b = [...sc].filter(x => !seen.has(x.m.id)).sort((x, y) => x.dab - y.dab).slice(0, n - a.length)
+  return [...a, ...b].map(x => x.m)
+}
 /** Xếp hạng TOÀN thư viện theo độ giống bề mặt (màu + vân). Nhóm vật liệu chỉ cộng nhẹ điểm ưu tiên, không loại mẫu khác nhóm. */
 export function rank(q: QFeat, mats: FMat[], groupCode?: string | null, min = SUGGEST_MIN): Cand[] {
   const k = kindOfGroup(groupCode)
