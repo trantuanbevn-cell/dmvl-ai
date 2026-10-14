@@ -460,3 +460,8 @@ input[data-lang="en"], textarea[data-lang="en"] { font-style: italic }
 .mx-none td { opacity: .55 }
 .mx-chip { display: inline-block; border: 1px solid #d9cdbd; background: #f7f1e9; border-radius: 5px; padding: 1px 6px; margin: 0 4px 3px 0; font-weight: 600; font-size: 11.5px; white-space: nowrap }
 .mx-chip.approved { background: #e4f3e6; border-color: #a9d3ae } .mx-chip.review { background: #fde8d3; border-color: #efc190 }
+
+/* Cấp quyền tính năng: ô tích nằm ngay trước tên tính năng, thẳng hàng dọc */
+.feat-opt { display: grid !important; grid-template-columns: 18px 1fr; column-gap: 8px; align-items: start; padding: 4px 0; cursor: pointer; line-height: 1.35 }
+.feat-opt input[type=checkbox] { width: 16px !important; height: 16px; margin: 1px 0 0; padding: 0 }
+.feat-opt + .feat-opt { border-top: 1px dashed #eadfd2 }
