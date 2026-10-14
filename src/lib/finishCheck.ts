@@ -27,7 +27,7 @@ const specText = (e: Entry) => [e.desc_vn, e.material_vn, e.composition].filter(
 const paintCodesOf = (e: Entry) => colorCodes([e.desc_vn, e.desc_en, e.material_vn, e.name_vn, e.note_vn].filter(Boolean).join('\n'))
 
 export type FinishFix = { refs: string[]; strip: string[]; generic?: boolean; label: string; bulk?: boolean }
-export type FinishIssue = { kind: 'err' | 'miss'; text: string; fix?: FinishFix }
+export type FinishIssue = { kind: 'err' | 'miss'; text: string; key: string; fix?: FinishFix }
 
 export type FinishCtx = { live: Entry[]; byId: Map<string, Entry>; paint: Entry[]; codeMap: Map<string, Entry>; symMap: Map<string, Entry>; roomCode: Map<string, string>; occOf: Map<string, ProjectData['occ']>; d: ProjectData; sym: (e: Entry) => string }
 export function finishCtx(d: ProjectData, sym: (e: Entry) => string): FinishCtx {
@@ -59,22 +59,22 @@ export function finishIssues(e: Entry, c: FinishCtx): FinishIssue[] {
   const mapped = typed.filter(k => ptOf(k))
 
   // 1. Mã sơn gõ tay không có trong nhóm sơn của dự án
-  if (unknown.length) out.push({ kind: 'err', text: `Ghi mã sơn ${unknown.map(show).join(', ')} nhưng dự án không có mã sơn nào dùng màu này – thêm vào nhóm Sơn nước (PT) hoặc dùng mã PT có sẵn` })
+  if (unknown.length) out.push({ key: 'unk:' + unknown.join(','), kind: 'err', text: `Ghi mã sơn ${unknown.map(show).join(', ')} nhưng dự án không có mã sơn nào dùng màu này – thêm vào nhóm Sơn nước (PT) hoặc dùng mã PT có sẵn` })
   // 2. Đã gắn mã hoàn thiện nhưng thông số còn ghi một mã màu khác / còn gõ tay
   if (refs.length) {
     const diff = mapped.filter(k => !refKeys.has(k))
-    if (diff.length && !unknown.length) out.push({ kind: 'err', text: `Thông số ghi ${diff.map(show).join(', ')} nhưng lớp hoàn thiện đã gắn là ${refs.map(S).join(', ')} – chỉ giữ một nguồn`, fix: { refs: [...new Set([...refIds, ...diff.map(k => ptOf(k)!.id)])], strip: diff, generic: gyp, label: `Gắn thêm ${[...new Set(diff.map(k => S(ptOf(k)!)))].join(', ')} & bỏ chữ gõ tay`, bulk: false } })
-    else if (mapped.length && !diff.length) out.push({ kind: 'miss', text: `${mapped.map(show).join(', ')} đang gõ tay trong thông số, trong khi đã gắn ${refs.map(S).join(', ')} – bỏ chữ gõ tay cho gọn`, fix: { refs: refIds, strip: mapped, generic: gyp, label: 'Bỏ chữ gõ tay, dùng mã đã gắn', bulk: true } })
+    if (diff.length && !unknown.length) out.push({ key: 'diff:' + diff.join(','), kind: 'err', text: `Thông số ghi ${diff.map(show).join(', ')} nhưng lớp hoàn thiện đã gắn là ${refs.map(S).join(', ')} – chỉ giữ một nguồn`, fix: { refs: [...new Set([...refIds, ...diff.map(k => ptOf(k)!.id)])], strip: diff, generic: gyp, label: `Gắn thêm ${[...new Set(diff.map(k => S(ptOf(k)!)))].join(', ')} & bỏ chữ gõ tay`, bulk: false } })
+    else if (mapped.length && !diff.length) out.push({ key: 'redundant:' + mapped.join(','), kind: 'miss', text: `${mapped.map(show).join(', ')} đang gõ tay trong thông số, trong khi đã gắn ${refs.map(S).join(', ')} – bỏ chữ gõ tay cho gọn`, fix: { refs: refIds, strip: mapped, generic: gyp, label: 'Bỏ chữ gõ tay, dùng mã đã gắn', bulk: true } })
   } else if (mapped.length) {
     // 3. Gõ tay mã trùng với một mã PT sẵn có → gắn liên kết
     const pts = [...new Set(mapped.map(k => ptOf(k)!))]
-    if (!unknown.length) out.push({ kind: 'miss', text: `Thông số đang gõ tay ${mapped.map(show).join(', ')} – gắn ${pts.map(S).join(', ')} vào ô “Lớp hoàn thiện” để tự đồng bộ, khỏi gõ lại`, fix: { refs: pts.map(p => p.id), strip: mapped, generic: gyp, label: `Gắn ${pts.map(S).join(', ')} & bỏ chữ gõ tay`, bulk: true } })
+    if (!unknown.length) out.push({ key: 'link:' + mapped.join(','), kind: 'miss', text: `Thông số đang gõ tay ${mapped.map(show).join(', ')} – gắn ${pts.map(S).join(', ')} vào ô “Lớp hoàn thiện” để tự đồng bộ, khỏi gõ lại`, fix: { refs: pts.map(p => p.id), strip: mapped, generic: gyp, label: `Gắn ${pts.map(S).join(', ')} & bỏ chữ gõ tay`, bulk: true } })
   }
   // 4. Nền thạch cao nhưng chưa gắn lớp hoàn thiện
   if (gyp && !refs.length && !typed.length) {
     const t = specText(e), says = /sơn/i.test(t)
     const cand = WHITE.test(t) ? c.paint.filter(p => WHITE.test(`${p.desc_vn ?? ''} ${p.desc_en ?? ''}`)) : []
-    out.push({ kind: 'miss', text: says ? 'Ghi “sơn” chung chung nhưng chưa gắn mã sơn nào của dự án' + (cand.length ? ` – gợi ý ${cand.map(S).join(' / ')} (màu trắng)` : '') : 'Chưa có lớp hoàn thiện (mã sơn) cho nền thạch cao',
+    out.push({ key: 'gyp', kind: 'miss', text: says ? 'Ghi “sơn” chung chung nhưng chưa gắn mã sơn nào của dự án' + (cand.length ? ` – gợi ý ${cand.map(S).join(' / ')} (màu trắng)` : '') : 'Chưa có lớp hoàn thiện (mã sơn) cho nền thạch cao',
       fix: cand.length === 1 ? { refs: [cand[0].id], strip: [], generic: true, label: `Gắn ${S(cand[0])}`, bulk: true } : undefined })
   }
   // 5. Lệch theo phòng: cùng phòng + cùng hạng mục nhưng ảnh khoanh gán mã sơn khác
@@ -88,10 +88,11 @@ export function finishIssues(e: Entry, c: FinishCtx): FinishIssue[] {
       if (!refs.length && !gyp) continue   // chỉ đối chiếu mục nền thạch cao hoặc mục đã gắn mã
       const k = `${p.id}|${cat}`; if (seen.has(k)) continue; seen.add(k)
       const rooms = [...new Set(mine.filter(z => z.room_id && (z.category ?? e.category) === cat && (c.occOf.get(p.id) ?? []).some(q => q.room_id === z.room_id && (q.category ?? p.category) === cat)).map(z => c.roomCode.get(z.room_id!) ?? ''))].filter(Boolean)
-      out.push({ kind: 'err', text: `Phòng ${rooms.join(', ')}: ${catLabel(cat).toLowerCase()} gán ${S(p)} trong ảnh khoanh, nhưng ${S(e)} ${refs.length ? `ghi ${refs.map(S).join(', ')}` : 'chưa gắn mã sơn nào'}`, fix: { refs: [...new Set([...refIds, p.id])], strip: [], label: `Gắn thêm ${S(p)} theo ảnh khoanh`, bulk: false } })
+      out.push({ key: 'room:' + p.id + '|' + cat, kind: 'err', text: `Phòng ${rooms.join(', ')}: ${catLabel(cat).toLowerCase()} gán ${S(p)} trong ảnh khoanh, nhưng ${S(e)} ${refs.length ? `ghi ${refs.map(S).join(', ')}` : 'chưa gắn mã sơn nào'}`, fix: { refs: [...new Set([...refIds, p.id])], strip: [], label: `Gắn thêm ${S(p)} theo ảnh khoanh`, bulk: false } })
     }
   }
-  return out
+  const ok = new Set(e.finish_ok ?? [])
+  return out.filter(i => !ok.has(i.key))
 }
 
 /** Dòng “Hoàn thiện” tự sinh từ các mã đã gắn (VN / EN) – dùng khi xuất file và xem trước */
@@ -140,5 +141,11 @@ export async function applyFinishFix(e: Entry, fix: FinishFix): Promise<void> {
     if (ensrc.desc_en && (patch.desc_vn !== undefined || patch.desc_en !== undefined)) { ensrc.desc_en = { vi: String((patch.desc_vn !== undefined ? patch.desc_vn : e.desc_vn) ?? ''), en: String((patch.desc_en !== undefined ? patch.desc_en : e.desc_en) ?? '') }; patch.en_src = ensrc }
   }
   const { error } = await supabase.from('entries').update(patch).eq('id', e.id)
+  if (error) throw new Error(error.message)
+}
+
+/** Người dùng xác nhận cảnh báo này KHÔNG đúng → ghi nhớ (dùng chung cả nhóm), không báo lại */
+export async function dismissFinish(e: Entry, key: string): Promise<void> {
+  const { error } = await supabase.from('entries').update({ finish_ok: [...new Set([...(e.finish_ok ?? []), key])] }).eq('id', e.id)
   if (error) throw new Error(error.message)
 }

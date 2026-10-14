@@ -11,7 +11,7 @@ import { finishCtx, finishIssues, type FinishFix } from './finishCheck'
 import { symbolMap } from './sections'
 
 /** keys = ô cần tô đỏ trong khung sửa: tên cột của mã (name_vn, product_code…) hoặc 'loc' | 'shot' | 'group' | 'category' | 'link' | 'qty' */
-export type Issue = { kind: 'err' | 'miss' | 'info'; text: string; keys: string[]; fix?: 'category'; finishFix?: FinishFix }
+export type Issue = { kind: 'err' | 'miss' | 'info'; text: string; keys: string[]; fix?: 'category'; finishFix?: FinishFix; finishKey?: string }
 export type EntryIssues = { e: Entry; issues: Issue[] }
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase()
 
@@ -47,7 +47,7 @@ export function checkEntries(d: ProjectData, lang: Lang): EntryIssues[] {
       const bad = SYNC_KEYS.filter(k => grp.some(x => norm(x[k]) !== norm(e[k])))
       if (bad.length) issues.push({ kind: 'err', text: `Lệch với mã liên kết (${bad.map(k => SYNC_LABEL[k].toLowerCase()).join(', ')}) – sửa cho giống nhau`, keys: ['link', ...bad] })
     }
-    for (const f of finishIssues(e, fctx)) issues.push({ kind: f.kind === 'err' ? 'err' : 'miss', text: '🎨 ' + f.text, keys: ['finish', 'desc_vn'], finishFix: f.fix })
+    for (const f of finishIssues(e, fctx)) issues.push({ kind: f.kind === 'err' ? 'err' : 'miss', text: '🎨 ' + f.text, keys: ['finish', 'desc_vn'], finishFix: f.fix, finishKey: f.key })
     if (issues.length) out.push({ e, issues })
   }
   const w = (r: EntryIssues) => (r.issues.some(i => i.kind === 'err') ? 0 : 1)

@@ -17,6 +17,7 @@ export type Entry = {
   note_vn: string | null; note_en: string | null; enriched: boolean; sort: number
   link_id?: string | null
   finish_refs?: string[] | null
+  finish_ok?: string[] | null
   lib_id?: string | null
   en_src?: EnSrc | null
   section_key?: string | null

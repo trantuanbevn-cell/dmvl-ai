@@ -21,7 +21,7 @@ import { StatusDot } from '../pages/tabs/MaterialView'
 import { useAuth } from '../lib/auth'
 import SuggestDialog from './SuggestDialog'
 import { missingOf, missText } from '../lib/missing'
-import { isFinish, refsOf, finishCtx, finishIssues, finishLines, applyFinishFix } from '../lib/finishCheck'
+import { isFinish, refsOf, finishCtx, finishIssues, finishLines, applyFinishFix, dismissFinish } from '../lib/finishCheck'
 
 type K = keyof Entry
 /** Ô sửa trực tiếp: lưu khi rời ô */
@@ -280,7 +280,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                           <div>{fr.map(x => <span key={x.id} className="loc-tag">{symMap.get(x.id) ?? x.code}{canEdit && <a className="loc-x" title="Bỏ gắn" onClick={async () => { await saveEntry(e, { finish_refs: fr.filter(y => y.id !== x.id).map(y => y.id) }); d.reload() }}>✕</a>}</span>)}
                             {canEdit && <select className="loc-add" value="" onChange={async x => { if (!x.target.value) return; await saveEntry(e, { finish_refs: [...fr.map(y => y.id), x.target.value] }); d.reload() }}><option value="">＋ gắn mã sơn…</option>{fctx.paint.filter(y => !fr.some(z => z.id === y.id)).map(y => <option key={y.id} value={y.id}>{symMap.get(y.id) ?? y.code} – {String(y.desc_vn ?? y.name_vn).replace(/^[-\s]+/, '').slice(0, 60)}</option>)}</select>}</div>
                           {fl.map((l, k) => <div key={k} className="small muted">→ {lang === 'en' ? l.en : l.vn}</div>)}
-                          {fi.map((i, k) => <div key={k} className="small"><span className={'chk-tag chk-' + i.kind}>{i.kind === 'err' ? 'Lỗi' : 'Nên sửa'}</span> {i.text}{canEdit && i.fix && <button className="btn sm primary" style={{ marginLeft: 6 }} onClick={async () => { try { await applyFinishFix(e, i.fix!); d.reload() } catch (err) { toast(String((err as Error).message ?? err)) } }}>{i.fix.label}</button>}</div>)}
+                          {fi.map((i, k) => <div key={k} className="small"><span className={'chk-tag chk-' + i.kind}>{i.kind === 'err' ? 'Lỗi' : 'Nên sửa'}</span> {i.text}{canEdit && i.fix && <button className="btn sm primary" style={{ marginLeft: 6 }} onClick={async () => { try { await applyFinishFix(e, i.fix!); d.reload() } catch (err) { toast(String((err as Error).message ?? err)) } }}>{i.fix.label}</button>}{canEdit && <button className="btn ghost sm" style={{ marginLeft: 6 }} title="Cảnh báo này không đúng – bỏ và không báo lại" onClick={async () => { try { await dismissFinish(e, i.key); d.reload() } catch (err) { toast(String((err as Error).message ?? err)) } }}>✕ Không đúng</button>}</div>)}
                         </div>
                       })()}
                       </td>
