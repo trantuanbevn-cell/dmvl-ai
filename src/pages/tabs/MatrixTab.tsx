@@ -70,20 +70,20 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
               {hasFloors && newFl && <tr className="mx-floor"><td colSpan={cats.length + 2}><b>{floorLabel(fl)}</b> <span className="muted small">· {nFl} phòng</span></td></tr>}
               <tr className={r.state === 'none' ? 'mx-none' : ''}>
                 <td className="mx-room" draggable={canEdit && r.total > 0} onDragStart={e => e.dataTransfer.setData('text/plain', JSON.stringify({ room: r.room.id, cat: null }))} onDragOver={e => canEdit && e.preventDefault()} onDrop={e => onDrop(e, r.room.id, null)}>
-                  <div className="row between" style={{ gap: 6, alignItems: 'flex-start' }}>
-                    <div><b>{r.room.code}</b> {r.room.name_vn}<div className="en">{r.room.name_en}</div><div className="small muted">{roomTypeLabel(r.room.room_type)}{r.room.floor && ' · ' + (FLOORS.find(f => f.key === r.room.floor)?.vn ?? r.room.floor)}</div></div>
-                    <span className="row" style={{ gap: 0, flexShrink: 0 }}>
-                      <span className="mx-grip" title="Kéo để đổi vị trí phòng trong bảng này (không ảnh hưởng các bảng khác)" draggable={canEdit} onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData('application/x-mx-row', r.room.id) }}>⠿</span>
-                      <button className="btn ghost sm" title="Lên" disabled={!canEdit || i === 0 || (rows[i - 1].room.floor ?? null) !== (r.room.floor ?? null)} onClick={() => run(() => moveRoomRow(rows, r.room.id, i - 1))}>▲</button>
-                      <button className="btn ghost sm" title="Xuống" disabled={!canEdit || i === rows.length - 1 || (rows[i + 1].room.floor ?? null) !== (r.room.floor ?? null)} onClick={() => run(() => moveRoomRow(rows, r.room.id, i + 1))}>▼</button>
-                      <button className="btn ghost sm" title="Sửa tên / loại / hiện trạng" disabled={!canEdit} onClick={() => setEdit(r.room.id)}>✎</button>
-                      <button className="btn ghost sm danger" title="Xoá phòng" disabled={!canEdit} onClick={() => delRoom(r)}>🗑</button>
-                    </span>
+                  <div className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}><b>{r.room.code}</b> {r.room.name_vn}<div className="en">{r.room.name_en}</div></div>
+                    {hasPlans && (r.room.plan_img
+                      ? <img className="mx-plan" src={imgSrc(r.room)} alt={'Mặt bằng ' + r.room.name_vn} loading="lazy" title="Bấm để phóng to (có thêm khu vực xung quanh)" onClick={() => setZoom(r.room)} />
+                      : <div className="mx-plan none" title="Chưa tìm thấy phòng này trên bộ mặt bằng khách sạn – cần kiểm tra đúng / thừa">chưa có MB</div>)}
                   </div>
-                  {hasPlans && (r.room.plan_img
-                    ? <img className="mx-plan" src={imgSrc(r.room)} alt={'Mặt bằng ' + r.room.name_vn} loading="lazy" title="Bấm để phóng to – vòng tròn xanh = vị trí phòng trên bản vẽ" onClick={() => setZoom(r.room)} />
-                    : <div className="mx-plan none" title="Chưa tìm thấy phòng này trên bộ mặt bằng khách sạn – cần kiểm tra có đúng / thừa không">Chưa có mặt bằng</div>)}
-                  <div className="small"><button className="btn ghost sm" disabled={!canEdit} onClick={() => setCopy({ to: r.room.id })}>⧉ Sao chép từ phòng khác…</button></div>
+                  <div className="row" style={{ gap: 0, marginTop: 2 }}>
+                    <span className="mx-grip" title="Kéo để đổi vị trí phòng trong bảng này (không ảnh hưởng các bảng khác)" draggable={canEdit} onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData('application/x-mx-row', r.room.id) }}>⠿</span>
+                    <button className="btn ghost sm" title="Lên" disabled={!canEdit || i === 0 || (rows[i - 1].room.floor ?? null) !== (r.room.floor ?? null)} onClick={() => run(() => moveRoomRow(rows, r.room.id, i - 1))}>▲</button>
+                    <button className="btn ghost sm" title="Xuống" disabled={!canEdit || i === rows.length - 1 || (rows[i + 1].room.floor ?? null) !== (r.room.floor ?? null)} onClick={() => run(() => moveRoomRow(rows, r.room.id, i + 1))}>▼</button>
+                    <button className="btn ghost sm" title="Sửa tên / loại / tầng / hiện trạng" disabled={!canEdit} onClick={() => setEdit(r.room.id)}>✎</button>
+                    <button className="btn ghost sm" title="Sao chép vật liệu từ phòng khác vào phòng này" disabled={!canEdit} onClick={() => setCopy({ to: r.room.id })}>⧉</button>
+                    <button className="btn sm mx-del" title="Xoá phòng này" disabled={!canEdit} onClick={() => delRoom(r)}>🗑 Xoá</button>
+                  </div>
                 </td>
                 <td className="mx-st"><State r={r} /></td>
                 {cats.map(c => {
