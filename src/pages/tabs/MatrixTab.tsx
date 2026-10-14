@@ -1,12 +1,12 @@
 // Tổng hợp phòng: ma trận Phòng × Hạng mục. Nhìn là biết phòng nào đủ / thiếu gì / chưa có phối cảnh; sửa ngay tại đây – các tab khác tự cập nhật.
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import type { ProjectData } from '../../lib/useProject'
 import type { Entry, Room } from '../../lib/types'
 import { CATEGORIES, ROOM_TYPES, roomTypeLabel } from '../../lib/codes'
 import { symbolMap } from '../../lib/sections'
 import { useAuth } from '../../lib/auth'
 import { toast } from '../../lib/toast'
-import { buildMatrix, copyCells, addToCell, removeFromCell, shotsIn, createRoom, updateRoom, moveRoomRow, deleteRoom, type Row } from '../../lib/roomMatrix'
+import { buildMatrix, copyCells, addToCell, removeFromCell, shotsIn, createRoom, updateRoom, moveRoomRow, deleteRoom, FLOORS, floorLabel, type Row } from '../../lib/roomMatrix'
 
 type Filter = 'all' | 'missing' | 'norender' | 'none'
 const catVn = (k: string) => CATEGORIES.find(c => c.key === k)?.vn ?? k
@@ -26,6 +26,7 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
   const full = live.filter(r => !r.missing.length && r.total > 0).length
   const cnt = { all: rows.length, missing: live.filter(r => r.missing.length).length, norender: rows.filter(r => r.state === 'norender').length, none: rows.filter(r => r.state === 'none').length }
   const shown = rows.filter(r => flt === 'all' ? true : flt === 'missing' ? r.state !== 'none' && r.missing.length > 0 : r.state === flt)
+  const hasFloors = rows.some(r => r.room.floor)
   const cats = CATEGORIES.filter(c => rows.some(r => r.cells.get(c.key)?.length) || rows.some(r => r.need.includes(c.key)))
 
   const delRoom = (r: Row) => {
@@ -62,15 +63,16 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
         <table className="mx">
           <thead><tr><th className="mx-room">Phòng · Room</th><th className="mx-st">Hiện trạng</th>{cats.map(c => <th key={c.key}>{c.vn}<br /><span className="en">{c.en}</span></th>)}</tr></thead>
           <tbody>
-            {shown.map(r => { const i = rows.indexOf(r); return (
-              <tr key={r.room.id} className={r.state === 'none' ? 'mx-none' : ''}>
+            {shown.map((r, si) => { const i = rows.indexOf(r); const fl = r.room.floor ?? null, newFl = si === 0 || (shown[si - 1].room.floor ?? null) !== fl, nFl = shown.filter(x => (x.room.floor ?? null) === fl).length; return (<Fragment key={r.room.id}>
+              {hasFloors && newFl && <tr className="mx-floor"><td colSpan={cats.length + 2}><b>{floorLabel(fl)}</b> <span className="muted small">· {nFl} phòng</span></td></tr>}
+              <tr className={r.state === 'none' ? 'mx-none' : ''}>
                 <td className="mx-room" draggable={canEdit && r.total > 0} onDragStart={e => e.dataTransfer.setData('text/plain', JSON.stringify({ room: r.room.id, cat: null }))} onDragOver={e => canEdit && e.preventDefault()} onDrop={e => onDrop(e, r.room.id, null)}>
                   <div className="row between" style={{ gap: 6, alignItems: 'flex-start' }}>
-                    <div><b>{r.room.code}</b> {r.room.name_vn}<div className="en">{r.room.name_en}</div><div className="small muted">{roomTypeLabel(r.room.room_type)}</div></div>
+                    <div><b>{r.room.code}</b> {r.room.name_vn}<div className="en">{r.room.name_en}</div><div className="small muted">{roomTypeLabel(r.room.room_type)}{r.room.floor && ' · ' + (FLOORS.find(f => f.key === r.room.floor)?.vn ?? r.room.floor)}</div></div>
                     <span className="row" style={{ gap: 0, flexShrink: 0 }}>
                       <span className="mx-grip" title="Kéo để đổi vị trí phòng trong bảng này (không ảnh hưởng các bảng khác)" draggable={canEdit} onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData('application/x-mx-row', r.room.id) }}>⠿</span>
-                      <button className="btn ghost sm" title="Lên" disabled={!canEdit || i === 0} onClick={() => run(() => moveRoomRow(rows, r.room.id, i - 1))}>▲</button>
-                      <button className="btn ghost sm" title="Xuống" disabled={!canEdit || i === rows.length - 1} onClick={() => run(() => moveRoomRow(rows, r.room.id, i + 1))}>▼</button>
+                      <button className="btn ghost sm" title="Lên" disabled={!canEdit || i === 0 || (rows[i - 1].room.floor ?? null) !== (r.room.floor ?? null)} onClick={() => run(() => moveRoomRow(rows, r.room.id, i - 1))}>▲</button>
+                      <button className="btn ghost sm" title="Xuống" disabled={!canEdit || i === rows.length - 1 || (rows[i + 1].room.floor ?? null) !== (r.room.floor ?? null)} onClick={() => run(() => moveRoomRow(rows, r.room.id, i + 1))}>▼</button>
                       <button className="btn ghost sm" title="Sửa tên / loại / hiện trạng" disabled={!canEdit} onClick={() => setEdit(r.room.id)}>✎</button>
                       <button className="btn ghost sm danger" title="Xoá phòng" disabled={!canEdit} onClick={() => delRoom(r)}>🗑</button>
                     </span>
@@ -85,7 +87,7 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
                     {!es.length && r.need.includes(c.key) && r.state !== 'none' && <span className="mx-hint">thiếu</span>}
                   </td>
                 })}
-              </tr>) })}
+              </tr></Fragment>) })}
             {!shown.length && <tr><td colSpan={cats.length + 2} className="muted" style={{ padding: 16 }}>Không có phòng nào ở bộ lọc này.</td></tr>}
           </tbody>
         </table>
@@ -162,28 +164,30 @@ function CopyDialog({ d, rows, init, run, onClose }: { d: ProjectData; rows: Row
 }
 
 function RoomDialog({ d, room, run, onClose }: { d: ProjectData; room: Room; run: (f: () => Promise<unknown>, ok?: string) => Promise<void>; onClose: () => void }) {
-  const [vn, setVn] = useState(room.name_vn), [en, setEn] = useState(room.name_en ?? ''), [type, setType] = useState(room.room_type), [flag, setFlag] = useState(room.matrix_flag ?? '')
+  const [vn, setVn] = useState(room.name_vn), [en, setEn] = useState(room.name_en ?? ''), [type, setType] = useState(room.room_type), [flag, setFlag] = useState(room.matrix_flag ?? ''), [floor, setFloor] = useState(room.floor ?? '')
   void d
   return <Modal title={`Sửa phòng ${room.code}`} onClose={onClose}>
     <div className="stack">
       <label className="small">Tên tiếng Việt<input value={vn} onChange={e => setVn(e.target.value)} /></label>
       <label className="small">Tên tiếng Anh<input value={en} onChange={e => setEn(e.target.value)} /></label>
       <label className="small">Loại phòng (quyết định hạng mục nào bị coi là thiếu)<select value={type} onChange={e => setType(e.target.value)}>{ROOM_TYPES.map(t => <option key={t.key} value={t.key}>{t.vn}</option>)}</select></label>
+<label className="small">Tầng<select value={floor} onChange={e => setFloor(e.target.value)}><option value="">— chưa gán tầng —</option>{FLOORS.map(f => <option key={f.key} value={f.key}>{f.vn}</option>)}</select></label>
       <label className="small">Hiện trạng<select value={flag} onChange={e => setFlag(e.target.value)}><option value="">Tự động (có phối cảnh / chưa có phối cảnh)</option><option value="none">Không có / không thực hiện phòng này</option></select></label>
-      <div className="row gap"><button className="btn primary" disabled={!vn.trim()} onClick={() => run(() => updateRoom(room.id, { name_vn: vn.trim(), name_en: en.trim() || null, room_type: type, matrix_flag: flag || null }), 'Đã lưu').then(onClose)}>Lưu</button><button className="btn" onClick={onClose}>Huỷ</button></div>
+      <div className="row gap"><button className="btn primary" disabled={!vn.trim()} onClick={() => run(() => updateRoom(room.id, { name_vn: vn.trim(), name_en: en.trim() || null, room_type: type, matrix_flag: flag || null, floor: floor || null }), 'Đã lưu').then(onClose)}>Lưu</button><button className="btn" onClick={onClose}>Huỷ</button></div>
     </div>
   </Modal>
 }
 
 function AddRoomDialog({ d, rows, run, onClose }: { d: ProjectData; rows: Row[]; run: (f: () => Promise<unknown>, ok?: string) => Promise<void>; onClose: () => void }) {
-  const [vn, setVn] = useState(''), [en, setEn] = useState(''), [type, setType] = useState('office'), [from, setFrom] = useState('')
+  const [vn, setVn] = useState(''), [en, setEn] = useState(''), [type, setType] = useState('office'), [from, setFrom] = useState(''), [floor, setFloor] = useState('')
   return <Modal title="Thêm phòng mới" onClose={onClose}>
     <div className="stack">
       <label className="small">Tên tiếng Việt<input autoFocus value={vn} onChange={e => setVn(e.target.value)} placeholder="vd: Phòng họp 2" /></label>
       <label className="small">Tên tiếng Anh<input value={en} onChange={e => setEn(e.target.value)} placeholder="vd: Meeting Room 2" /></label>
       <label className="small">Loại phòng<select value={type} onChange={e => setType(e.target.value)}>{ROOM_TYPES.map(t => <option key={t.key} value={t.key}>{t.vn}</option>)}</select></label>
+<label className="small">Tầng<select value={floor} onChange={e => setFloor(e.target.value)}><option value="">— chưa gán tầng —</option>{FLOORS.map(f => <option key={f.key} value={f.key}>{f.vn}</option>)}</select></label>
       <label className="small">Sao chép toàn bộ vật liệu từ phòng (tuỳ chọn – sau đó chỉnh từng ô)<select value={from} onChange={e => setFrom(e.target.value)}><option value="">— không sao chép —</option>{rows.filter(r => r.total > 0).map(r => <option key={r.room.id} value={r.room.id}>{r.room.code} {r.room.name_vn} ({r.total} mã)</option>)}</select></label>
-      <div className="row gap"><button className="btn primary" disabled={!vn.trim()} onClick={() => run(() => createRoom(d, { name_vn: vn.trim(), name_en: en.trim(), room_type: type }, from || undefined), 'Đã thêm phòng').then(onClose)}>Thêm phòng</button><button className="btn" onClick={onClose}>Huỷ</button></div>
+      <div className="row gap"><button className="btn primary" disabled={!vn.trim()} onClick={() => run(() => createRoom(d, { name_vn: vn.trim(), name_en: en.trim(), room_type: type, floor }, from || undefined), 'Đã thêm phòng').then(onClose)}>Thêm phòng</button><button className="btn" onClick={onClose}>Huỷ</button></div>
     </div>
   </Modal>
 }

@@ -14,6 +14,14 @@ export const REQUIRED: Record<string, string[]> = {
 }
 export const requiredOf = (r: Room) => (REQUIRED[r.room_type] ?? BASE).filter(k => !(r.matrix_na ?? []).includes(k))
 
+/** Tầng (theo bộ mặt bằng khách sạn): thấp ở trên, cao dần xuống dưới */
+export const FLOORS: { key: string; vn: string }[] = [
+  { key: 'B2', vn: 'Tầng hầm B2' }, { key: 'B1', vn: 'Tầng hầm B1' }, { key: 'T1', vn: 'Tầng 1' }, { key: 'TL', vn: 'Tầng lửng' }, { key: 'T2', vn: 'Tầng 2' }, { key: 'T3', vn: 'Tầng 3' },
+  { key: 'T4-7', vn: 'Tầng 4–7' }, { key: 'T8', vn: 'Tầng 8' }, { key: 'T9-17', vn: 'Tầng 9–17' }, { key: 'ALL', vn: 'Dùng chung / điển hình nhiều tầng' },
+]
+export const floorRank = (f?: string | null) => { const i = FLOORS.findIndex(x => x.key === f); return i < 0 ? FLOORS.length : i }
+export const floorLabel = (f?: string | null) => FLOORS.find(x => x.key === f)?.vn ?? 'Chưa gán tầng'
+
 export type RoomState = 'render' | 'norender' | 'none'
 export type Row = { room: Room; state: RoomState; renders: number; cells: Map<string, Entry[]>; need: string[]; missing: string[]; total: number }
 
@@ -23,7 +31,7 @@ export function buildMatrix(d: ProjectData): Row[] {
   const occByRoom = new Map<string, Occurrence[]>()
   for (const o of d.occ) if (o.room_id) occByRoom.set(o.room_id, [...(occByRoom.get(o.room_id) ?? []), o])
   const ord = (r: Room) => r.matrix_sort ?? 1e6 + (r.sort ?? 0)   // thứ tự riêng của bảng này; phòng mới chưa xếp thì xuống cuối theo thứ tự gốc
-  return [...d.rooms].sort((a, b) => ord(a) - ord(b)).map(room => {
+  return [...d.rooms].sort((a, b) => floorRank(a.floor) - floorRank(b.floor) || ord(a) - ord(b)).map(room => {
     const cells = new Map<string, Entry[]>()
     for (const o of occByRoom.get(room.id) ?? []) {
       const e = byId.get(o.entry_id); if (!e) continue
@@ -60,10 +68,10 @@ export async function removeFromCell(d: ProjectData, roomId: string, e: Entry, c
   if (!ids.length) return
   const { error } = await supabase.from('occurrences').delete().in('id', ids); if (error) throw new Error(error.message)
 }
-export async function createRoom(d: ProjectData, v: { name_vn: string; name_en: string; room_type: string }, copyFrom?: string): Promise<Room> {
+export async function createRoom(d: ProjectData, v: { name_vn: string; name_en: string; room_type: string; floor?: string }, copyFrom?: string): Promise<Room> {
   if (!d.project) throw new Error('Chưa tải dự án')
   const sort = Math.max(0, ...d.rooms.map(r => r.sort ?? 0)) + 1
-  const { data, error } = await supabase.from('rooms').insert({ project_id: d.project.id, code: nextCode(d.rooms), name_vn: v.name_vn, name_en: v.name_en || null, room_type: v.room_type, sort }).select().single()
+  const { data, error } = await supabase.from('rooms').insert({ project_id: d.project.id, code: nextCode(d.rooms), name_vn: v.name_vn, name_en: v.name_en || null, room_type: v.room_type, floor: v.floor || null, sort }).select().single()
   if (error) throw new Error(error.message)
   const room = data as Room
   if (copyFrom) await copyCells({ ...d, rooms: [...d.rooms, room] }, copyFrom, room.id, CATEGORIES.map(c => c.key))
@@ -74,6 +82,8 @@ export const updateRoom = async (id: string, patch: Partial<Room>) => { const { 
 /** Đổi thứ tự phòng CHỈ trong bảng Tổng hợp phòng (cột matrix_sort) – không đụng rooms.sort của các bảng khác */
 export async function moveRoomRow(rows: Row[], id: string, toIndex: number) {
   const ids = rows.map(r => r.room.id), from = ids.indexOf(id); if (from < 0) return
+  const fl = rows[from].room.floor ?? null, tgt = rows[Math.max(0, Math.min(rows.length - 1, toIndex))]
+  if ((tgt.room.floor ?? null) !== fl) throw new Error('Phòng thuộc tầng khác – muốn chuyển tầng thì bấm ✎ và đổi “Tầng”.')
   ids.splice(from, 1); ids.splice(Math.max(0, Math.min(ids.length, toIndex)), 0, id)
   const changed = ids.map((rid, i) => ({ rid, i })).filter(({ rid, i }) => rows.find(r => r.room.id === rid)!.room.matrix_sort !== i)
   const res = await Promise.all(changed.map(({ rid, i }) => supabase.from('rooms').update({ matrix_sort: i }).eq('id', rid)))

@@ -466,3 +466,5 @@ input[data-lang="en"], textarea[data-lang="en"] { font-style: italic }
 .feat-opt input[type=checkbox] { width: 16px !important; height: 16px; margin: 1px 0 0; padding: 0 }
 .feat-opt + .feat-opt { border-top: 1px dashed #eadfd2 }
 .mx-grip { cursor: grab; color: var(--muted); padding: 0 4px; font-size: 16px; line-height: 1.6; user-select: none } .mx-grip:active { cursor: grabbing }
+
+.mx tr.mx-floor td { background: var(--brown); color: #fff; padding: 6px 10px; position: sticky; left: 0; font-size: 14px } .mx tr.mx-floor .muted { color: #e8dccd }
