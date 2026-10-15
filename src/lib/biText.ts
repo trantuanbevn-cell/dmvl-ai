@@ -34,12 +34,14 @@ function descPairs(e: Entry, L: Lang): Seg[] {
   return pair(e.desc_vn || e.material_vn, e.desc_en || e.material_en, L)
 }
 export type EntryCells = { cat: Seg[]; loc: Seg[]; spec: Seg[]; brand: Seg[]; note: Seg[] }
-export function entryCells(e: Entry, L: Lang, occCats: string[], locs: { room: { name_vn: string; name_en: string | null } }[], fin: { vn: string; en: string }[] = []): EntryCells {
+export const allRoomsCount = (locs: { room: { id: string } }[], rooms: { id: string; name_vn: string | null }[]) => { const real = rooms.filter(r => !/^\s*tất cả/i.test(r.name_vn ?? '')); return real.length > 1 && real.every(r => locs.some(l => l.room.id === r.id)) ? real.length : 0 }
+export function entryCells(e: Entry, L: Lang, occCats: string[], locs: { room: { name_vn: string; name_en: string | null } }[], fin: { vn: string; en: string }[] = [], allRooms = 0): EntryCells {
   const flat = (s: string | null | undefined) => (s ?? '').replace(/\n/g, ' ')
   const cat = occCats.flatMap(k => { const c = CATEGORIES.find(z => z.key === k); return c ? pair(c.vn, c.en, L) : one(k) })
   // Nhiều phòng (>10): gom thành một đoạn, tự xuống dòng theo độ rộng cột → hàng không bị kéo dài.
   // Song ngữ: mỗi phòng là MỘT CẶP liền nhau “Tiếng Việt / English” (VN đậm, EN nghiêng) ngăn bằng dấu •, không tách hai danh sách VN và EN
   const loc: Seg[] = !locs.length ? pair('(chưa gán phòng)', '(no room assigned)', L)
+    : allRooms > 1 && locs.length >= allRooms ? pair(`★ Tất cả các phòng (${allRooms})`, `★ All rooms (${allRooms})`, L) // áp dụng cho mọi phòng → ghi gọn như trên màn hình, không liệt kê
     : locs.length > 10 ? (() => {
       const vns = locs.map(l => flat(l.room.name_vn)), ens = locs.map(l => flat(l.room.name_en || l.room.name_vn))
       if (L !== 'both') return [{ t: (L === 'en' ? ens : vns).join('  •  '), k: 'n' as const }]

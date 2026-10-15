@@ -7,7 +7,7 @@ import { matMontage, extraPaths } from './matImages'
 import { viewCanvas, regionCanvas, swatchBase64, loadImage } from './crop'
 import { locationsOf, locationLines } from './locations'
 import { finishLines } from './finishCheck'
-import { entryCells, setLines, splitBoth, wrapCount, fitWidth, hostOf, pair, type Seg, type EntryCells } from './biText'
+import { allRoomsCount, entryCells, setLines, splitBoth, wrapCount, fitWidth, hostOf, pair, type Seg, type EntryCells } from './biText'
 import type { Project, Room, Page, Entry, Occurrence } from './types'
 import { STATUS_VN, STATUS_EN, SOURCE_VN, SOURCE_EN } from './types'
 
@@ -59,7 +59,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
   const cells = new Map<string, EntryCells>()
   for (const g of groups) for (const e of g.items) {
     const o2 = d.occ.filter(z => z.entry_id === e.id)
-    cells.set(e.id, entryCells(e, L, [...new Set(o2.map(z => z.category ?? e.category).filter(Boolean) as string[])], locationsOf(e.id, d.occ, d.rooms, d.pages), finishLines(e, d.entries, y => symbolOf(y, L, sym.legacy, sym.en))))
+    cells.set(e.id, entryCells(e, L, [...new Set(o2.map(z => z.category ?? e.category).filter(Boolean) as string[])], locationsOf(e.id, d.occ, d.rooms, d.pages), finishLines(e, d.entries, y => symbolOf(y, L, sym.legacy, sym.en)), allRoomsCount(locationsOf(e.id, d.occ, d.rooms, d.pages), d.rooms)))
   }
   const LIM: Record<string, [number, number]> = { cat: [13, 26], loc: [30, 46], spec: [48, 80], brand: [22, 40], note: [26, 44] }
   for (const k of Object.keys(LIM)) { const c = cols.find(z => z.key === k); if (c) c.w = fitWidth([...cells.values()].map(v => (v as any)[k] as Seg[]), LIM[k][0], LIM[k][1]) }
