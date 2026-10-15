@@ -6,7 +6,7 @@ import PlanView from './PlanView'
 import { planVector, type PlanVec } from '../lib/planSvg'
 import { findWallFixes } from '../lib/planFix'
 import { checkPlanWithAI, ISSUE_LABEL, type PlanIssue } from '../lib/planAi'
-import { suggestRoles, readPlan, mergeDxf, renderPlan, type DxfMerge, type LayerRow, type PlanResult, type Role } from '../lib/planRead'
+import { nameBareLayers, suggestRoles, readPlan, mergeDxf, renderPlan, type DxfMerge, type LayerRow, type PlanResult, type Role } from '../lib/planRead'
 
 const ROLE: [Role, string][] = [['wall', 'Tường / cột'], ['door', 'Cửa'], ['arc', 'Cung cửa (phụ)'], ['skip', 'Bỏ']]
 const key = (n: string) => 'dmvl.planread.' + n
@@ -29,7 +29,7 @@ export default function PlanReader() {
     reset(); setBusy('Đang đọc PDF…')
     try {
       const ab = await f.arrayBuffer(); bufRef.current = ab
-      const v = await readVectorPage(ab, pg, s => setBusy(s)); const sug = suggestRoles(v), sv = saved(f.name)
+      const v = await readVectorPage(ab, pg, s => setBusy(s)); nameBareLayers(v); const sug = suggestRoles(v), sv = saved(f.name)
       if (sv) for (const r of sug) if (sv[r.layer]) r.role = sv[r.layer]
       setPv(v); setPRows(sug)
     } catch (e) { setErr(String(e instanceof Error ? e.message : e)) }

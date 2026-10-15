@@ -14,6 +14,10 @@ const WALL = /ktv-kt-tuong|k-wall|be ?tong|1-tuong|column|ktv-kt-hatch|1-hatch|l
 const DOOR = /door|cua di|cửa đi|9-door/i
 const ARC = /net ?khuat|netkhuat|net ?manh|net ?thay|nét khuất/i
 
+/** PDF không chia layer (mọi nét cùng layer rỗng): đặt tên theo bề dày nét / vùng tô để vẫn chọn được vai trò từng loại nét */
+export function nameBareLayers(v: VecPage) {
+  for (const c of v.classes) if (!c.layer) c.layer = c.fill ? '(vùng tô / hatch)' : `(nét dày ${c.lw} pt)`
+}
 /** gợi ý vai trò từng layer theo tên (người dùng đổi được): tường/cột · cửa · chỉ để tìm cung cửa · bỏ */
 export function suggestRoles(v: VecPage): LayerRow[] {
   const m = new Map<string, LayerRow>()
@@ -21,7 +25,7 @@ export function suggestRoles(v: VecPage): LayerRow[] {
   for (const f of v.fills) { const l = v.classes[f.cls].layer; const r = m.get(l) ?? { layer: l, segs: 0, fills: 0, role: 'skip' as Role }; r.fills++; m.set(l, r) }
   for (const r of m.values()) {
     const n = r.layer
-    r.role = /balloon/i.test(n) ? 'skip' : DOOR.test(n) ? 'door' : /k-wall|column/i.test(n) || (WALL.test(n) && !SKIP.test(n)) ? 'wall' : ARC.test(n) && !SKIP.test(n) ? 'arc' : 'skip'
+    r.role = /^\(nét dày/.test(n) ? (parseFloat(n.replace(/[^\d.]/g, '')) >= 0.6 ? 'wall' : parseFloat(n.replace(/[^\d.]/g, '')) >= 0.25 ? 'door' : 'arc') : /balloon/i.test(n) ? 'skip' : DOOR.test(n) ? 'door' : /k-wall|column/i.test(n) || (WALL.test(n) && !SKIP.test(n)) ? 'wall' : ARC.test(n) && !SKIP.test(n) ? 'arc' : 'skip'
   }
   return [...m.values()].sort((a, b) => b.segs + b.fills - a.segs - a.fills)
 }
@@ -96,7 +100,7 @@ export async function readPlan(v: VecPage, roles: Record<string, Role>, den: num
         const far = Math.max(...sl); if (far < 70) continue
         let cov = true; for (let t = 0; t < Math.min(far, 90) - 15; t += 15) if (!sl.some(x => x >= t && x < t + 15)) { cov = false; break }
         if (!cov) continue
-        const ae = (a0 + sg * far) * Math.PI / 180
+        const ae = (a0 + sg * (far >= 78 && far <= 104 ? 90 : far)) * Math.PI / 180
         raw.push({ H, Q, r, E: [H[0] + r * Math.cos(ae), H[1] + r * Math.sin(ae)] })
       }
     }
@@ -117,7 +121,7 @@ export async function readPlan(v: VecPage, roles: Record<string, Role>, den: num
   const thin = Math.max(3, Math.round(0.06 * PT * ppp)), thick = Math.max(3, Math.round(0.1 * PT * ppp))
   const nearestWall = (P0: P, u: P, maxd = 0.9): P | null => {
     let best: { t: number; q: P } | null = null
-    for (let ang = -40; ang <= 40; ang += 10) {
+    for (let ang = -12; ang <= 12; ang += 6) {
       const c = Math.cos(ang * Math.PI / 180), s = Math.sin(ang * Math.PI / 180), vx = u[0] * c - u[1] * s, vy = u[0] * s + u[1] * c
       for (let t = 0.05; t < maxd; t += 0.03) {
         const qx = P0[0] + vx * t * PT, qy = P0[1] + vy * t * PT, x = Math.round(qx * ppp), y = Math.round(qy * ppp)
