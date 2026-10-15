@@ -8,6 +8,7 @@ import { useAuth } from '../lib/auth'
 import { useProject } from '../lib/useProject'
 import MasterPlan from '../components/MasterPlan'
 import DeckEditor from '../components/DeckEditor'
+import PlanReader from '../components/PlanReader'
 import DeckPageSvg from '../components/DeckPageSvg'
 import { useDeck } from '../lib/useDeck'
 import { STYLES, newDeck } from '../lib/deck'
@@ -65,7 +66,7 @@ export function ConceptPage() {
   const d = useProject(id)
   const { deck, update } = useDeck(d)
   const [bk, setBk] = useState('')
-  const [tab, setTab] = useState<'plan' | 'deck'>(() => { try { return (sessionStorage.getItem('cp-tab') as 'plan' | 'deck') || 'plan' } catch { return 'plan' } })
+  const [tab, setTab] = useState<'plan' | 'deck' | 'read'>(() => { try { return (sessionStorage.getItem('cp-tab') as 'plan' | 'deck' | 'read') || 'plan' } catch { return 'plan' } })
   const backup = async () => { try { const { blob, name } = await exportConcept(d, setBk); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000); toast('Đã lưu bản sao: ' + name) } catch (e) { toast(String(e)) } setBk('') }
   if (!d.project) return <div className="page muted">{d.loading ? 'Đang tải…' : 'Không tìm thấy'}</div>
   return (
@@ -73,7 +74,7 @@ export function ConceptPage() {
       <div className="proj-head"><div><div className="small muted"><Link to="/concept">← Dàn trang concept</Link></div><h1>{d.project.name}</h1><div className="muted small">{d.project.location}</div></div>
         <div style={{ maxWidth: 380, textAlign: 'right' }}><button className="btn sm" disabled={!!bk} onClick={backup}>💾 Lưu bản sao về máy</button>{bk && <div className="small muted">{bk}</div>}
           <div className="muted small">Mỗi lần xong một phương án nên lưu bản sao; muốn quay lại thì “Nạp bản sao từ máy” ở danh sách concept. Sắp có: “Đưa sang lập danh mục”.</div></div></div>
-      <div className="mp-tabs big">{([['plan', 'Mặt bằng tổng'], ['deck', 'Dàn trang concept']] as const).map(([k, l]) => <button key={k} className={'mp-tab' + (tab === k ? ' on' : '')} onClick={() => { setTab(k); try { sessionStorage.setItem('cp-tab', k) } catch { /* bỏ qua */ } }}>{l}</button>)}</div>
-      {tab === 'plan' ? <MasterPlan d={d} size={deck.size} /> : <DeckEditor d={d} deck={deck} update={update} />}
+      <div className="mp-tabs big">{([['plan', 'Mặt bằng tổng'], ['deck', 'Dàn trang concept'], ['read', 'Đọc mặt bằng (thử nghiệm)']] as const).map(([k, l]) => <button key={k} className={'mp-tab' + (tab === k ? ' on' : '')} onClick={() => { setTab(k); try { sessionStorage.setItem('cp-tab', k) } catch { /* bỏ qua */ } }}>{l}</button>)}</div>
+      {tab === 'plan' ? <MasterPlan d={d} size={deck.size} /> : tab === 'read' ? <PlanReader /> : <DeckEditor d={d} deck={deck} update={update} />}
     </div>)
 }
