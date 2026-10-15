@@ -50,21 +50,21 @@ export const BASIC_SPECS: BasicSpec[] = [
 
   // ───── Vách ốp gỗ công nghiệp (phôi + bề mặt) ─────
   {
-    key: 'clad-mdf-mel', title: 'Vách ốp: phôi MDF + bề mặt melamine', groups: ['LM'], brand: 'An Cường', head: ['Cấu tạo vách ốp – thông số chuẩn:', 'Wall cladding build-up – standard specification:'], match: /ốp|vách|tường|panel/i,
+    key: 'clad-mdf-mel', title: 'Vách ốp: phôi MDF + bề mặt melamine', groups: ['EWD'], brand: 'An Cường', head: ['Cấu tạo vách ốp – thông số chuẩn:', 'Wall cladding build-up – standard specification:'], match: /ốp|vách|tường|panel/i,
     src: 'Trang sản phẩm Mel-MDF An Cường (độ dày/tỷ trọng: xem file SPEC của hãng)', src_url: AC,
     composition: 'Ván MDF phủ melamine An Cường ốp lên khung xương/tường',
     vn: ['Phôi: MDF tiêu chuẩn phủ melamine hai mặt (Mel-MDF An Cường), bề mặt phẳng mịn, nhiều màu/vân', 'Khổ tấm thông dụng 1220×2440 mm (có 1220×3050, 1830×2440 tùy mã); độ dày chọn theo thiết kế (thông dụng 17–18 mm)', 'Phát thải formaldehyde tối thiểu E1 (SGS / ISO 12460-1); loại MDF tiêu chuẩn – KHÔNG chống ẩm, chỉ dùng nơi khô ráo', 'Lắp: bắt vít vào khung xương gỗ/thép hoặc dán keo lên tường đã xử lý phẳng; dán nẹp PVC/ABV cùng màu cạnh hở'],
     en: ['Core: standard MDF faced with melamine both sides (An Cuong Mel-MDF), smooth surface, many colours/patterns', 'Common sheet size 1220×2440 mm (1220×3050, 1830×2440 per code); thickness per design (typically 17–18 mm)', 'Formaldehyde emission minimum E1 (SGS / ISO 12460-1); standard MDF – NOT moisture-resistant, dry areas only', 'Fixing: screwed to timber/steel framing or bonded to a levelled wall; edges sealed with matching PVC/ABS edge banding'],
   },
   {
-    key: 'clad-mfc-mel', title: 'Vách ốp: phôi ván dăm (MFC) phủ melamine', groups: ['LM'], brand: 'An Cường', head: ['Cấu tạo vách ốp – thông số chuẩn:', 'Wall cladding build-up – standard specification:'], match: /ốp|vách|tường|panel/i,
+    key: 'clad-mfc-mel', title: 'Vách ốp: phôi ván dăm (MFC) phủ melamine', groups: ['EWD'], brand: 'An Cường', head: ['Cấu tạo vách ốp – thông số chuẩn:', 'Wall cladding build-up – standard specification:'], match: /ốp|vách|tường|panel/i,
     src: 'Trang sản phẩm MFC An Cường (MS 104 SH)', src_url: AC_MFC,
     composition: 'Ván dăm (MFC) phủ melamine An Cường',
     vn: ['Phôi: ván dăm phủ melamine (MFC An Cường), nhiều màu/vân', 'Khổ 1220×2440 mm, độ dày 9 / 12 / 15 / 18 / 25 mm (1830×2440 mm có ở 12 / 18 / 25 mm; tùy mã)', 'Phát thải formaldehyde tối thiểu E1 (SGS / ISO 12460-1)', 'Có loại MFC chống ẩm cho khu vực ẩm; dán nẹp cạnh cùng màu'],
     en: ['Core: melamine-faced particleboard (An Cuong MFC), many colours/patterns', 'Size 1220×2440 mm; thickness 9 / 12 / 15 / 18 / 25 mm (1830×2440 mm in 12 / 18 / 25 mm; per code)', 'Formaldehyde emission minimum E1 (SGS / ISO 12460-1)', 'Moisture-resistant MFC available for humid areas; matching edge banding'],
   },
   {
-    key: 'clad-hpl', title: 'Vách ốp: bề mặt laminate HPL dán trên phôi MDF/ván ép', groups: ['LM'], brand: 'An Cường (Laminate Kingdom)', head: ['Cấu tạo vách ốp – thông số chuẩn:', 'Wall cladding build-up – standard specification:'], match: /ốp|vách|tường|panel/i,
+    key: 'clad-hpl', title: 'Vách ốp: bề mặt laminate HPL dán trên phôi MDF/ván ép', groups: ['EWD'], brand: 'An Cường (Laminate Kingdom)', head: ['Cấu tạo vách ốp – thông số chuẩn:', 'Wall cladding build-up – standard specification:'], match: /ốp|vách|tường|panel/i,
     src: 'Trang sản phẩm Laminate Kingdom An Cường (LK 062 A)', src_url: AC_LK,
     composition: 'Laminate HPL An Cường dán lên phôi MDF/ván ép',
     vn: ['Bề mặt: laminate HPL (Laminate Kingdom An Cường), chịu nhiệt, chống trầy xước, kháng hóa chất', 'Khổ 1220×2440 mm; độ dày laminate 0,6 / 0,7 / 0,8 / 1,0 / 1,2 mm (tùy mã)', 'Phôi: MDF (hoặc ván ép) dày 17–18 mm; dán ép nguội/nóng hai mặt để cân bằng chống cong vênh', 'Phôi chống ẩm (HMR/ván ép) cho khu vực ẩm; dán nẹp cạnh cùng màu'],

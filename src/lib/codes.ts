@@ -189,7 +189,7 @@ export const GROUPS: Group[] = [
   "std_intl": "AWI/AWMAC; EN 717-1 (E1)"
  },
  {
-  "code": "LM",
+  "code": "EWD",
   "vn": "Gỗ công nghiệp (MDF/MFC, melamine, laminate, acrylic)",
   "en": "Melamine / HPL / Acrylic Panels",
   "legacy": "GO",
@@ -271,7 +271,7 @@ export const GROUPS: Group[] = [
   "en": "Doors",
   "legacy": "CU",
   "csi": "08 10 00 Doors & Frames",
-  "attrs_vn": "Kiểu mở, kích thước, vật liệu cánh/khung, hoàn thiện (mã LM/PT), chống cháy (EI), cách âm, gioăng",
+  "attrs_vn": "Kiểu mở, kích thước, vật liệu cánh/khung, hoàn thiện (mã EWD/PNT), chống cháy (EI), cách âm, gioăng",
   "attrs_en": "Operation, size, leaf & frame construction, finish code, fire rating, acoustic rating, seals",
   "std_vn": "QCVN 06:2022/BXD (cửa ngăn cháy)",
   "std_intl": "EN 1634 / UL 10C"
@@ -315,8 +315,8 @@ export const GROUPS: Group[] = [
   "en": "Loose Furniture",
   "legacy": "FU",
   "csi": "12 50 00 Furniture",
-  "attrs_vn": "Kích thước, khung, bọc (mã FB/LE), hoàn thiện (mã MT/LM/WD), số lượng theo phòng",
-  "attrs_en": "Dimensions, frame, upholstery (FB/LE), finishes (MT/LM/WD), quantity per room",
+  "attrs_vn": "Kích thước, khung, bọc (mã FB/LE), hoàn thiện (mã MT/EWD/WD), số lượng theo phòng",
+  "attrs_en": "Dimensions, frame, upholstery (FB/LE), finishes (MT/EWD/WD), quantity per room",
   "std_vn": "—",
   "std_intl": "BIFMA X5.1 / X5.4 (ghế văn phòng, ghế chờ)"
  },

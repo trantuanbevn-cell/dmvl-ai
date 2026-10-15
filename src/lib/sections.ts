@@ -22,7 +22,7 @@ export const SECTIONS: Section[] = [
   { key: 'panel', vn: 'ỐP TƯỜNG (GỖ, LAM, TIÊU ÂM)', en: 'WALL PANELLING', band: 'A', groups: ['WP'] },
   { key: 'ceiling', vn: 'TRẦN THẠCH CAO & TRẦN ĐẶC BIỆT', en: 'GYPSUM & SPECIALTY CEILING', band: 'A', groups: ['GWB', 'FGWB', 'MGWB', 'ACT'] },
   { key: 'skirting', vn: 'LEN CHÂN TƯỜNG – PHÀO CHỈ', en: 'SKIRTING & MOULDING', band: 'A', groups: ['BS'] },
-  { key: 'wood', vn: 'GỖ (TỰ NHIÊN – CÔNG NGHIỆP – NHỰA)', en: 'WOOD (NATURAL – ENGINEERED – WPC)', band: 'B', groups: ['WD', 'LM', 'WPC'] },
+  { key: 'wood', vn: 'GỖ (TỰ NHIÊN – CÔNG NGHIỆP – NHỰA)', en: 'WOOD (NATURAL – ENGINEERED – WPC)', band: 'B', groups: ['WD', 'EWD', 'WPC'] },
   { key: 'metal', vn: 'KIM LOẠI', en: 'METAL', band: 'B', groups: ['MT'] },
   { key: 'glass', vn: 'KÍNH', en: 'GLASS', band: 'B', groups: ['GL'] },
   { key: 'mirror', vn: 'GƯƠNG', en: 'MIRROR', band: 'B', groups: ['MR'] },
@@ -92,7 +92,7 @@ const resolve = (k: string) => { let c = k, n = 0; while (LAYOUT.merge?.[c] && n
 type SecEntry = Pick<Entry, 'group_code' | 'category'> & { section_key?: string | null }
 const rawKey = (e: SecEntry): string => {
   if (e.section_key && fullSections().some(x => x.key === e.section_key && x.custom)) return e.section_key
-  return (e.group_code === 'WD' || e.group_code === 'LM' || e.group_code === 'WPC') && e.category === 'floor' ? 'floor' : (SECTIONS.find(s => s.groups.includes(e.group_code)) ?? SECTIONS[SECTIONS.length - 1]).key
+  return (e.group_code === 'WD' || e.group_code === 'EWD' || e.group_code === 'WPC') && e.category === 'floor' ? 'floor' : (SECTIONS.find(s => s.groups.includes(e.group_code)) ?? SECTIONS[SECTIONS.length - 1]).key
 }
 /** Tiền tố ký hiệu hiệu lực: mục đã gộp thì dùng tiền tố của mục đích (đánh số liên tục cùng dãy) */
 export function effPrefix(e: SecEntry): string {
@@ -216,7 +216,7 @@ export const PREFIXES: Prefix[] = [
   { prefix: 'ST', en: 'Natural Stone', vn: 'Đá tự nhiên', includes_en: 'marble, granite, limestone, travertine, slate', includes_vn: 'marble, granite, đá vôi, travertine, đá slate', groups: ['ST'] },
   { prefix: 'EST', en: 'Engineered Stone', vn: 'Đá nhân tạo', includes_en: 'quartz, terrazzo, solid surface, sintered stone', includes_vn: 'quartz, terrazzo, solid surface, đá nung kết', groups: ['ES'] },
   { prefix: 'WD', en: 'Natural Wood', vn: 'Gỗ tự nhiên', includes_en: 'solid wood, timber, veneer', includes_vn: 'gỗ thịt, veneer', groups: ['WD'] },
-  { prefix: 'EWD', en: 'Engineered Wood', vn: 'Gỗ công nghiệp', includes_en: 'MDF, MFC, plywood, melamine, laminate, acrylic panels', includes_vn: 'MDF, MFC, ván ép, melamine, laminate, acrylic', groups: ['LM'] },
+  { prefix: 'EWD', en: 'Engineered Wood', vn: 'Gỗ công nghiệp', includes_en: 'MDF, MFC, plywood, melamine, laminate, acrylic panels', includes_vn: 'MDF, MFC, ván ép, melamine, laminate, acrylic', groups: ['EWD'] },
   { prefix: 'WPC', en: 'Wood Plastic Composite', vn: 'Gỗ nhựa', includes_en: 'WPC, wood-plastic composite, wood-look plastic', includes_vn: 'gỗ nhựa composite, nhựa giả gỗ, lam gỗ nhựa', groups: ['WPC'] },
   { prefix: 'LVT', en: 'Resilient Flooring', vn: 'Sàn nhựa', includes_en: 'luxury vinyl tile, vinyl sheet', includes_vn: 'sàn vinyl, sàn nhựa', groups: ['LVT'] },
   { prefix: 'CPT', en: 'Carpet Broadloom', vn: 'Thảm trải kín', includes_en: 'broadloom carpet (rolls, wall-to-wall)', includes_vn: 'thảm cuộn, thảm trải liền sàn', groups: ['CPT'] },
@@ -324,7 +324,7 @@ export function tx(vn: string | null | undefined, en: string | null | undefined,
 export const PICK_FAMILIES: { label: string; groups: string[] }[] = [
   { label: 'Gạch', groups: ['CT'] },
   { label: 'Đá', groups: ['ST', 'ES'] },
-  { label: 'Gỗ', groups: ['WD', 'LM', 'WPC'] },
+  { label: 'Gỗ', groups: ['WD', 'EWD', 'WPC'] },
   { label: 'Sàn nhựa – Thảm', groups: ['LVT', 'CPT', 'CTL', 'RUG'] },
   { label: 'Sơn – Giấy dán tường', groups: ['PT', 'SP', 'WC'] },
   { label: 'Thạch cao – Ốp tường – Trần – Len', groups: ['WP', 'GWB', 'FGWB', 'MGWB', 'ACT', 'BS'] },

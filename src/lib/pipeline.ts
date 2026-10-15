@@ -192,7 +192,8 @@ async function applyItems(project: Project, room: Room, rawItems: AIItem[], page
   const ordered = [...items.filter(i => !i.parent_ref), ...items.filter(i => i.parent_ref)]
   let created = 0, linked = 0
   for (const it of ordered) {
-    const group = GROUP_SET.has(it.group_code) ? it.group_code : 'DC'
+    const g0 = it.group_code === 'LM' ? 'EWD' : it.group_code   // AI (edge function) vẫn trả mã cũ LM
+    const group = GROUP_SET.has(g0) ? g0 : 'DC'
     const category = CAT_SET.has(it.category) ? it.category : 'decor'
     let entry = it.match_code && group !== 'AW' ? book.byCode.get(it.match_code.trim()) : undefined
     if (!entry && group !== 'AW') {

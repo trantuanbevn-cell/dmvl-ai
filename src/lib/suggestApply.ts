@@ -14,7 +14,7 @@ export function kindOfGroup(code?: string | null): string | null {
   if (c === 'PT' || c === 'SP') return 'paint'
   if (c === 'SF' || c === 'BA') return 'sanitary'
   if (c === 'BS') return 'moulding'
-  if (['WD', 'LM', 'WP', 'WPC'].includes(c)) return 'wood'
+  if (['WD', 'EWD', 'WP', 'WPC'].includes(c)) return 'wood'
   return null
 }
 

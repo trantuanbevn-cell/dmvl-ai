@@ -22,7 +22,7 @@ const T: Record<string, [string, string]> = {
   GWB: ['Khung xương chìm mạ kẽm (xương chính a ≤ 1200, xương phụ a ≤ 406), tấm thạch cao dày 9–12mm, xử lý mối nối băng keo lưới, bả 2 lớp, sơn 1 lót 2 phủ.', 'Galvanised concealed grid (main ≤ 1200 c/c, furring ≤ 406 c/c), 9–12mm gypsum board, taped joints, 2 skim coats, 1 primer + 2 finish coats.'],
   ACT: ['Tấm tiêu âm 600x600 trên khung nổi/ chìm sơn tĩnh điện, NRC ≥ 0,6.', '600x600 acoustic tiles on exposed/concealed grid, NRC ≥ 0.6.'],
   WD: ['Gỗ tự nhiên/ veneer, sơn PU hoặc lau dầu, độ bóng theo mẫu duyệt.', 'Solid timber/veneer, PU lacquer or oil finish, sheen to approved sample.'],
-  LM: ['Cốt MDF/ MFC dày 17–18mm phủ melamine/ laminate; nẹp chỉ PVC đồng màu dán máy; phát thải E1 trở lên.', '17–18mm MDF/MFC core faced with melamine/laminate; machine-applied matching PVC edge-band; E1 emission or better.'],
+  EWD: ['Cốt MDF/ MFC dày 17–18mm phủ melamine/ laminate; nẹp chỉ PVC đồng màu dán máy; phát thải E1 trở lên.', '17–18mm MDF/MFC core faced with melamine/laminate; machine-applied matching PVC edge-band; E1 emission or better.'],
   MT: ['Inox 304 dày ≥ 1,0mm hoặc thép sơn tĩnh điện màng ≥ 60µm; mối hàn mài phẳng.', 'SS304 ≥ 1.0mm or powder-coated steel ≥ 60µm DFT; welds ground flush.'],
   GL: ['Kính cường lực/ kính dán an toàn, mài cạnh; dán decal nhận diện nếu là vách.', 'Toughened/laminated safety glass, polished edges; manifestation on glazed screens.'],
   MR: ['Gương bạc dày 5mm, mài cạnh, dán băng an toàn mặt sau.', '5mm silvered mirror, polished edges, safety backing film.'],
@@ -62,7 +62,7 @@ export function perfFor(e: Pick<Entry, 'group_code' | 'category'>, roomTypes: st
   if ((c === 'wall' || c === 'feature_wall') && g === 'CT') add('Chống thấm, dễ lau chùi, kháng hóa chất tẩy rửa', 'Water-resistant, cleanable, chemical-resistant')
   if (g === 'PT') add(wet ? 'Sơn chống nấm mốc, lau chùi được' : 'Lau chùi được, hàm lượng VOC thấp', wet ? 'Anti-mould, washable' : 'Washable, low VOC')
   if (g === 'GWB' && wet) add('Tấm thạch cao chống ẩm; sơn chống nấm mốc', 'Moisture-resistant board; anti-mould paint')
-  if (['LM', 'WD', 'JN'].includes(g)) { add('Phát thải formaldehyde E1 trở lên', 'Formaldehyde emission E1 or better'); if (wet) add('Cốt chống ẩm (HMR); chân tủ cách sàn ≥ 150mm', 'Moisture-resistant (HMR) core; ≥150mm floor clearance') }
+  if (['EWD', 'WD', 'JN'].includes(g)) { add('Phát thải formaldehyde E1 trở lên', 'Formaldehyde emission E1 or better'); if (wet) add('Cốt chống ẩm (HMR); chân tủ cách sàn ≥ 150mm', 'Moisture-resistant (HMR) core; ≥150mm floor clearance') }
   if (g === 'LT') { if (wet) add('Cấp bảo vệ IP44 trở lên (gần nước IP65)', 'IP44 minimum (IP65 near water)'); if (roomTypes.some(t => ['office', 'meeting', 'lounge_training'].includes(t))) add('Độ rọi 300–500 lux, UGR ≤ 19, CRI ≥ 80', '300–500 lux, UGR ≤ 19, CRI ≥ 80') }
   if ((g === 'FB' || g === 'LE') && pub) add('Vải contract: ≥ 30.000 double rubs (Wyzenbeek), bền màu ≥ 4, chống cháy', 'Contract grade: ≥ 30,000 double rubs, colourfastness ≥ 4, flame-retardant')
   if (g === 'FF' && pub) add('Đồ dùng khu công cộng: kết cấu chắc chắn, bề mặt dễ vệ sinh', 'Contract-grade construction, cleanable surfaces')

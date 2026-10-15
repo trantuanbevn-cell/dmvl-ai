@@ -42,7 +42,7 @@ export async function saveToLibrary(e: Entry) {
 
 // Liên kết tìm nhanh theo nhóm (site: chỉ dùng cho các website đã xác minh)
 const SITES: Record<string, [string, string][]> = {
-  LM: [['An Cường', 'site:ancuong.com']], WD: [['An Cường', 'site:ancuong.com']], WP: [['An Cường', 'site:ancuong.com']],
+  EWD: [['An Cường', 'site:ancuong.com']], WD: [['An Cường', 'site:ancuong.com']], WP: [['An Cường', 'site:ancuong.com']],
   PT: [['Dulux', 'site:dulux.vn'], ['Jotun', 'Jotun màu sơn'], ['Nippon', 'Nippon Paint màu']], SP: [['Jotun', 'Jotun epoxy'], ['Dulux', 'site:dulux.vn']],
   CT: [['Khatra', 'site:khatra.com.vn'], ['Luxcasa', 'site:gachluxcasa.vn'], ['Viglacera', 'Viglacera gạch'], ['Vietceramics', 'Vietceramics']],
   GWB: [['Vĩnh Tường', 'site:vinhtuong.com'], ['Knauf', 'Knauf Việt Nam']], ACT: [['Vĩnh Tường', 'site:vinhtuong.com'], ['Knauf', 'Knauf trần tiêu âm']],
