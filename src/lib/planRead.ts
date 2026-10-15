@@ -100,7 +100,7 @@ export async function readPlan(v: VecPage, roles: Record<string, Role>, den: num
     }
   }
   const uniq: typeof raw = []
-  for (const d of raw) if (!uniq.some(u => Math.hypot(d.H[0] - u.H[0], d.H[1] - u.H[1]) < 1.5 && Math.abs(d.r - u.r) < 1.5 && Math.hypot(d.E[0] - u.E[0], d.E[1] - u.E[1]) < 2)) uniq.push(d)
+  for (const d of raw) if (!uniq.some(u => Math.hypot(d.H[0] - u.H[0], d.H[1] - u.H[1]) < 8 && Math.abs(d.r - u.r) < 3 && Math.hypot(d.E[0] - u.E[0], d.E[1] - u.E[1]) < 8)) uniq.push(d)
   const doors: PlanDoor[] = uniq.map(d => {
     const L = Math.hypot(d.E[0] - d.H[0], d.E[1] - d.H[1]) || 1, u: P = [(d.E[0] - d.H[0]) / L, (d.E[1] - d.H[1]) / L]
     const hOk = [0, 0.1, 0.2].some(k => hasWall(d.H[0] - u[0] * k * PT, d.H[1] - u[1] * k * PT))
@@ -218,4 +218,101 @@ export function renderPlan(res: PlanResult, opt: RenderOpt): HTMLCanvasElement {
     for (const r of res.rooms) if (r.area >= 1.5) g.fillText(`${r.id} · ${r.area.toFixed(1)} m²`, r.cx * ppp, r.cy * ppp)
   }
   return c
+}
+
+// ───────── Gộp thêm DXF (dữ liệu bổ sung, tuỳ chọn) ─────────
+/** DXF và PDF cùng một bản vẽ nhưng khác gốc toạ độ → quy DXF về toạ độ trang PDF: tỉ lệ theo đơn vị thật, dịch chuyển bằng khớp mặt nạ tường (coarse 1 px/pt rồi tinh 4 px/pt) */
+export type DxfMerge = { merged: VecPage; dx: number; dy: number; score: number; mmPerPt: number; den: number; roles: Record<string, Role>; diffs: { kind: 'dxfOnly' | 'pdfOnly'; x: number; y: number; w: number; h: number }[]; nDxfOnly: number; nPdfOnly: number }
+type DxfVec = VecPage & { dxf?: { den: number } }
+const PT_MM = 25.4 / 72
+
+function wallMaskCanvas(v: VecPage, sel: Set<number>, ppp: number, W: number, H: number): Uint8Array {
+  const { mask, W: w, H: h } = rasterWalls(v, sel, ppp, [], false, 0.03528)
+  if (w === W && h === H) return mask
+  const out = new Uint8Array(W * H)
+  for (let y = 0; y < Math.min(h, H); y++) for (let x = 0; x < Math.min(w, W); x++) if (mask[y * w + x]) out[y * W + x] = 255
+  return out
+}
+
+/** Ghép DXF vào PDF: dò TỈ LỆ THẬT của PDF (mm/pt – PDF xuất ra thường không đúng 1:200) và độ dịch bằng khớp mẫu mặt nạ tường; sau đó quy nét DXF về toạ độ PDF. */
+export async function mergeDxf(pdf: VecPage, pdfRoles: Record<string, Role>, dxf: DxfVec, den: number, onLog: (s: string) => void = () => {}, dRolesIn?: Record<string, Role>): Promise<DxfMerge> {
+  const cv = await loadCv()
+  const dxfMm = PT_MM * (dxf.dxf?.den ?? den) // mm thật trên 1 pt của DXF
+  const dRows = suggestRoles(dxf), dRoles: Record<string, Role> = {}; dRows.forEach(r => { dRoles['[DXF] ' + r.layer] = dRolesIn?.['[DXF] ' + r.layer] ?? r.role })
+  const selP = new Set<number>(); pdf.classes.forEach((c, i) => { if (pdfRoles[c.layer] === 'wall') selP.add(i) })
+  const selD = new Set<number>(); dxf.classes.forEach((c, i) => { if (dRoles['[DXF] ' + c.layer] === 'wall') selD.add(i) })
+  if (!selP.size || !selD.size) throw new Error('Cần có layer tường ở cả PDF lẫn DXF để khớp hai file')
+  onLog('Dò tỉ lệ và vị trí DXF so với PDF…')
+  const M0 = 70.56, k0 = dxfMm / M0 // quy chiếu: 1 pt PDF = M0 mm
+  const blur = (a: Uint8Array, w: number, h: number, ks: number) => { const m = new cv.Mat(h, w, cv.CV_8UC1); m.data.set(a); const o = new cv.Mat(); cv.GaussianBlur(m, o, new cv.Size(ks, ks), 0); const f = new cv.Mat(); o.convertTo(f, cv.CV_32F, 1 / 255); m.delete(); o.delete(); return f }
+  const dense = (m: Uint8Array, w: number, h: number, lo: number, hi: number) => { // vùng đặc theo phân vị (DXF hay có nét lạc ở xa)
+    const cx = new Float64Array(w), cy = new Float64Array(h); let tot = 0
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (m[y * w + x]) { cx[x]++; cy[y]++; tot++ }
+    const pct = (a: Float64Array, q: number) => { let acc = 0; for (let i = 0; i < a.length; i++) { acc += a[i]; if (acc >= q * tot) return i } return a.length - 1 }
+    return { x0: pct(cx, lo), x1: pct(cx, hi), y0: pct(cy, lo), y1: pct(cy, hi) }
+  }
+  // tìm vị trí tốt nhất của mẫu DXF (đã thu/phóng theo M) trong mặt nạ PDF ở độ phân giải g px/pt
+  const search = (g: number, Ms: number[]) => {
+    const Wg = Math.ceil(pdf.w * g), Hg = Math.ceil(pdf.h * g)
+    const img = blur(wallMaskCanvas(pdf, selP, g, Wg, Hg), Wg, Hg, g >= 1 ? 7 : 5)
+    const D = rasterWalls(dxf, selD, k0 * g, [], false, 0.03528), bb = dense(D.mask, D.W, D.H, 0.08, 0.92)
+    const cw = bb.x1 - bb.x0, ch = bb.y1 - bb.y0, crop = new Uint8Array(cw * ch)
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) crop[y * cw + x] = D.mask[(y + bb.y0) * D.W + x + bb.x0]
+    const cm = new cv.Mat(ch, cw, cv.CV_8UC1); cm.data.set(crop)
+    let best = { score: -1, M: M0, x: 0, y: 0 }
+    for (const M of Ms) {
+      const sc = M0 / M, tw = Math.round(cw * sc), th = Math.round(ch * sc); if (tw < 20 || th < 20 || tw >= Wg || th >= Hg) continue
+      const rs = new cv.Mat(); cv.resize(cm, rs, new cv.Size(tw, th), 0, 0, cv.INTER_AREA)
+      const tpl = blur(rs.data as Uint8Array, tw, th, g >= 1 ? 7 : 5), out = new cv.Mat()
+      cv.matchTemplate(img, tpl, out, cv.TM_CCOEFF_NORMED); const mm = cv.minMaxLoc(out)
+      if (mm.maxVal > best.score) best = { score: mm.maxVal, M, x: mm.maxLoc.x / g - (bb.x0 * sc) / g, y: mm.maxLoc.y / g - (bb.y0 * sc) / g }
+      rs.delete(); tpl.delete(); out.delete()
+    }
+    img.delete(); cm.delete()
+    return best
+  }
+  const grid = (a: number, b: number, r: number) => { const o: number[] = []; for (let M = a; M <= b; M *= 1 + r) o.push(M); return o }
+  let best = search(0.5, grid(60, 150, 0.015))
+  best = search(1, grid(best.M * 0.975, best.M * 1.025, 0.003))
+  const M = best.M, k = dxfMm / M
+  // tinh dịch chuyển ở 4 px/pt với đúng tỉ lệ
+  const f = 4, Wf = Math.ceil(pdf.w * f), Hf = Math.ceil(pdf.h * f)
+  const Pf = wallMaskCanvas(pdf, selP, f, Wf, Hf), Df = rasterWalls(dxf, selD, k * f, [], false, 0.03528), bbf = dense(Df.mask, Df.W, Df.H, 0.2, 0.8)
+  const tw = bbf.x1 - bbf.x0, th = bbf.y1 - bbf.y0, ta = new Uint8Array(tw * th)
+  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) ta[y * tw + x] = Df.mask[(y + bbf.y0) * Df.W + x + bbf.x0]
+  const R = 4 * f, ex = Math.round(best.x * f) + bbf.x0, ey = Math.round(best.y * f) + bbf.y0
+  const rx0 = Math.max(0, ex - R), ry0 = Math.max(0, ey - R), rw = Math.min(Wf - rx0, tw + 2 * R), rh = Math.min(Hf - ry0, th + 2 * R)
+  const sub = new Uint8Array(rw * rh); for (let y = 0; y < rh; y++) for (let x = 0; x < rw; x++) sub[y * rw + x] = Pf[(y + ry0) * Wf + x + rx0]
+  const img2 = blur(sub, rw, rh, 5), tpl2 = blur(ta, tw, th, 5), res2 = new cv.Mat()
+  cv.matchTemplate(img2, tpl2, res2, cv.TM_CCOEFF_NORMED); const m2 = cv.minMaxLoc(res2)
+  const dx = (rx0 + m2.maxLoc.x - bbf.x0) / f, dy = (ry0 + m2.maxLoc.y - bbf.y0) / f
+  img2.delete(); tpl2.delete(); res2.delete()
+  onLog(`Khớp DXF: ${M.toFixed(1)} mm/pt (≈ 1:${Math.round(M / PT_MM)}), dịch (${dx.toFixed(1)}, ${dy.toFixed(1)}) pt, độ khớp ${(m2.maxVal * 100).toFixed(0)}%`)
+  // gộp: nét/tô/chữ của DXF quy về toạ độ PDF, layer gắn tiền tố "[DXF] "
+  const nClsBase = pdf.classes.length
+  const classes = [...pdf.classes, ...dxf.classes.map(c => ({ ...c, layer: '[DXF] ' + c.layer, key: '[DXF] ' + c.key }))]
+  const segs = new Float32Array(pdf.segs.length + dxf.segs.length), cls = new Uint16Array(pdf.nSeg + dxf.nSeg)
+  segs.set(pdf.segs.subarray(0, pdf.nSeg * 4)); cls.set(pdf.cls.subarray(0, pdf.nSeg))
+  for (let i = 0; i < dxf.nSeg; i++) { for (let j = 0; j < 4; j += 2) { segs[(pdf.nSeg + i) * 4 + j] = dxf.segs[i * 4 + j] * k + dx; segs[(pdf.nSeg + i) * 4 + j + 1] = dxf.segs[i * 4 + j + 1] * k + dy } cls[pdf.nSeg + i] = dxf.cls[i] + nClsBase }
+  const fills = [...pdf.fills, ...dxf.fills.map(fl => { const p = new Float32Array(fl.pts.length); for (let i = 0; i < p.length; i += 2) { p[i] = fl.pts[i] * k + dx; p[i + 1] = fl.pts[i + 1] * k + dy } return { cls: fl.cls + nClsBase, pts: p } })]
+  const merged: VecPage = { ...pdf, segs, cls, nSeg: pdf.nSeg + dxf.nSeg, fills, classes, arcs: pdf.arcs }
+  // so sánh tường: chỗ chỉ một bên có → nghi vấn (người xem quyết định)
+  const g = 2, Wg = Math.ceil(pdf.w * g), Hg = Math.ceil(pdf.h * g)
+  const selD2 = new Set<number>(); classes.forEach((c, i) => { if (i >= nClsBase && dRoles[c.layer] === 'wall') selD2.add(i) })
+  const MP = wallMaskCanvas(merged, selP, g, Wg, Hg), MD = wallMaskCanvas(merged, selD2, g, Wg, Hg)
+  const diffs: DxfMerge['diffs'] = []
+  const dil = (a: Uint8Array) => { const m = new cv.Mat(Hg, Wg, cv.CV_8UC1); m.data.set(a); const o = new cv.Mat(); cv.dilate(m, o, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(9, 9))); const r = (o.data as Uint8Array).slice(); m.delete(); o.delete(); return r }
+  const comps = (a: Uint8Array, kind: 'dxfOnly' | 'pdfOnly') => {
+    const m = new cv.Mat(Hg, Wg, cv.CV_8UC1); m.data.set(a); const o = new cv.Mat(); cv.erode(m, o, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3)))
+    const lab = new cv.Mat(), st = new cv.Mat(), ce = new cv.Mat(); const n = cv.connectedComponentsWithStats(o, lab, st, ce, 8, cv.CV_32S); const S = (st.data32S as Int32Array).slice()
+    let cnt = 0
+    for (let i = 1; i < n; i++) { const w = S[i * 5 + 2], h = S[i * 5 + 3]; if (S[i * 5 + 4] < 14 || Math.max(w, h) < 0.5 * g * 14.17 * 0.5) continue; if (S[i * 5] / g < 12 || S[i * 5 + 1] / g < 12 || (S[i * 5] + w) / g > pdf.w - 12 || (S[i * 5 + 1] + h) / g > pdf.h - 12) continue; cnt++; diffs.push({ kind, x: S[i * 5] / g, y: S[i * 5 + 1] / g, w: w / g, h: h / g }) }
+    m.delete(); o.delete(); lab.delete(); st.delete(); ce.delete(); return cnt
+  }
+  const dP = dil(MP), dD = dil(MD)
+  const onlyD = new Uint8Array(Wg * Hg), onlyP = new Uint8Array(Wg * Hg)
+  for (let i = 0; i < onlyD.length; i++) { if (MD[i] && !dP[i]) onlyD[i] = 255; if (MP[i] && !dD[i]) onlyP[i] = 255 }
+  const nDxfOnly = comps(onlyD, 'dxfOnly'), nPdfOnly = comps(onlyP, 'pdfOnly')
+  onLog(`Khác biệt tường: chỉ DXF có ${nDxfOnly} chỗ, chỉ PDF có ${nPdfOnly} chỗ`)
+  return { merged, dx, dy, score: m2.maxVal, mmPerPt: M, den: M / PT_MM, roles: dRoles, diffs, nDxfOnly, nPdfOnly }
 }

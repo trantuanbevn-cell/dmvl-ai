@@ -1,94 +1,124 @@
-// Tab thử nghiệm "Đọc mặt bằng": tải PDF/DXF mặt bằng → chọn layer (có gợi ý) → dựng lại tường/cột/cửa → tách không gian + diện tích.
-// Không ghi gì vào dự án nào (chỉ xem), để duyệt thuật toán trước khi áp vào các bước khác.
+// Tab thử nghiệm "Đọc mặt bằng": tải PDF (chuẩn hình ảnh) và/hoặc DXF (dữ liệu bổ sung) → chọn layer (có gợi ý) → dựng lại tường/cột/cửa → tách không gian + diện tích.
+// Có cả hai file: phần mềm tự dò tỉ lệ thật + khớp vị trí DXF lên PDF, gộp dữ liệu và chỉ ra chỗ hai file khác nhau. Không ghi gì vào dự án nào.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { readVectorPage, type VecPage } from '../lib/vector'
 import { checkPlanWithAI, ISSUE_LABEL, type PlanIssue } from '../lib/planAi'
-import { suggestRoles, readPlan, renderPlan, type LayerRow, type PlanResult, type Role } from '../lib/planRead'
+import { suggestRoles, readPlan, mergeDxf, renderPlan, type DxfMerge, type LayerRow, type PlanResult, type Role } from '../lib/planRead'
 
 const ROLE: [Role, string][] = [['wall', 'Tường / cột'], ['door', 'Cửa'], ['arc', 'Cung cửa (phụ)'], ['skip', 'Bỏ']]
 const key = (n: string) => 'dmvl.planread.' + n
+const DX = '[DXF] '
+type Dv = VecPage & { dxf?: { den: number } }
 
 export default function PlanReader() {
-  const [file, setFile] = useState<File | null>(null), [page, setPage] = useState(1), [den, setDen] = useState(200)
-  const [vec, setVec] = useState<VecPage | null>(null), [rows, setRows] = useState<LayerRow[]>([])
-  const [res, setRes] = useState<PlanResult | null>(null), [busy, setBusy] = useState(''), [err, setErr] = useState('')
-  const [showRooms, setShowRooms] = useState(true), [showDoors, setShowDoors] = useState(true), [showLabels, setShowLabels] = useState(true)
-  const host = useRef<HTMLDivElement>(null)
+  const [pdf, setPdf] = useState<File | null>(null), [dxf, setDxf] = useState<File | null>(null), [page, setPage] = useState(1), [den, setDen] = useState(200)
+  const [pv, setPv] = useState<VecPage | null>(null), [dv, setDv] = useState<Dv | null>(null)
+  const [pRows, setPRows] = useState<LayerRow[]>([]), [dRows, setDRows] = useState<LayerRow[]>([])
+  const [res, setRes] = useState<PlanResult | null>(null), [mg, setMg] = useState<DxfMerge | null>(null), [busy, setBusy] = useState(''), [err, setErr] = useState('')
+  const [showRooms, setShowRooms] = useState(true), [showDoors, setShowDoors] = useState(true), [showLabels, setShowLabels] = useState(true), [showDiff, setShowDiff] = useState(true)
   const [issues, setIssues] = useState<PlanIssue[] | null>(null), [orig, setOrig] = useState<HTMLCanvasElement | null>(null), [showIssues, setShowIssues] = useState(true), [focus, setFocus] = useState<PlanIssue | null>(null)
-  const bufRef = useRef<ArrayBuffer | null>(null)
+  const host = useRef<HTMLDivElement>(null), bufRef = useRef<ArrayBuffer | null>(null)
 
-  const load = async (f: File, pg: number) => {
-    setErr(''); setRes(null); setIssues(null); setOrig(null); setFocus(null); setVec(null); setBusy('Đang đọc nét vẽ…')
+  const reset = () => { setErr(''); setRes(null); setMg(null); setIssues(null); setOrig(null); setFocus(null) }
+  const saved = (name: string) => { try { return JSON.parse(localStorage.getItem(key(name)) ?? 'null') as Record<string, Role> | null } catch { return null } }
+  const loadPdf = async (f: File, pg: number) => {
+    reset(); setBusy('Đang đọc PDF…')
     try {
       const ab = await f.arrayBuffer(); bufRef.current = ab
-      const v = await readVectorPage(ab, pg, s => setBusy(s))
-      const sug = suggestRoles(v)
-      try { const saved = JSON.parse(localStorage.getItem(key(f.name)) ?? 'null') as Record<string, Role> | null; if (saved) for (const r of sug) if (saved[r.layer]) r.role = saved[r.layer] } catch { /* bỏ qua */ }
-      setVec(v); setRows(sug)
+      const v = await readVectorPage(ab, pg, s => setBusy(s)); const sug = suggestRoles(v), sv = saved(f.name)
+      if (sv) for (const r of sug) if (sv[r.layer]) r.role = sv[r.layer]
+      setPv(v); setPRows(sug)
+    } catch (e) { setErr(String(e instanceof Error ? e.message : e)) }
+    setBusy('')
+  }
+  const loadDxf = async (f: File) => {
+    reset(); setBusy('Đang đọc DXF…')
+    try {
+      const v = (await readVectorPage(await f.arrayBuffer(), 1, s => setBusy(s))) as Dv; const sug = suggestRoles(v), sv = saved(f.name)
+      if (sv) for (const r of sug) if (sv[DX + r.layer]) r.role = sv[DX + r.layer]
+      setDv(v); setDRows(sug)
     } catch (e) { setErr(String(e instanceof Error ? e.message : e)) }
     setBusy('')
   }
   const run = async () => {
-    if (!vec || !file) return
-    setErr(''); setBusy('Đang đọc mặt bằng…')
-    const roles: Record<string, Role> = {}; rows.forEach(r => { roles[r.layer] = r.role })
-    try { localStorage.setItem(key(file.name), JSON.stringify(roles)) } catch { /* bỏ qua */ }
-    setIssues(null); setOrig(null); setFocus(null)
-    try { setRes(await readPlan(vec, roles, den, setBusy)) } catch (e) { setErr(String(e instanceof Error ? e.message : e)) }
+    const base = pv ?? dv; if (!base) return
+    reset(); setBusy('Đang đọc mặt bằng…')
+    const roles: Record<string, Role> = {}, dRoles: Record<string, Role> = {}
+    if (pv) pRows.forEach(r => { roles[r.layer] = r.role }); dRows.forEach(r => { dRoles[DX + r.layer] = r.role })
+    try {
+      if (pdf) localStorage.setItem(key(pdf.name), JSON.stringify(roles)); if (dxf) localStorage.setItem(key(dxf.name), JSON.stringify(dRoles))
+    } catch { /* bỏ qua */ }
+    try {
+      if (pv && dv) { // có cả hai: dò tỉ lệ thật + khớp vị trí, gộp dữ liệu
+        const m = await mergeDxf(pv, roles, dv, den, setBusy, dRoles); setMg(m); setDen(Math.round(m.den))
+        setRes(await readPlan(m.merged, { ...roles, ...m.roles }, m.den, setBusy))
+      } else if (pv) setRes(await readPlan(pv, roles, den, setBusy))
+      else { const d0 = dv!.dxf?.den ?? den; const r2: Record<string, Role> = {}; dRows.forEach(r => { r2[r.layer] = dRoles[DX + r.layer] }); setDen(d0); setRes(await readPlan(dv!, r2, d0, setBusy)) }
+    } catch (e) { setErr(String(e instanceof Error ? e.message : e)) }
     setBusy('')
   }
   const ai = async () => {
-    if (!res || !bufRef.current) return
+    if (!res || !bufRef.current || !pv) return
     setErr(''); setBusy('AI đang kiểm tra…'); setIssues(null)
-    try { const r = await checkPlanWithAI(bufRef.current, page, res, file?.name ?? '', setBusy); setIssues(r.issues); setOrig(r.orig); setShowIssues(true) } catch (e) { setErr(String(e instanceof Error ? e.message : e)) }
+    try { const r = await checkPlanWithAI(bufRef.current, page, res, pdf?.name ?? '', setBusy); setIssues(r.issues); setOrig(r.orig); setShowIssues(true) } catch (e) { setErr(String(e instanceof Error ? e.message : e)) }
     setBusy('')
   }
   const canvas = useMemo(() => {
     if (!res) return null
-    const c = renderPlan(res, { rooms: showRooms, doors: showDoors, labels: showLabels })
+    const c = renderPlan(res, { rooms: showRooms, doors: showDoors, labels: showLabels }), g = c.getContext('2d')!
+    if (showDiff && mg) { g.lineWidth = 5; for (const d of mg.diffs) { g.strokeStyle = d.kind === 'dxfOnly' ? '#ff7a00' : '#b020c0'; g.strokeRect(d.x * res.ppp - 6, d.y * res.ppp - 6, d.w * res.ppp + 12, d.h * res.ppp + 12) } }
     if (showIssues && issues?.length) {
-      const g = c.getContext('2d')!; g.lineWidth = 7; g.font = 'bold 56px Arial'; g.textAlign = 'left'
+      g.lineWidth = 7; g.font = 'bold 56px Arial'; g.textAlign = 'left'
       for (const it of issues) { g.strokeStyle = '#d4202a'; g.strokeRect(it.box[0], it.box[1], it.box[2] - it.box[0], it.box[3] - it.box[1]); g.fillStyle = '#d4202a'; g.fillText(String(it.n), it.box[0] + 6, it.box[1] - 8) }
     }
     return c
-  }, [res, showRooms, showDoors, showLabels, issues, showIssues])
+  }, [res, mg, showRooms, showDoors, showLabels, showDiff, issues, showIssues])
+  useEffect(() => { const h = host.current; if (!h || !canvas) return; h.innerHTML = ''; canvas.style.width = '100%'; canvas.style.height = 'auto'; canvas.style.background = '#fff'; h.appendChild(canvas) }, [canvas])
   const crop = (src: HTMLCanvasElement | null, b: number[]) => {
     if (!src) return ''
     const m = 120, x = Math.max(0, b[0] - m), y = Math.max(0, b[1] - m), w = Math.min(src.width - x, b[2] - b[0] + 2 * m), h = Math.min(src.height - y, b[3] - b[1] + 2 * m)
     const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d')!.drawImage(src, x, y, w, h, 0, 0, w, h); return c.toDataURL('image/jpeg', 0.85)
   }
-  useEffect(() => { const h = host.current; if (!h || !canvas) return; h.innerHTML = ''; canvas.style.width = '100%'; canvas.style.height = 'auto'; canvas.style.background = '#fff'; h.appendChild(canvas) }, [canvas])
-  const png = () => { if (!canvas) return; const a = document.createElement('a'); a.href = canvas.toDataURL('image/png'); a.download = (file?.name ?? 'mat-bang').replace(/\.\w+$/, '') + '_doc.png'; a.click() }
+  const png = () => { if (!canvas) return; const a = document.createElement('a'); a.href = canvas.toDataURL('image/png'); a.download = ((pdf ?? dxf)?.name ?? 'mat-bang').replace(/\.\w+$/, '') + '_doc.png'; a.click() }
   const orphan = res?.doors.filter(d => !d.hOk || !d.eOk).length ?? 0
   const bad = res?.rooms.filter(r => r.labelArea && Math.abs(r.area - r.labelArea) / r.labelArea > 0.08) ?? []
+  const table = (title: string, rows: LayerRow[], set: (r: LayerRow[]) => void) => rows.length > 0 && <details open={!res} style={{ margin: '8px 0' }}><summary><b>Layer {title}</b></summary>
+    <div style={{ maxHeight: 280, overflow: 'auto' }}><table className="tbl small"><tbody>
+      {rows.map((r, i) => <tr key={r.layer}><td style={{ wordBreak: 'break-all' }}>{r.layer || '(không tên)'}</td><td className="muted">{r.segs} nét{r.fills ? ` · ${r.fills} tô` : ''}</td>
+        <td><select value={r.role} onChange={e => set(rows.map((x, j) => (j === i ? { ...x, role: e.target.value as Role } : x)))}>{ROLE.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td></tr>)}
+    </tbody></table></div></details>
 
   return (
     <div className="card concept">
-      <h3 style={{ margin: 0 }}>Đọc mặt bằng <span className="muted small">– bản thử nghiệm: dựng lại tường · cột · cửa từ PDF/DXF, tách không gian và đo diện tích (chưa ghi vào dự án nào)</span></h3>
-      <div className="row wrap" style={{ gap: 10, margin: '10px 0', alignItems: 'center' }}>
-        <input type="file" accept=".pdf,.dxf" onChange={e => { const f = e.target.files?.[0]; if (f) { setFile(f); load(f, page) } }} />
-        <label className="small">Trang <input type="number" min={1} value={page} style={{ width: 56 }} onChange={e => setPage(Math.max(1, +e.target.value || 1))} /></label>
-        <label className="small">Tỉ lệ 1: <input type="number" min={1} value={den} style={{ width: 70 }} onChange={e => setDen(Math.max(1, +e.target.value || 200))} /></label>
-        {file && <button className="btn sm" disabled={!!busy} onClick={() => load(file, page)}>Đọc lại file</button>}
-        {vec && <button className="btn primary" disabled={!!busy} onClick={run}>▶ Dựng mặt bằng</button>}
+      <h3 style={{ margin: 0 }}>Đọc mặt bằng <span className="muted small">– bản thử nghiệm: dựng lại tường · cột · cửa từ PDF và/hoặc DXF, tách không gian và đo diện tích (chưa ghi vào dự án nào)</span></h3>
+      <div className="row wrap" style={{ gap: 14, margin: '10px 0', alignItems: 'flex-end' }}>
+        <label className="small"><b>PDF</b> <span className="muted">(đúng về hình ảnh)</span><br /><input type="file" accept=".pdf" onChange={e => { const f = e.target.files?.[0]; if (f) { setPdf(f); loadPdf(f, page) } }} /></label>
+        <label className="small"><b>DXF</b> <span className="muted">(bổ sung, so sánh – tuỳ chọn)</span><br /><input type="file" accept=".dxf" onChange={e => { const f = e.target.files?.[0]; if (f) { setDxf(f); loadDxf(f) } }} /></label>
+        <label className="small">Trang PDF <input type="number" min={1} value={page} style={{ width: 56 }} onChange={e => setPage(Math.max(1, +e.target.value || 1))} /></label>
+        <label className="small">Tỉ lệ 1: <input type="number" min={1} value={den} style={{ width: 70 }} disabled={!!(pv && dv)} onChange={e => setDen(Math.max(1, +e.target.value || 200))} /></label>
+        {pdf && <button className="btn sm" disabled={!!busy} onClick={() => loadPdf(pdf, page)}>Đọc lại PDF</button>}
+        {(pv || dv) && <button className="btn primary" disabled={!!busy} onClick={run}>▶ Dựng mặt bằng</button>}
         {busy && <span className="muted small">{busy}</span>}
       </div>
+      <div className="muted small">{pv && dv ? 'Có cả PDF và DXF: tỉ lệ thật được tự dò từ DXF (PDF xuất ra thường không đúng tỉ lệ ghi trên khung tên) và hai file được khớp vị trí để bổ sung cho nhau.' : 'Chỉ có PDF thì phải nhập đúng tỉ lệ thật – sai tỉ lệ là sai diện tích. Tải thêm DXF để phần mềm tự dò.'}</div>
       {err && <div className="card" style={{ color: '#b00020' }}>{err}</div>}
-      {vec && <details open={!res} style={{ margin: '8px 0' }}><summary><b>Layer</b> <span className="muted small">– phần mềm đã gợi ý theo tên; đổi nếu sai (lựa chọn được nhớ theo tên file). “Cung cửa (phụ)” dành cho layer chỉ chứa cung quay của cửa.</span></summary>
-        <div style={{ maxHeight: 320, overflow: 'auto' }}><table className="tbl small"><tbody>
-          {rows.map((r, i) => <tr key={r.layer}><td style={{ wordBreak: 'break-all' }}>{r.layer || '(không tên)'}</td><td className="muted">{r.segs} nét{r.fills ? ` · ${r.fills} tô` : ''}</td>
-            <td><select value={r.role} onChange={e => setRows(rows.map((x, j) => (j === i ? { ...x, role: e.target.value as Role } : x)))}>{ROLE.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td></tr>)}
-        </tbody></table></div></details>}
+      {table('PDF', pRows, setPRows)}
+      {table(pv ? 'DXF (bổ sung)' : 'DXF', dRows, setDRows)}
       {res && <>
         <div className="row wrap small" style={{ gap: 14, margin: '6px 0' }}>
           <label><input type="checkbox" checked={showRooms} onChange={e => setShowRooms(e.target.checked)} /> Tô màu sàn</label>
           <label><input type="checkbox" checked={showDoors} onChange={e => setShowDoors(e.target.checked)} /> Cửa (xanh)</label>
           <label><input type="checkbox" checked={showLabels} onChange={e => setShowLabels(e.target.checked)} /> Số + diện tích</label>
+          {mg && <label><input type="checkbox" checked={showDiff} onChange={e => setShowDiff(e.target.checked)} /> Chỗ PDF/DXF khác nhau</label>}
           <button className="btn sm" onClick={png}>⬇ Tải ảnh PNG</button>
-          <button className="btn sm" disabled={!!busy} onClick={ai}>🤖 AI kiểm tra lỗi</button>
+          {pv && <button className="btn sm" disabled={!!busy} onClick={ai}>🤖 AI kiểm tra lỗi</button>}
           {issues && <label><input type="checkbox" checked={showIssues} onChange={e => setShowIssues(e.target.checked)} /> Khung đỏ lỗi</label>}
-          <span className="muted">{res.rooms.length} không gian · {res.doors.length} cửa quay (cánh đôi {res.doors.filter(d => d.pair).length}) · {res.closures.length} ô mở/trượt</span>
+          <span className="muted">{res.rooms.length} không gian · {res.doors.length} cửa quay (cánh đôi {res.doors.filter(d => d.pair).length}) · {res.closures.length} ô mở/trượt · tỉ lệ 1:{Math.round(res.mpp / (25.4 / 72 / 1000))}</span>
         </div>
+        {mg && <div className="card small" style={{ background: '#f1f6ff' }}>
+          <b>Khớp PDF ↔ DXF:</b> độ khớp {Math.round(mg.score * 100)}% · tỉ lệ thật <b>1:{Math.round(mg.den)}</b> ({mg.mmPerPt.toFixed(1)} mm/pt) · khung cam: {mg.nDxfOnly} chỗ chỉ DXF có tường · khung tím: {mg.nPdfOnly} chỗ chỉ PDF có tường.
+          {mg.score < 0.5 && <div style={{ color: '#b00020' }}>Độ khớp thấp – có thể hai file không cùng một mặt bằng hoặc layer tường chọn chưa đúng.</div>}
+        </div>}
         {(orphan > 0 || res.unresolved.length > 0 || bad.length > 0) && <div className="card small" style={{ background: '#fff8e6' }}>
           <b>Cần xem lại:</b>
           {orphan > 0 && <div>• {orphan} cửa có đầu chưa chạm tường (đã tự nối tới tường gần nhất nếu thấy).</div>}
