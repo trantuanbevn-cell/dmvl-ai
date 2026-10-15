@@ -25,7 +25,7 @@ export async function buildScheduleHtml(d: ExportData, o: ExportOpts, print: boo
   const L = o.lang, vn = L !== 'en', includePending = o.includePending
   const h = (a: string, b: string) => (L === 'vn' ? a : L === 'en' ? b : `${a} / ${b}`)
   const both = L === 'both'
-  const html1 = (ls: Seg[]) => ls.map(l => `<div class="${both ? l.k : 'n'}">${esc(l.t)}</div>`).join('')   // song ngữ: VN đậm trên, EN nghiêng dưới
+  const html1 = (ls: Seg[]) => ls.map(l => l.runs ? `<div>${l.runs.map(r => `<span class="${r.k}">${esc(r.t)}</span>`).join('')}</div>` : `<div class="${both ? l.k : 'n'}">${esc(l.t)}</div>`).join('')   // song ngữ: VN đậm trên, EN nghiêng dưới
   const hd = (a: string, b: string) => (both ? `<div class="vn">${esc(a)}</div><div class="en">${esc(b)}</div>` : esc(L === 'en' ? b : a))
   const list = filterEntries(d.entries, includePending)
   const pageById = new Map(d.pages.map(p => [p.id, p]))

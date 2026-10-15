@@ -6,7 +6,8 @@ import { STATUS_VN, STATUS_EN } from './types'
 import { CATEGORIES } from './codes'
 import type { Entry } from './types'
 
-export type Seg = { t: string; k: 'vn' | 'en' | 'n' }
+export type Run = { t: string; k: 'vn' | 'en' | 'n' }
+export type Seg = { t: string; k: 'vn' | 'en' | 'n'; runs?: Run[] } // runs: một đoạn gồm nhiều cặp VN / EN nối liền (danh sách phòng dài)
 const lines = (s: string) => s.split('\n').map(x => x.trim()).filter(Boolean)
 /** Một ý: song ngữ → dòng VN rồi dòng EN; một ngôn ngữ → như cũ */
 export function pair(vn: string | null | undefined, en: string | null | undefined, L: Lang): Seg[] {
@@ -36,9 +37,16 @@ export type EntryCells = { cat: Seg[]; loc: Seg[]; spec: Seg[]; brand: Seg[]; no
 export function entryCells(e: Entry, L: Lang, occCats: string[], locs: { room: { name_vn: string; name_en: string | null } }[], fin: { vn: string; en: string }[] = []): EntryCells {
   const flat = (s: string | null | undefined) => (s ?? '').replace(/\n/g, ' ')
   const cat = occCats.flatMap(k => { const c = CATEGORIES.find(z => z.key === k); return c ? pair(c.vn, c.en, L) : one(k) })
-  // Nhiều phòng (>10): nối thành đoạn văn, tự xuống dòng theo độ rộng cột → hàng không bị kéo dài; song ngữ: 1 đoạn VN + 1 đoạn EN
-  const loc = !locs.length ? pair('(chưa gán phòng)', '(no room assigned)', L)
-    : locs.length > 10 ? pair(locs.map(l => flat(l.room.name_vn)).join('  •  '), locs.map(l => flat(l.room.name_en || l.room.name_vn)).join('  •  '), L).map(s => ({ ...s, t: s.t.replace(/\s+/g, ' ') }))
+  // Nhiều phòng (>10): gom thành một đoạn, tự xuống dòng theo độ rộng cột → hàng không bị kéo dài.
+  // Song ngữ: mỗi phòng là MỘT CẶP liền nhau “Tiếng Việt / English” (VN đậm, EN nghiêng) ngăn bằng dấu •, không tách hai danh sách VN và EN
+  const loc: Seg[] = !locs.length ? pair('(chưa gán phòng)', '(no room assigned)', L)
+    : locs.length > 10 ? (() => {
+      const vns = locs.map(l => flat(l.room.name_vn)), ens = locs.map(l => flat(l.room.name_en || l.room.name_vn))
+      if (L !== 'both') return [{ t: (L === 'en' ? ens : vns).join('  •  '), k: 'n' as const }]
+      const runs: Run[] = []
+      vns.forEach((v, i) => { if (i) runs.push({ t: '  •  ', k: 'n' }); runs.push({ t: v, k: 'vn' }); if (ens[i] && ens[i] !== v) { runs.push({ t: ' / ', k: 'n' }); runs.push({ t: ens[i], k: 'en' }) } })
+      return [{ t: runs.map(r => r.t).join(''), k: 'vn' as const, runs }]
+    })()
     : locs.flatMap(l => pair(flat(l.room.name_vn), flat(l.room.name_en), L))
   const lab = (a: string, b: string, vn: string | null | undefined, en: string | null | undefined) => pair(vn ? `${a}: ${vn}` : '', vn || en ? `${b}: ${en || vn}` : '', L)
   // Không in dòng "Bộ phận": cột Hạng mục đã nêu rõ (sàn/tường/trần…)
@@ -55,7 +63,8 @@ export const hostOf = (u: string) => { try { return new URL(u).hostname.replace(
 /** Gán dòng vào ô Excel: song ngữ → richText (VN đậm, EN nghiêng) */
 export function setLines(cell: any, ls: Seg[], size: number, color: string, both: boolean, bold = false) {
   if (!both) { cell.value = ls.map(l => l.t).join('\n'); cell.font = { name: 'Arial', size, bold, color: { argb: color } }; return }
-  cell.value = { richText: ls.map((l, i) => ({ text: l.t + (i < ls.length - 1 ? '\n' : ''), font: { name: 'Arial', size, bold: bold || l.k === 'vn', italic: l.k === 'en', color: { argb: color } } })) }
+  const f = (r: { k: string }) => ({ name: 'Arial', size, bold: bold || r.k === 'vn', italic: r.k === 'en', color: { argb: color } })
+  cell.value = { richText: ls.flatMap((l, i) => (l.runs ? l.runs.map((r, j) => ({ text: r.t + (j === l.runs!.length - 1 && i < ls.length - 1 ? '\n' : ''), font: f(r) })) : [{ text: l.t + (i < ls.length - 1 ? '\n' : ''), font: f(l) }])) }
 }
 /** Số dòng hiển thị của ô (có tính xuống dòng do hẹp) – để đặt chiều cao hàng đủ chỗ */
 export const wrapCount = (ls: Seg[], width: number, size = 9) => ls.reduce((n, l) => n + Math.max(1, Math.ceil(l.t.length / (width * (size >= 10 ? 1.05 : 1.15) * (l.k === 'vn' ? 0.92 : 1)))), 0)
