@@ -474,3 +474,11 @@ input[data-lang="en"], textarea[data-lang="en"] { font-style: italic }
 .mx-del { color: #b91c1c; border-color: #f0b4b4; margin-left: 6px; padding: 2px 8px; font-size: 12px } .mx-del:hover:not(:disabled) { background: #fee2e2 }
 .mx .mx-room { min-width: 250px !important }
 .loc-tag.all { background: #d9ecd0; border-color: #9cc48a; font-weight: 600 }
+
+/* Cột Vị trí gọn: nhiều phòng → tự chia thành các cột nhỏ theo độ rộng; cột kéo giãn được */
+.sec-table th { position: relative }
+.sec-table .col-rs { position: absolute; right: -3px; top: 0; bottom: 0; width: 7px; cursor: col-resize; z-index: 3 } .sec-table .col-rs:hover { background: rgba(197,117,66,.45) }
+.sec-table td { overflow-wrap: anywhere }
+.sec-wrap { overflow-x: auto }
+.sec-table .c-loc.many .loc-flow { column-width: 92px; column-gap: 4px }
+.sec-table .c-loc.many .loc-tag { display: block; break-inside: avoid; font-size: 11px; line-height: 1.25; padding: 1px 5px; margin: 0 0 2px; border-radius: 6px; white-space: normal }
