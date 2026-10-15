@@ -24,9 +24,14 @@ export function useProject(id: string): ProjectData {
     const entries = (e.data ?? []) as Entry[]
     let occ: Occurrence[] = []
     // lấy occurrences theo lô để tránh URL quá dài
-    for (let i = 0; i < entries.length; i += 150) {
-      const { data } = await supabase.from('occurrences').select('*').in('entry_id', entries.slice(i, i + 150).map(x => x.id))
-      occ = occ.concat((data ?? []) as Occurrence[])
+    // Supabase chỉ trả tối đa 1000 dòng/lần → lô nhỏ + phân trang để không bị mất vị trí khi dự án lớn
+    for (let i = 0; i < entries.length; i += 60) {
+      const ids = entries.slice(i, i + 60).map(x => x.id)
+      for (let from = 0; ; from += 1000) {
+        const { data } = await supabase.from('occurrences').select('*').in('entry_id', ids).order('id').range(from, from + 999)
+        occ = occ.concat((data ?? []) as Occurrence[])
+        if ((data?.length ?? 0) < 1000) break
+      }
     }
     const pages = (pg.data ?? []) as Page[]
     const floors = (fl.data ?? []) as FloorPlan[]

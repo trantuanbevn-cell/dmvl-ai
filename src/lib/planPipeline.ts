@@ -1,3 +1,4 @@
+import { fetchOccurrences } from './occFetch'
 // Đọc mặt bằng + camera cho cả dự án – KHÔNG dùng AI. Kết quả lưu vào rooms.plan và pages.camera.
 import { supabase, BUCKET, signedUrl } from './supabase'
 import { loadCv } from './cv'
@@ -257,7 +258,7 @@ export async function fillPlanQty(project: Project) {
   const rooms = await must(supabase.from('rooms').select('*').eq('project_id', project.id)) as (Room & { plan?: PlanData | null })[]
   const entries = await must(supabase.from('entries').select('*').eq('project_id', project.id)) as Entry[]
   if (!entries.length) return
-  const occ = await must(supabase.from('occurrences').select('*').in('entry_id', entries.map(e => e.id))) as Occurrence[]
+  const occ = await fetchOccurrences<Occurrence>(entries.map(e => e.id), '*')
   await supabase.from('warnings').delete().eq('project_id', project.id).like('text', '[Mặt bằng]%')
   for (const e of entries) {
     const kind = isChair(e) ? 'chairs' : isTable(e) ? 'tables' : null; if (!kind) continue

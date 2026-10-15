@@ -1,3 +1,4 @@
+import { fetchOccurrences } from './occFetch'
 import { compDefault } from './compDefault'
 import { autoPickRoom } from './suggest'
 import { supabase, BUCKET, signedUrl, signedUrls } from './supabase'
@@ -413,7 +414,7 @@ export async function writeSpecs(project: Project, opts: { ids?: string[]; force
   entries = opts.ids ? entries.filter(e => opts.ids!.includes(e.id)) : entries.filter(e => opts.force || !e.enriched)
   if (!entries.length) return 0
   const rooms = await must(supabase.from('rooms').select('*').eq('project_id', project.id)) as Room[]
-  const occ = await must(supabase.from('occurrences').select('entry_id,room_id').in('entry_id', entries.map(e => e.id))) as Occurrence[]
+  const occ = await fetchOccurrences<Occurrence>(entries.map(e => e.id), 'entry_id,room_id')
   for (const e of entries) {
     const rs = rooms.filter(r => occ.some(o => o.entry_id === e.id && o.room_id === r.id))
     await must(supabase.from('entries').update(specPatch(e, rs)).eq('id', e.id))
@@ -425,7 +426,7 @@ export async function writeSpecs(project: Project, opts: { ids?: string[]; force
 export async function cleanupOrphans(project: Project) {
   const entries = await must(supabase.from('entries').select('id,source,status').eq('project_id', project.id)) as Entry[]
   if (!entries.length) return
-  const occ = await must(supabase.from('occurrences').select('entry_id').in('entry_id', entries.map(e => e.id))) as Occurrence[]
+  const occ = await fetchOccurrences<Occurrence>(entries.map(e => e.id), 'entry_id')
   const used = new Set(occ.map(o => o.entry_id))
   const orphan = entries.filter(e => !used.has(e.id) && e.source !== 'manual' && e.status === 'pending').map(e => e.id)
   if (orphan.length) {
