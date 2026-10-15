@@ -104,6 +104,13 @@ export async function removeFromCell(d: ProjectData, roomId: string, e: Entry, c
   if (!ids.length) return
   const { error } = await supabase.from('occurrences').delete().in('id', ids); if (error) throw new Error(error.message)
 }
+/** Chuyển mã sang hạng mục (cột) khác TRONG CÙNG PHÒNG: chỉ đổi hạng mục của các vị trí của mã trong phòng này (giữ ảnh khoanh, không ảnh hưởng phòng khác / thông tin mã) */
+export async function moveToCategory(d: ProjectData, roomId: string, e: Entry, from: string, to: string) {
+  const ids = d.occ.filter(o => o.room_id === roomId && o.entry_id === e.id && catOf(o, e) === from).map(o => o.id)
+  if (!ids.length) return 0
+  const { error } = await supabase.from('occurrences').update({ category: to }).in('id', ids); if (error) throw new Error(error.message)
+  return ids.length
+}
 /** Chuyển mã (kèm ảnh khoanh) của ô này sang phòng khác */
 export async function moveToRoom(d: ProjectData, fromRoom: string, toRoom: string, e: Entry, cat: string) {
   const ids = d.occ.filter(o => o.room_id === fromRoom && o.entry_id === e.id && catOf(o, e) === cat).map(o => o.id)

@@ -9,7 +9,7 @@ import { missingPairs, locateMissingShots } from '../../lib/locateShots'
 import RoomSections from '../../components/RoomSections'
 import OccCrop from '../../components/OccCrop'
 import { toast } from '../../lib/toast'
-import { buildMatrix, copyCells, addToCell, removeFromCell, moveToRoom, shotsIn, createRoom, updateRoom, moveRoomRow, deleteRoom, renumberRooms, cellTree, FLOORS, floorLabel, type Row } from '../../lib/roomMatrix'
+import { buildMatrix, copyCells, addToCell, removeFromCell, moveToRoom, moveToCategory, shotsIn, createRoom, updateRoom, moveRoomRow, deleteRoom, renumberRooms, cellTree, FLOORS, floorLabel, type Row } from '../../lib/roomMatrix'
 
 type Filter = 'all' | 'missing' | 'norender' | 'none'
 const catVn = (k: string) => CATEGORIES.find(c => c.key === k)?.vn ?? k
@@ -48,6 +48,16 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
   }
   const onDrop = (e: React.DragEvent, toRoom: string, toCat: string | null) => {
     e.preventDefault(); if (!canEdit) return
+    const chip = e.dataTransfer.getData('application/x-mx-chip')
+    if (chip) {   // kéo 1 mã (kèm thành phần con ẩn) sang cột khác trong CÙNG hàng
+      let c: { room: string; cat: string; id: string }; try { c = JSON.parse(chip) } catch { return }
+      if (!toCat || c.cat === toCat) return
+      if (c.room !== toRoom) { toast('Chỉ kéo được trong cùng một hàng (cùng phòng). Muốn sang phòng khác: bấm mã → Chuyển sang phòng…'); return }
+      const row = rows.find(r => r.room.id === c.room); const es = row?.cells.get(c.cat) ?? []; const top = es.find(x => x.id === c.id); if (!row || !top) return
+      const group = [top, ...(cellTree(es, x => sym.get(x.id) ?? x.code).kids.get(top.id) ?? [])]
+      run(async () => { for (const g of group) await moveToCategory(d, c.room, g, c.cat, toCat) }, `Đã chuyển ${sym.get(top.id) ?? top.code} sang “${catVn(toCat)}”`)
+      return
+    }
     const mv = e.dataTransfer.getData('application/x-mx-row')
     if (mv) { if (mv !== toRoom) run(() => moveRoomRow(rows, mv, rows.findIndex(r => r.room.id === toRoom))); return }
     let src: { room: string; cat: string | null }; try { src = JSON.parse(e.dataTransfer.getData('text/plain')) } catch { return }
@@ -104,7 +114,7 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
                 {cats.map(c => {
                   const es = r.cells.get(c.key) ?? [], miss = r.missing.includes(c.key)
                   return <td key={c.key} className={'mx-c' + (miss && r.state !== 'none' ? ' mx-miss' : '')} draggable={canEdit && es.length > 0} onDragStart={e => e.dataTransfer.setData('text/plain', JSON.stringify({ room: r.room.id, cat: c.key }))} onDragOver={e => canEdit && e.preventDefault()} onDrop={e => onDrop(e, r.room.id, c.key)} onClick={() => setCell({ roomId: r.room.id, cat: c.key })}>
-                    {(() => { const t = cellTree(es, e => sym.get(e.id) ?? e.code); return t.top.map(e => <span key={e.id} className={'mx-chip ' + e.status} style={{ cursor: 'pointer' }} onClick={ev => { ev.stopPropagation(); setChk({ roomId: r.room.id, cat: c.key, id: e.id }) }} title={`Bấm để kiểm tra vị trí · ${e.name_vn}${e.brand ? ' · ' + e.brand : ''}${t.kids.get(e.id)?.length ? ' · gồm ' + t.kids.get(e.id)!.map(x => sym.get(x.id) ?? x.code).join(', ') : ''}`}>{sym.get(e.id) ?? e.code}</span>) })()}
+                    {(() => { const t = cellTree(es, e => sym.get(e.id) ?? e.code); return t.top.map(e => <span key={e.id} className={'mx-chip ' + e.status} style={{ cursor: canEdit ? 'grab' : 'pointer' }} draggable={canEdit} onDragStart={ev => { ev.stopPropagation(); ev.dataTransfer.setData('application/x-mx-chip', JSON.stringify({ room: r.room.id, cat: c.key, id: e.id })); ev.dataTransfer.effectAllowed = 'move' }} onClick={ev => { ev.stopPropagation(); setChk({ roomId: r.room.id, cat: c.key, id: e.id }) }} title={`Bấm để kiểm tra vị trí · kéo sang cột khác cùng hàng để đổi hạng mục · ${e.name_vn}${e.brand ? ' · ' + e.brand : ''}${t.kids.get(e.id)?.length ? ' · gồm ' + t.kids.get(e.id)!.map(x => sym.get(x.id) ?? x.code).join(', ') : ''}`}>{sym.get(e.id) ?? e.code}</span>) })()}
                     {!es.length && r.need.includes(c.key) && r.state !== 'none' && <span className="mx-hint">thiếu</span>}
                   </td>
                 })}
