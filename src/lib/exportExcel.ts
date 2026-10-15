@@ -39,7 +39,7 @@ const BANDCOL: Record<Col['band'], string> = { content: 'FFB22A2A', ref: 'FFB22A
 function columns(o: ExportOpts, h: Ctx['h']): Col[] {
   const c: Col[] = [
     { key: 'stt', head: h('STT', 'No.'), w: 5, band: 'content' }, { key: 'sym', head: h('KÍ HIỆU BẢN VẼ', 'DRAWING CODE'), w: 16, band: 'content' }, { key: 'mavl', head: h('KÍ HIỆU VL', 'MATERIAL CODE'), w: 17, band: 'content' },
-    { key: 'cat', head: h('Hạng mục', 'Item'), w: 13, band: 'content' }, { key: 'loc', head: h('Vị trí', 'Location'), w: 28, band: 'content' },
+    { key: 'cat', head: h('Hạng mục', 'Item'), w: 13, band: 'content' }, { key: 'loc', head: h('Vị trí', 'Location'), w: 22, band: 'content' }, { key: 'loc2', head: '', w: 22, band: 'content' },
     { key: 'render', head: h('Hình ảnh phối cảnh', 'Render image'), w: 44, band: 'content' },
     { key: 'spec', head: h('Thông số kỹ thuật', 'Technical specification'), w: 46, band: 'ref' },
     { key: 'brand', head: h('Xuất xứ/ Thương hiệu', 'Origin / Brand'), w: 22, band: 'ref' }, { key: 'sample', head: h('Hình ảnh vật liệu', 'Material image'), w: 26, band: 'ref' },
@@ -61,8 +61,9 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
     const o2 = d.occ.filter(z => z.entry_id === e.id)
     cells.set(e.id, entryCells(e, L, [...new Set(o2.map(z => z.category ?? e.category).filter(Boolean) as string[])], locationsOf(e.id, d.occ, d.rooms, d.pages), finishLines(e, d.entries, y => symbolOf(y, L, sym.legacy, sym.en)), allRoomsCount(locationsOf(e.id, d.occ, d.rooms, d.pages), d.rooms)))
   }
-  const LIM: Record<string, [number, number]> = { cat: [13, 26], loc: [30, 46], spec: [48, 80], brand: [22, 40], note: [26, 44] }
+  const LIM: Record<string, [number, number]> = { cat: [13, 26], loc: [22, 34], spec: [48, 80], brand: [22, 40], note: [26, 44] }
   for (const k of Object.keys(LIM)) { const c = cols.find(z => z.key === k); if (c) c.w = fitWidth([...cells.values()].map(v => (v as any)[k] as Seg[]), LIM[k][0], LIM[k][1]) }
+  { const l2 = cols.find(z => z.key === 'loc2'), l1 = cols.find(z => z.key === 'loc'); if (l1 && l2) l2.w = l1.w }
   cols.forEach((c, i) => (ws.getColumn(i + 1).width = c.w))
   const wide = ci('note')
   const T = (cell: any, lines: Seg[], size: number, color: string, bold = false) => setLines(cell, lines, size, color, both, bold)
@@ -85,6 +86,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
     c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BANDCOL[col.band] } }
     c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; c.border = border
   })
+  if (ci('loc2')) ws.mergeCells(5, ci('loc'), 5, ci('loc2'))
   hr.height = both ? 56 : 34
   ws.views = [{ state: 'frozen', xSplit: 2, ySplit: 5 }]
   const catLabel = (k: string) => { const c = CATEGORIES.find(z => z.key === k); return c ? tx(c.vn, c.en, L) : k }
@@ -127,7 +129,9 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
       if (e.product_url) { const lc = row.getCell(ci('sample')); lc.value = { text: '🔗 ' + hostOf(e.product_url), hyperlink: e.product_url }; lc.font = { name: 'Arial', size: 8, color: { argb: 'FF1F4E9A' }, underline: true }; lc.alignment = { vertical: 'bottom', horizontal: 'left', wrapText: false, shrinkToFit: true } }  // link sản phẩm nằm ngay dưới hình vật liệu
       if (e.source === 'inferred') for (let i = 1; i <= wide; i++) row.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9E5' } }
       const wOf = (k: string) => cols[ci(k) - 1].w
-      row.height = Math.max(150, ...(['cat', 'loc', 'spec', 'brand', 'note'] as const).map(k => wrapCount(cl[k], wOf(k)) * 12.5 + 8))
+      const l2w = !cl.loc2.length
+      row.height = Math.max(150, wrapCount(cl.loc, l2w ? wOf('loc') * 2 : wOf('loc')) * 12.5 + 8, wrapCount(cl.loc2, wOf('loc')) * 12.5 + 8, ...(['cat', 'spec', 'brand', 'note'] as const).map(k => wrapCount(cl[k], wOf(k)) * 12.5 + 8))
+      if (l2w) ws.mergeCells(r, ci('loc'), r, ci('loc2'))
       const best = occ.filter(o2 => o2.bbox && (o2.page_id || o2.view?.img)).sort((a2, b2) => (b2.note ? 1 : 0) - (a2.note ? 1 : 0) || (b2.confidence ?? 0) - (a2.confidence ?? 0))[0]
       const rc = ci('render'), sc = ci('sample')
       if (best) {

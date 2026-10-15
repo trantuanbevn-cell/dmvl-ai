@@ -33,23 +33,19 @@ function descPairs(e: Entry, L: Lang): Seg[] {
   if (L === 'both' && vn.length >= 2 && vn.length === en.length) return vn.flatMap((t, i) => [{ t, k: 'vn' as const }, { t: en[i], k: 'en' as const }])
   return pair(e.desc_vn || e.material_vn, e.desc_en || e.material_en, L)
 }
-export type EntryCells = { cat: Seg[]; loc: Seg[]; spec: Seg[]; brand: Seg[]; note: Seg[] }
+export type EntryCells = { cat: Seg[]; loc: Seg[]; loc2: Seg[]; spec: Seg[]; brand: Seg[]; note: Seg[] }
 export const allRoomsCount = (locs: { room: { id: string } }[], rooms: { id: string; name_vn: string | null }[]) => { const real = rooms.filter(r => !/^\s*tất cả/i.test(r.name_vn ?? '')); return real.length > 1 && real.every(r => locs.some(l => l.room.id === r.id)) ? real.length : 0 }
 export function entryCells(e: Entry, L: Lang, occCats: string[], locs: { room: { name_vn: string; name_en: string | null } }[], fin: { vn: string; en: string }[] = [], allRooms = 0): EntryCells {
   const flat = (s: string | null | undefined) => (s ?? '').replace(/\n/g, ' ')
   const cat = occCats.flatMap(k => { const c = CATEGORIES.find(z => z.key === k); return c ? pair(c.vn, c.en, L) : one(k) })
-  // Nhiều phòng (>10): gom thành một đoạn, tự xuống dòng theo độ rộng cột → hàng không bị kéo dài.
-  // Song ngữ: mỗi phòng là MỘT CẶP liền nhau “Tiếng Việt / English” (VN đậm, EN nghiêng) ngăn bằng dấu •, không tách hai danh sách VN và EN
+  // Nhiều phòng (>10): chia hai cột nhỏ (cột Vị trí + cột Vị trí phụ cạnh bên), mỗi phòng một mục: tiếng Việt đậm, tiếng Anh nghiêng ngay bên dưới – giống màn hình
+  const roomLines = (ls: typeof locs) => ls.flatMap(l => pair(flat(l.room.name_vn), flat(l.room.name_en), L))
+  const split = locs.length > 10 && !(allRooms > 1 && locs.length >= allRooms)
+  const half = Math.ceil(locs.length / 2)
   const loc: Seg[] = !locs.length ? pair('(chưa gán phòng)', '(no room assigned)', L)
-    : allRooms > 1 && locs.length >= allRooms ? pair(`★ Tất cả các phòng (${allRooms})`, `★ All rooms (${allRooms})`, L) // áp dụng cho mọi phòng → ghi gọn như trên màn hình, không liệt kê
-    : locs.length > 10 ? (() => {
-      const vns = locs.map(l => flat(l.room.name_vn)), ens = locs.map(l => flat(l.room.name_en || l.room.name_vn))
-      if (L !== 'both') return [{ t: (L === 'en' ? ens : vns).join('  •  '), k: 'n' as const }]
-      const runs: Run[] = []
-      vns.forEach((v, i) => { if (i) runs.push({ t: '  •  ', k: 'n' }); runs.push({ t: v, k: 'vn' }); if (ens[i] && ens[i] !== v) { runs.push({ t: ' / ', k: 'n' }); runs.push({ t: ens[i], k: 'en' }) } })
-      return [{ t: runs.map(r => r.t).join(''), k: 'vn' as const, runs }]
-    })()
-    : locs.flatMap(l => pair(flat(l.room.name_vn), flat(l.room.name_en), L))
+    : allRooms > 1 && locs.length >= allRooms ? pair('★ Tất cả các phòng', '★ All rooms', L) // áp dụng cho mọi phòng → ghi gọn, không liệt kê
+    : split ? roomLines(locs.slice(0, half)) : roomLines(locs)
+  const loc2: Seg[] = split ? roomLines(locs.slice(half)) : []
   const lab = (a: string, b: string, vn: string | null | undefined, en: string | null | undefined) => pair(vn ? `${a}: ${vn}` : '', vn || en ? `${b}: ${en || vn}` : '', L)
   // Không in dòng "Bộ phận": cột Hạng mục đã nêu rõ (sàn/tường/trần…)
   const noPart = (ls: Seg[]) => ls.filter(l => !/^\s*(bộ phận|part)\s*:/i.test(l.t))
@@ -58,7 +54,7 @@ export function entryCells(e: Entry, L: Lang, occCats: string[], locs: { room: {
   const o = (e.origin ?? '').trim(), b = (e.brand ?? '').trim()   // dòng 1: xuất xứ; dòng 2: hãng / thương hiệu – luôn kèm nhãn
   const brand = [...(o ? pair(`Xuất xứ: ${o}`, `Origin: ${o}`, L) : []), ...(b ? pair(`Thương hiệu: ${b}`, `Brand: ${b}`, L) : [])]
   const note = [...pair(e.note_vn, e.note_en, L), ...(e.status !== 'approved' ? pair(`[${STATUS_VN[e.status]}]`, `[${STATUS_EN[e.status]}]`, L) : [])]
-  return { cat, loc, spec, brand, note }
+  return { cat, loc, loc2, spec, brand, note }
 }
 export const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, '') } catch { return u.slice(0, 30) } }
 
