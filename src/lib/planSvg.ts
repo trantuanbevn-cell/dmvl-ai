@@ -23,11 +23,18 @@ export async function planVector(res: PlanResult): Promise<PlanVec> {
   const cv = await loadCv(), { W, H, ppp, wall, lab } = res
   const wm = new cv.Mat(H, W, cv.CV_8UC1); wm.data.set(wall)
   const walls = pathOf(cv, wm, 0, 0, ppp, 0.6); wm.delete()
+  // nét đóng cửa/nối tường: tô liền theo màu không gian lân cận để không còn khe trắng
+  const L = lab.slice(), sealed = res.seal
+  for (let pass = 0; pass < 10; pass++) {
+    const nx = L.slice(); let ch = false
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) { const i = y * W + x; if (L[i] || !sealed[i]) continue; const v = L[i - 1] || L[i + 1] || L[i - W] || L[i + W]; if (v) { nx[i] = v; ch = true } }
+    L.set(nx); if (!ch) break
+  }
   const rooms: PlanVec['rooms'] = []
   for (const r of res.rooms) {
-    const x0 = Math.max(0, Math.floor(r.x * ppp) - 2), y0 = Math.max(0, Math.floor(r.y * ppp) - 2), w = Math.min(W - x0, Math.ceil(r.w * ppp) + 5), h = Math.min(H - y0, Math.ceil(r.h * ppp) + 5)
+    const x0 = Math.max(0, Math.floor(r.x * ppp) - 12), y0 = Math.max(0, Math.floor(r.y * ppp) - 12), w = Math.min(W - x0, Math.ceil(r.w * ppp) + 26), h = Math.min(H - y0, Math.ceil(r.h * ppp) + 26)
     const m = new cv.Mat(h, w, cv.CV_8UC1)
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) m.data[y * w + x] = lab[(y + y0) * W + x + x0] === r.id ? 255 : 0
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) m.data[y * w + x] = L[(y + y0) * W + x + x0] === r.id ? 255 : 0
     rooms.push({ id: r.id, d: pathOf(cv, m, x0, y0, ppp, 0.8), c: PALETTE[(r.id - 1) % PALETTE.length] }); m.delete()
   }
   return { w: W / ppp, h: H / ppp, walls, rooms }

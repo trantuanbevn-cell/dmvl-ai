@@ -34,6 +34,7 @@ export type PlanResult = {
   lab: Int32Array // nhãn không gian cho từng điểm ảnh (0 = tường/ngoài)
   doors: PlanDoor[]; closures: number[][] // đoạn đóng ô cửa không có cung (trượt, ô mở) [x0,y0,x1,y1] pt
   rooms: PlanRoom[]; unresolved: { x: number; y: number; len: number }[]; log: string[]
+  seal: Uint8Array // điểm ảnh nét đóng cửa/nối tường (không phải tường thật) – chỉ để tô liền khi hiển thị
   extra: number[][] // tường bổ sung do tự sửa (pt) [x0,y0,x1,y1]
 }
 
@@ -183,10 +184,10 @@ export async function readPlan(v: VecPage, roles: Record<string, Role>, den: num
     if (m && (/^S/i.test(t.t) || m[2])) { const val = parseFloat(m[1].replace(',', '.')); if (val > 0) r.labelArea = val }
     else if (!/^[\d.,\s]+$/.test(t.t) && t.t.length > 2 && r.names.length < 4) r.names.push(t.t)
   }
-  const wall = Wm.slice()
+  const wall = Wm.slice(), seal = new Uint8Array(W * H); { const W2 = w2.data as Uint8Array; for (let i = 0; i < W * H; i++) if (W2[i] && !Wm[i]) seal[i] = 1 }
   for (const m of [wm, w2, free, lm, st, ce, dm, dd, cl, cst, cce, ker, dk]) m.delete()
   say(`Không gian tách được: ${rooms.length}`)
-  return { W, H, ppp, mpp, wall, lab, doors, closures, rooms, unresolved, log, extra }
+  return { W, H, ppp, mpp, wall, lab, doors, closures, rooms, unresolved, log, seal, extra }
 }
 
 const PALETTE = ['#cfe3f5', '#f5d9c8', '#d6efc9', '#f1e2a6', '#e3cdf0', '#c8efe9', '#f6c9d6', '#dcdcdc', '#c9d6f6', '#e6f0b8']

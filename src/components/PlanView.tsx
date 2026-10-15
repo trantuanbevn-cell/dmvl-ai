@@ -30,7 +30,7 @@ export default function PlanView({ vec, res, showRooms, showDoors, showLabels, i
     for (let t = 0; t <= 16; t++) { const a = a0 + da * t / 16; s += (t ? 'L' : 'M') + (d.H[0] + d.r * Math.cos(a)).toFixed(1) + ' ' + (d.H[1] + d.r * Math.sin(a)).toFixed(1) }
     return s
   }
-  return <div ref={el} style={{ position: 'relative', border: '1px solid #ddd', background: '#fff', width: '100%', aspectRatio: `${vec.w} / ${Math.min(vec.h, vec.w * 0.75)}`, maxHeight: '78vh', overflow: 'hidden', cursor: drag.current ? 'grabbing' : 'grab', touchAction: 'none' }}
+  return <div ref={el} style={{ position: 'relative', border: '1px solid #ddd', background: '#fff', width: '100%', aspectRatio: `${vec.w} / ${Math.min(vec.h, vec.w * 0.75)}`, maxHeight: '78vh', overflow: 'hidden', cursor: drag.current ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none' }}
     onPointerDown={e => { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, vb } }}
     onPointerMove={e => { const d = drag.current; if (!d) return; const r = e.currentTarget.getBoundingClientRect(); const s = d.vb.w / r.width; setVb({ ...d.vb, x: d.vb.x - (e.clientX - d.x) * s, y: d.vb.y - (e.clientY - d.y) * s }) }}
     onPointerUp={() => { drag.current = null }} onDoubleClick={() => setVb(full)}>
@@ -40,8 +40,8 @@ export default function PlanView({ vec, res, showRooms, showDoors, showLabels, i
       {res.extra.map((s, i) => <line key={i} x1={s[0]} y1={s[1]} x2={s[2]} y2={s[3]} stroke="#e07000" strokeWidth={1.6} vectorEffect="non-scaling-stroke" />)}
       {showDoors && <g fill="none" stroke="#1e5ac8" strokeWidth={1.2} strokeLinecap="round" vectorEffect="non-scaling-stroke">
         {res.doors.map((d, i) => <path key={i} d={arc(d)} vectorEffect="non-scaling-stroke" />)}
-        {res.closures.map((l, i) => <line key={'c' + i} x1={l[0]} y1={l[1]} x2={l[2]} y2={l[3]} strokeDasharray={dash} vectorEffect="non-scaling-stroke" />)}</g>}
-      {showLabels && <g textAnchor="middle" fill="#000" fontSize={fs} fontFamily="Arial">{res.rooms.filter(r => r.area >= 1.5).map(r => <text key={r.id} x={r.cx} y={r.cy}>{r.id} · {r.area.toFixed(1)} m²</text>)}</g>}
+        {res.closures.map((l, i) => <line key={'c' + i} opacity={0.5} x1={l[0]} y1={l[1]} x2={l[2]} y2={l[3]} strokeDasharray={dash} vectorEffect="non-scaling-stroke" />)}</g>}
+      {showLabels && <g textAnchor="middle" fill="#000" fontFamily="Arial" style={{ userSelect: 'none', pointerEvents: 'none' }}>{res.rooms.map(r => { const f = Math.min(fs, r.w * 0.13, r.h * 0.4); return f >= 1.3 ? <text key={r.id} x={r.cx} y={r.cy} fontSize={f} stroke="#fff" strokeWidth={f * 0.18} paintOrder="stroke">{r.id} · {r.area.toFixed(1)} m²</text> : null })}</g>}
       {diffs?.map((d, i) => <rect key={'d' + i} x={d.x - 2} y={d.y - 2} width={d.w + 4} height={d.h + 4} fill="none" stroke={d.kind === 'dxfOnly' ? '#ff7a00' : '#b020c0'} strokeWidth={2} vectorEffect="non-scaling-stroke" />)}
       {issues?.map(it => <g key={it.n}><rect x={it.box[0] / ppp} y={it.box[1] / ppp} width={(it.box[2] - it.box[0]) / ppp} height={(it.box[3] - it.box[1]) / ppp} fill="none" stroke="#d4202a" strokeWidth={2} vectorEffect="non-scaling-stroke" />
         <text x={it.box[0] / ppp + 1} y={it.box[1] / ppp - 1.5} fill="#d4202a" fontSize={fs * 1.3} fontWeight="bold" fontFamily="Arial">{it.n}</text></g>)}
