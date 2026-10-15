@@ -10,6 +10,7 @@ import { groupBySection, sectionOf, allSections, sectionTitle, bandTitle, legacy
 import { locationsOf } from '../lib/locations'
 import type { ProjectData } from '../lib/useProject'
 import type { Entry, Occurrence, Room } from '../lib/types'
+import { missingPairs, locateMissingShots } from '../lib/locateShots'
 import OccCrop from './OccCrop'
 import AddShot from './AddShot'
 import RoomShotFallback from './RoomShotFallback'
@@ -181,23 +182,18 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     setScanning(null); d.reload()
   }
   /** Rà lần lượt các phòng chưa có ảnh của vật liệu này bằng AI (mỗi phòng 1 lượt phân tích) */
+  /** AI an toàn: chỉ bổ sung ảnh khoanh còn thiếu vào vị trí đã có – không tạo mới, không đổi/xoá gì (có sao lưu trước) */
   const scanMissing = async (e: Entry, roomIds: string[]) => {
     if (!d.project) return
-    const rooms = roomIds.map(id => d.rooms.find(r => r.id === id)).filter((r): r is Room => !!r && d.pages.some(p => p.room_id === r.id && p.kind === 'render'))
-    if (!rooms.length) return
-    if (!confirm(`AI sẽ rà lần lượt ${rooms.length} phòng (${rooms.map(r => r.code).join(', ')}) để tìm ${e.name_vn} và khoanh mũi tên. Mỗi phòng mất vài chục giây và dùng lượt AI; thông tin đã sửa tay giữ nguyên, có thể xuất hiện thêm mã mới ở trạng thái “Chờ duyệt”. Tiếp tục?`)) return
-    let found = 0
-    for (const [i, room] of rooms.entries()) {
-      setScanning(`${room.code} (${i + 1}/${rooms.length})`)
-      try {
-        await analyzeRoom(d.project, room, () => {})
-        const { data: oc } = await supabase.from('occurrences').select('*').eq('entry_id', e.id).eq('room_id', room.id)
-        const rows = (oc ?? []) as Occurrence[]
-        if (rows.some(o => o.bbox)) { found++; const dead = rows.filter(o => !o.bbox && !o.page_id).map(o => o.id); if (dead.length) await supabase.from('occurrences').delete().in('id', dead) }
-      } catch (er) { toast(`${room.code}: ${String(er)}`) }
-    }
-    setScanning(null); await d.reload()
-    toast(`Xong: khoanh được ${found}/${rooms.length} phòng.${found < rooms.length ? ' Phòng còn lại AI không thấy vật liệu – bấm vào ảnh phòng để khoanh tay.' : ''}`, found ? 'ok' : undefined)
+    const n = missingPairs(d, { entryIds: [e.id], roomIds }).length
+    if (!n) { toast('Không có phòng nào đủ điều kiện (cần có trang phối cảnh).'); return }
+    if (!confirm(`AI sẽ nhìn phối cảnh của ${n} phòng để tìm ${e.name_vn} và bổ sung ảnh khoanh.\n• Chỉ thêm ảnh vào vị trí ĐÃ CÓ; không tạo mã/vị trí mới, không đổi hay xoá gì.\n• Không chắc thì bỏ qua.\n• Tự sao lưu trước khi chạy.`)) return
+    setScanning(e.code)
+    try {
+      const rep = await locateMissingShots(d, { entryIds: [e.id], roomIds }, () => {})
+      toast(`Đã bổ sung ${rep.updated.length}/${n} ảnh khoanh.${rep.updated.length < n ? ' Phần còn lại AI không thấy/không chắc – khoanh tay nếu cần.' : ''}`, rep.updated.length ? 'ok' : undefined)
+    } catch (er) { toast(String((er as Error).message ?? er)) }
+    setScanning(null)
   }
   /** Ghi chú cho hình: vd “Phối cảnh gốc: thảm – đã đổi sang sàn vinyl” (hình giữ nguyên, người xem hiểu ngữ cảnh) */
   const setNote = async (o: Occurrence, text: string | null) => {
@@ -287,7 +283,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                       : null}
                     {(shots.length > shown.length || missRooms.length > 0) && <div className="small muted" style={{ cursor: 'pointer' }} title="Bấm vào dòng để xem đủ ảnh các phòng">＋ {shots.length > shown.length ? `${shots.length - shown.length} ảnh khác` : ''}{shots.length > shown.length && missRooms.length ? ' · ' : ''}{missRooms.length ? `${missRooms.length} phòng chưa khoanh` : ''} – bấm để xem đủ</div>}
                     {!locs.length && !shots.length && <div className="ic-none tiny"><span>{e.source === 'inferred' ? 'Suy luận' : 'Chưa có ảnh'}</span></div>}
-                    {isAdmin && locs.some(l => !shots.some(o => o.room_id === l.room.id) && d.pages.some(p => p.room_id === l.room.id && p.kind === 'render')) && <div><button className="btn ghost sm" title="AI rà từng phòng chưa khoanh để tìm vật liệu và vẽ mũi tên" onClick={ev => { ev.stopPropagation(); scanMissing(e, locs.filter(l => !shots.some(o => o.room_id === l.room.id)).map(l => l.room.id)) }}>🔍 AI khoanh {locs.filter(l => !shots.some(o => o.room_id === l.room.id)).length} phòng còn thiếu</button></div>}
+                    {isAdmin && locs.some(l => !shots.some(o => o.room_id === l.room.id) && d.pages.some(p => p.room_id === l.room.id && p.kind === 'render')) && <div><button className="btn ghost sm" title="AI chỉ bổ sung ảnh khoanh còn thiếu (an toàn: không tạo mới, không đổi dữ liệu)" onClick={ev => { ev.stopPropagation(); scanMissing(e, locs.filter(l => !shots.some(o => o.room_id === l.room.id)).map(l => l.room.id)) }}>🔍 AI khoanh {locs.filter(l => !shots.some(o => o.room_id === l.room.id)).length} phòng còn thiếu</button></div>}
                       {canEdit && <button className="btn ghost sm" title="Thêm hình phối cảnh" onClick={ev => { ev.stopPropagation(); setShotRoom(null); setShotFor(e) }}>＋ ảnh</button>}</td>
                     <td>{shortBi(e, 'name', 30, lang) && <div className="ed-line bi"><Ed e={e} k="name_vn" miss={M('name_vn' as any)} ph="Tên hạng mục" /><span className="bi-sl">/</span><Ed e={e} k="name_en" miss={M('name_en' as any)} ph="Item name (English)" /></div>}{[...(shortBi(e, 'name', 30, lang) ? [] : pair('name', lang)), ...pair('material', lang), ...pair('desc', lang)].map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} miss={M(k)} area={!String(k).startsWith('name')} ph={String(k).endsWith('_en') ? (String(k).startsWith('name') ? 'Item name (English – not translated yet)' : String(k).startsWith('material') ? 'Material / colour / finish' : 'Specification') : String(k).startsWith('name') ? 'Tên hạng mục' : String(k).startsWith('material') ? 'Vật liệu / màu / bề mặt' : 'Thông số kỹ thuật'} /></div>)}
                       <div className="ed-line lab"><i>{lang === 'en' ? 'Composition' : 'Cấu tạo'}</i><Ed e={e} k="composition" area ph={lang === 'en' ? 'Composition' : 'Cấu tạo (vật liệu thành phần)'} /></div>
@@ -318,7 +314,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
           </div>)
       })}
     {shotFor && <AddShot d={d} entry={shotFor} roomId={shotRoom ?? room?.id} onClose={() => { setShotFor(null); setShotRoom(null) }} />}
-    {scanning && <div className="modal-bg center"><div className="modal"><span className="spinner" /> AI đang rà phòng {scanning} để tìm vật liệu và khoanh mũi tên…</div></div>}
+    {scanning && <div className="modal-bg center"><div className="modal"><span className="spinner" /> AI đang tìm ảnh khoanh cho {scanning}…</div></div>}
     {shotNote && <div className="modal-bg center" onMouseDown={() => setShotNote(null)}><div className="modal" style={{ maxWidth: 520 }} onMouseDown={ev => ev.stopPropagation()}>
       <h3 style={{ margin: 0 }}>Ghi chú cho hình phối cảnh</h3>
       <p className="small muted">Dùng khi hình gốc đang khoanh vật liệu khác (vd thảm) nhưng danh mục đã đổi sang vật liệu mới (vd sàn vinyl): hình vẫn giữ để người xem biết vị trí, chú thích sẽ hiện dưới hình và trong file xuất.</p>

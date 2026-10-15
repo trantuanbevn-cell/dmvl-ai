@@ -5,6 +5,7 @@ import type { Entry, Room } from '../../lib/types'
 import { CATEGORIES, ROOM_TYPES, roomTypeLabel } from '../../lib/codes'
 import { symbolMap } from '../../lib/sections'
 import { useAuth } from '../../lib/auth'
+import { missingPairs, locateMissingShots } from '../../lib/locateShots'
 import RoomSections from '../../components/RoomSections'
 import OccCrop from '../../components/OccCrop'
 import { toast } from '../../lib/toast'
@@ -14,7 +15,8 @@ type Filter = 'all' | 'missing' | 'norender' | 'none'
 const catVn = (k: string) => CATEGORIES.find(c => c.key === k)?.vn ?? k
 
 export default function MatrixTab({ d }: { d: ProjectData }) {
-  const { canEdit } = useAuth()
+  const { canEdit, isAdmin } = useAuth()
+  const [locating, setLocating] = useState<string | null>(null)
   const rows = useMemo(() => buildMatrix(d), [d.rooms, d.occ, d.entries, d.pages])
   const sym = useMemo(() => symbolMap(d.entries), [d.entries])
   const [flt, setFlt] = useState<Filter>('all')
@@ -61,6 +63,13 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
         <div className="row between" style={{ flexWrap: 'wrap', gap: 8 }}>
           <div><h3 style={{ margin: 0 }}>Tổng hợp phòng – vật liệu theo phòng</h3><div className="small muted">{rows.length} phòng · <b>{full}</b> phòng đủ hạng mục chính · <b style={{ color: '#b45309' }}>{cnt.missing}</b> còn thiếu · {cnt.norender} chưa có phối cảnh · {cnt.none} không có</div></div>
           <button className="btn primary" disabled={!canEdit} onClick={() => setAdding(true)}>＋ Thêm phòng</button>
+          {isAdmin && <button className="btn" disabled={!!locating} title="AI chỉ bổ sung ảnh khoanh còn thiếu vào các vị trí ĐÃ CÓ (không tạo mới, không đổi/xoá gì, không chắc thì bỏ qua; tự sao lưu trước)" onClick={async () => {
+            const n = missingPairs(d).length
+            if (!n) return toast('Không còn vật liệu nào thiếu ảnh ở các phòng đã có phối cảnh.')
+            if (!confirm(`AI sẽ bổ sung ảnh khoanh cho tối đa ${n} vật liệu (các phòng đã có phối cảnh).\n• Chỉ thêm ảnh vào vị trí ĐÃ CÓ; không tạo mã/vị trí mới, không đổi hay xoá gì.\n• Không chắc thì bỏ qua.\n• Tự sao lưu trước khi chạy; có thể khôi phục ở mục Sao lưu.`)) return
+            try { const rep = await locateMissingShots(d, {}, m => setLocating(m)); toast(`Xong: bổ sung ${rep.updated.length} ảnh khoanh, bỏ qua ${rep.skipped.length} (AI không thấy/không chắc).`, 'ok'); console.log('locate report', JSON.stringify(rep)); (window as unknown as { __locateReport?: unknown }).__locateReport = rep } catch (e) { alert(String((e as Error).message ?? e)) }
+            setLocating(null)
+          }}>{locating ? '⏳ ' + locating.slice(0, 40) : '🔍 AI bổ sung ảnh còn thiếu'}</button>}
         </div>
         <div className="chips" style={{ marginTop: 8, marginBottom: 0 }}>
           {([['all', 'Tất cả'], ['missing', '⚠ Còn thiếu'], ['norender', '🖼 Chưa có phối cảnh'], ['none', '∅ Không có / bỏ qua']] as [Filter, string][]).map(([k, l]) => <button key={k} className={'chip' + (flt === k ? ' on' : '')} onClick={() => setFlt(k)}>{l} <span className="cnt">{cnt[k]}</span></button>)}

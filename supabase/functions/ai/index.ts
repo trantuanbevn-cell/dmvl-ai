@@ -145,6 +145,30 @@ const REPORT_PLAN_ISSUES = {
   },
 }
 
+const REPORT_LOCATIONS = {
+  name: 'report_locations',
+  description: 'Vị trí của từng vật liệu/đồ vật được hỏi trong ảnh phối cảnh',
+  input_schema: {
+    type: 'object',
+    properties: {
+      locations: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'đúng id đã cho của hạng mục' },
+            found: { type: 'boolean', description: 'true CHỈ khi nhìn thấy rõ hạng mục này trong ảnh' },
+            box_2d: { type: 'array', items: { type: 'number' }, description: '[ymin, xmin, ymax, xmax] số nguyên 0..1000 theo toàn ảnh; bỏ trống nếu found=false' },
+            confidence: { type: 'number', description: '0..1, mức chắc chắn đây đúng là hạng mục được hỏi' },
+          },
+          required: ['id', 'found'],
+        },
+      },
+    },
+    required: ['locations'],
+  },
+}
+
 const BASE_SYSTEM = `Bạn là kiến trúc sư nội thất cấp cao chuyên lập Bảng danh mục vật liệu hoàn thiện (DMVL / Finishes & FF&E Schedule) cho khách sạn và văn phòng tại Việt Nam, theo thông lệ quốc tế (CSI MasterFormat, hospitality FF&E) và TCVN.
 Nguyên tắc: không bỏ sót; không bịa phòng không có trong concept; phân biệt rõ cái NHÌN THẤY với cái SUY LUẬN; viết tiếng Việt chuyên ngành ngắn gọn, chính xác; luôn kèm bản tiếng Anh tương đương.
 
@@ -198,6 +222,24 @@ Gọi report_items.`),
         img(p.page),
       ]
       return { model: MODEL, max_tokens: 8000, system: BASE_SYSTEM, tools: [REPORT_ITEMS_LITE], tool_choice: { type: 'tool', name: 'report_items' }, messages: [{ role: 'user', content }] }
+    }
+
+    case 'locate_items': {
+      const list = (p.items ?? []).map((i: any) => `- id=${i.id} | ${i.code ?? ''} | ${i.name_vn}${i.material_vn ? ' | ' + i.material_vn : ''}${i.part_vn ? ' | bộ phận: ' + i.part_vn : ''}${i.desc ? ' | ' + String(i.desc).slice(0, 160) : ''}`).join('\n')
+      const content: any[] = [
+        txt(`Phòng: ${p.room?.name_vn ?? ''}. Ảnh dưới đây là phối cảnh 3D của phòng này.
+Danh sách vật liệu / đồ vật ĐÃ CÓ trong danh mục của phòng (id | mã | tên | vật liệu | bộ phận):
+${list}
+
+Nhiệm vụ: với MỖI hạng mục trong danh sách, tìm xem nó có NHÌN THẤY trong ảnh không và khoanh vị trí.
+- KHÔNG tạo hạng mục mới, KHÔNG đổi tên/mô tả. Chỉ trả lời cho các id đã cho.
+- found=true CHỈ khi nhìn thấy rõ đúng hạng mục đó (đúng chất liệu, màu, loại đồ). Không chắc, bị khuất, hay chỉ "có vẻ giống" → found=false. Thà bỏ sót còn hơn khoanh nhầm.
+- box_2d = [ymin,xmin,ymax,xmax] thang 0..1000 so với toàn ảnh: ôm sát món đồ; với bề mặt (sàn/tường/trần/len/cửa) chọn một mảng đại diện rõ nhất, KHÔNG phủ cả ảnh. Chỉ khoanh trong vùng ảnh 3D (không khoanh khung chữ, logo, mặt bằng nhỏ).
+- Mỗi id tối đa một khung. confidence 0..1 thật thà.
+Gọi report_locations.`),
+        img(p.image),
+      ]
+      return { model: MODEL, max_tokens: 4000, system: BASE_SYSTEM, tools: [REPORT_LOCATIONS], tool_choice: { type: 'tool', name: 'report_locations' }, messages: [{ role: 'user', content }] }
     }
 
     case 'check_plan': {
