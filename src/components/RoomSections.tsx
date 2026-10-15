@@ -1,6 +1,6 @@
 import OpRuleBadge from './OpRuleBadge'
 import { syncLibrary } from '../lib/matLibrary'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import LinkCell from './LinkCell'
 import { toast } from '../lib/toast'
@@ -39,7 +39,13 @@ function Ed({ e, k, area, ph, num, w, miss }: { e: Entry; k: K; area?: boolean; 
   }
   const dl = String(k).endsWith('_vn') ? 'vn' : String(k).endsWith('_en') ? 'en' : ['product_code', 'color_hex', 'product_url'].includes(String(k)) || num ? 'none' : 'name'
   const common = { value: v, placeholder: ph, 'data-lang': dl, readOnly: !canEdit, className: miss ? 'miss' : undefined, title: miss ? 'Thiếu thông tin – cần điền' : undefined, onChange: (x: any) => setV(x.target.value), onBlur: save, onClick: (x: any) => x.stopPropagation(), style: w ? { width: w } : undefined }
-  return area ? <textarea {...common} rows={Math.min(8, Math.max(2, Math.ceil(v.length / 38)))} /> : <input {...common} type={num ? 'number' : 'text'} />
+  const ref = useRef<HTMLTextAreaElement>(null)
+  // ô chữ tự giãn cao theo nội dung (và theo độ rộng cột) để thấy ĐỦ chữ, kiểm tra được đúng như bản xuất
+  const fit = () => { const t = ref.current; if (!t) return; t.style.height = 'auto'; t.style.height = t.scrollHeight + 2 + 'px' }
+  useLayoutEffect(fit, [v])
+  useEffect(() => { const t = ref.current; if (!t || typeof ResizeObserver === 'undefined') return; let w = t.clientWidth; const ro = new ResizeObserver(() => { if (t.clientWidth !== w) { w = t.clientWidth; fit() } }); ro.observe(t); return () => ro.disconnect() }, [])
+  if (num) return <input {...common} type="number" />
+  return <textarea {...common} ref={ref} rows={area ? 2 : 1} style={{ ...(common.style ?? {}), overflow: 'hidden', resize: 'none' }} onKeyDown={area ? undefined : (x: any) => { if (x.key === 'Enter') { x.preventDefault(); x.target.blur() } }} />
 }
 /** Ô mã vật liệu: một vật có thể có NHIỀU mã (mỗi mã một ô). Lưu trong cột product_code, mỗi mã một dòng. */
 function CodeList({ e, miss }: { e: Entry; miss?: boolean }) {
