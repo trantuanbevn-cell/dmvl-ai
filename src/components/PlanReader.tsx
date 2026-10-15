@@ -2,6 +2,9 @@
 // Có cả hai file: phần mềm tự dò tỉ lệ thật + khớp vị trí DXF lên PDF, gộp dữ liệu và chỉ ra chỗ hai file khác nhau. Không ghi gì vào dự án nào.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { readVectorPage, type VecPage } from '../lib/vector'
+import PlanView from './PlanView'
+import { planVector, type PlanVec } from '../lib/planSvg'
+import { findWallFixes } from '../lib/planFix'
 import { checkPlanWithAI, ISSUE_LABEL, type PlanIssue } from '../lib/planAi'
 import { suggestRoles, readPlan, mergeDxf, renderPlan, type DxfMerge, type LayerRow, type PlanResult, type Role } from '../lib/planRead'
 
@@ -17,9 +20,10 @@ export default function PlanReader() {
   const [res, setRes] = useState<PlanResult | null>(null), [mg, setMg] = useState<DxfMerge | null>(null), [busy, setBusy] = useState(''), [err, setErr] = useState('')
   const [showRooms, setShowRooms] = useState(true), [showDoors, setShowDoors] = useState(true), [showLabels, setShowLabels] = useState(true), [showDiff, setShowDiff] = useState(true)
   const [issues, setIssues] = useState<PlanIssue[] | null>(null), [orig, setOrig] = useState<HTMLCanvasElement | null>(null), [showIssues, setShowIssues] = useState(true), [focus, setFocus] = useState<PlanIssue | null>(null)
-  const host = useRef<HTMLDivElement>(null), bufRef = useRef<ArrayBuffer | null>(null)
+  const bufRef = useRef<ArrayBuffer | null>(null), rd = useRef<((extra: number[][]) => Promise<PlanResult>) | null>(null)
+  const [vec, setVec] = useState<PlanVec | null>(null), [fixMsg, setFixMsg] = useState('')
 
-  const reset = () => { setErr(''); setRes(null); setMg(null); setIssues(null); setOrig(null); setFocus(null) }
+  const reset = () => { setErr(''); setFixMsg(''); rd.current = null; setRes(null); setMg(null); setIssues(null); setOrig(null); setFocus(null) }
   const saved = (name: string) => { try { return JSON.parse(localStorage.getItem(key(name)) ?? 'null') as Record<string, Role> | null } catch { return null } }
   const loadPdf = async (f: File, pg: number) => {
     reset(); setBusy('Đang đọc PDF…')
@@ -51,9 +55,10 @@ export default function PlanReader() {
     try {
       if (pv && dv) { // có cả hai: dò tỉ lệ thật + khớp vị trí, gộp dữ liệu
         const m = await mergeDxf(pv, roles, dv, den, setBusy, dRoles); setMg(m); setDen(Math.round(m.den))
-        setRes(await readPlan(m.merged, { ...roles, ...m.roles }, m.den, setBusy))
-      } else if (pv) setRes(await readPlan(pv, roles, den, setBusy))
-      else { const d0 = dv!.dxf?.den ?? den; const r2: Record<string, Role> = {}; dRows.forEach(r => { r2[r.layer] = dRoles[DX + r.layer] }); setDen(d0); setRes(await readPlan(dv!, r2, d0, setBusy)) }
+        rd.current = ex => readPlan(m.merged, { ...roles, ...m.roles }, m.den, setBusy, ex)
+      } else if (pv) rd.current = ex => readPlan(pv, roles, den, setBusy, ex)
+      else { const d0 = dv!.dxf?.den ?? den; const r2: Record<string, Role> = {}; dRows.forEach(r => { r2[r.layer] = dRoles[DX + r.layer] }); setDen(d0); rd.current = ex => readPlan(dv!, r2, d0, setBusy, ex) }
+      setRes(await rd.current!([]))
     } catch (e) { setErr(String(e instanceof Error ? e.message : e)) }
     setBusy('')
   }
@@ -63,6 +68,18 @@ export default function PlanReader() {
     try { const r = await checkPlanWithAI(bufRef.current, page, res, pdf?.name ?? '', setBusy); setIssues(r.issues); setOrig(r.orig); setShowIssues(true) } catch (e) { setErr(String(e instanceof Error ? e.message : e)) }
     setBusy('')
   }
+  const fix = async () => {
+    if (!res || !orig || !issues || !rd.current) return
+    setErr(''); setFixMsg(''); setBusy('Tự sửa theo AI…')
+    try {
+      const rep = await findWallFixes(res, orig, issues, setBusy)
+      if (!rep.segs.length) { setFixMsg(`Đã thử ${rep.tried} nét trong ${rep.boxes} khung nghi thiếu tường/vách nhưng không nét nào cắt được một không gian – chưa tự sửa được (có thể cần chọn thêm layer vách ở bảng layer rồi dựng lại).`) }
+      else { const all = [...res.extra, ...rep.segs]; setBusy('Dựng lại với vách bổ sung…'); setRes(await rd.current(all)); setFixMsg(`Đã thêm ${rep.segs.length} vách (nét cam). Bấm “AI kiểm tra lỗi” lại để xem còn sai chỗ nào.`) }
+    } catch (e) { setErr(String(e instanceof Error ? e.message : e)) }
+    setBusy('')
+  }
+  const undoFix = async () => { if (!rd.current) return; setBusy('Dựng lại…'); try { setRes(await rd.current([])); setFixMsg('Đã bỏ các vách tự thêm.') } catch (e) { setErr(String(e instanceof Error ? e.message : e)) } setBusy('') }
+  useEffect(() => { let on = true; setVec(null); if (res) planVector(res).then(v => { if (on) setVec(v) }).catch(() => {}); return () => { on = false } }, [res])
   const canvas = useMemo(() => {
     if (!res) return null
     const c = renderPlan(res, { rooms: showRooms, doors: showDoors, labels: showLabels }), g = c.getContext('2d')!
@@ -73,7 +90,6 @@ export default function PlanReader() {
     }
     return c
   }, [res, mg, showRooms, showDoors, showLabels, showDiff, issues, showIssues])
-  useEffect(() => { const h = host.current; if (!h || !canvas) return; h.innerHTML = ''; canvas.style.width = '100%'; canvas.style.height = 'auto'; canvas.style.background = '#fff'; h.appendChild(canvas) }, [canvas])
   const crop = (src: HTMLCanvasElement | null, b: number[]) => {
     if (!src) return ''
     const m = 120, x = Math.max(0, b[0] - m), y = Math.max(0, b[1] - m), w = Math.min(src.width - x, b[2] - b[0] + 2 * m), h = Math.min(src.height - y, b[3] - b[1] + 2 * m)
@@ -112,6 +128,8 @@ export default function PlanReader() {
           {mg && <label><input type="checkbox" checked={showDiff} onChange={e => setShowDiff(e.target.checked)} /> Chỗ PDF/DXF khác nhau</label>}
           <button className="btn sm" onClick={png}>⬇ Tải ảnh PNG</button>
           {pv && <button className="btn sm" disabled={!!busy} onClick={ai}>🤖 AI kiểm tra lỗi</button>}
+          {issues && issues.length > 0 && <button className="btn sm primary" disabled={!!busy} title="Phần mềm tự tìm vách ngăn còn thiếu ở các khung đỏ rồi dựng lại" onClick={fix}>🛠 Tự sửa theo AI</button>}
+          {res.extra.length > 0 && <button className="btn sm" disabled={!!busy} onClick={undoFix}>↩ Bỏ {res.extra.length} vách tự thêm</button>}
           {issues && <label><input type="checkbox" checked={showIssues} onChange={e => setShowIssues(e.target.checked)} /> Khung đỏ lỗi</label>}
           <span className="muted">{res.rooms.length} không gian · {res.doors.length} cửa quay (cánh đôi {res.doors.filter(d => d.pair).length}) · {res.closures.length} ô mở/trượt · tỉ lệ 1:{Math.round(res.mpp / (25.4 / 72 / 1000))}</span>
         </div>
@@ -126,13 +144,13 @@ export default function PlanReader() {
           {bad.length > 0 && <div>• {bad.length} phòng lệch diện tích ghi trong bản vẽ &gt; 8%: {bad.map(r => `#${r.id} ${r.area} vs ${r.labelArea}`).join(' · ')}</div>}
         </div>}
         {issues && <div className="card small" style={{ background: issues.length ? '#fff0f0' : '#eefaf0' }}>
-          <b>AI kiểm tra: {issues.length ? `${issues.length} chỗ nghi sai` : 'không thấy lỗi rõ ràng'}</b> <span className="muted">– chỉ là gợi ý để bạn xem, phần mềm không tự sửa. Bấm một dòng để xem hai ảnh cạnh nhau.</span>
+          <b>AI kiểm tra: {issues.length ? `${issues.length} chỗ nghi sai` : 'không thấy lỗi rõ ràng'}</b> <span className="muted">– bấm “🛠 Tự sửa theo AI” để phần mềm tự thêm vách ngăn còn thiếu (chỉ nhận nét thật sự cắt được một không gian); bấm một dòng để xem hai ảnh cạnh nhau.</span>{fixMsg && <div style={{ margin: '4px 0', color: '#8a4b00' }}>{fixMsg}</div>}
           {issues.map(it => <div key={it.n} style={{ cursor: 'pointer', padding: '3px 0', fontWeight: focus?.n === it.n ? 700 : 400 }} onClick={() => setFocus(focus?.n === it.n ? null : it)}>
             <span className="pill" style={{ background: '#d4202a', color: '#fff' }}>{it.n}</span> <b>{ISSUE_LABEL[it.kind] ?? it.kind}</b>{it.rooms.length ? ` (không gian ${it.rooms.join(', ')})` : ''}: {it.note}{it.conf != null ? <span className="muted"> · {Math.round(it.conf * 100)}%</span> : null}</div>)}
           {focus && <div className="row" style={{ gap: 8, marginTop: 8 }}><div style={{ flex: 1 }}><div className="muted">Bản vẽ gốc</div><img src={crop(orig, focus.box)} style={{ width: '100%' }} /></div>
             <div style={{ flex: 1 }}><div className="muted">Bản dựng lại</div><img src={crop(canvas, focus.box)} style={{ width: '100%' }} /></div></div>}
         </div>}
-        <div ref={host} style={{ border: '1px solid #ddd', overflow: 'auto', maxHeight: '75vh' }} />
+        {vec ? <PlanView vec={vec} res={res} showRooms={showRooms} showDoors={showDoors} showLabels={showLabels} issues={showIssues ? issues : null} diffs={showDiff && mg ? mg.diffs : null} ppp={res.ppp} /> : <div className="muted small">Đang dựng bản vector…</div>}
         <details style={{ marginTop: 8 }}><summary><b>Danh sách không gian</b></summary>
           <table className="tbl small"><thead><tr><th>#</th><th>Diện tích (m²)</th><th>Ghi trên bản vẽ</th><th>Chữ trong phòng</th></tr></thead>
             <tbody>{[...res.rooms].sort((a, b) => b.area - a.area).map(r => <tr key={r.id}><td>{r.id}</td><td>{r.area.toFixed(2)}</td><td>{r.labelArea ?? ''}</td><td>{r.names.join(' · ')}</td></tr>)}</tbody></table></details>

@@ -34,10 +34,11 @@ export type PlanResult = {
   lab: Int32Array // nhãn không gian cho từng điểm ảnh (0 = tường/ngoài)
   doors: PlanDoor[]; closures: number[][] // đoạn đóng ô cửa không có cung (trượt, ô mở) [x0,y0,x1,y1] pt
   rooms: PlanRoom[]; unresolved: { x: number; y: number; len: number }[]; log: string[]
+  extra: number[][] // tường bổ sung do tự sửa (pt) [x0,y0,x1,y1]
 }
 
 type P = [number, number]
-export async function readPlan(v: VecPage, roles: Record<string, Role>, den: number, onLog: (s: string) => void = () => {}): Promise<PlanResult> {
+export async function readPlan(v: VecPage, roles: Record<string, Role>, den: number, onLog: (s: string) => void = () => {}, extra: number[][] = []): Promise<PlanResult> {
   const log: string[] = []; const say = (s: string) => { log.push(s); onLog(s) }
   const cv = await loadCv()
   const mpp = mPerPt(den), PT = 1 / mpp
@@ -132,6 +133,7 @@ export async function readPlan(v: VecPage, roles: Record<string, Role>, den: num
       const q = nearestWall([p[0], p[1]], [uu[0], uu[1]]); if (q) cv.line(w2, px(p), px(q), new cv.Scalar(255), thick)
     }
   }
+  for (const e of extra) cv.line(w2, px([e[0], e[1]]), px([e[2], e[3]]), new cv.Scalar(255), thick) // tường bổ sung (tự sửa)
   // 5) ô cửa không có cung (cửa trượt, ô mở…): cụm nét cửa chưa thuộc cửa quay nào → đóng bằng một nét dọc trục dài của cụm
   const dm = cv.Mat.zeros(H, W, cv.CV_8UC1)
   for (const s of doorSegs) cv.line(dm, px([s[0], s[1]]), px([s[2], s[3]]), new cv.Scalar(255), 2)
@@ -184,7 +186,7 @@ export async function readPlan(v: VecPage, roles: Record<string, Role>, den: num
   const wall = Wm.slice()
   for (const m of [wm, w2, free, lm, st, ce, dm, dd, cl, cst, cce, ker, dk]) m.delete()
   say(`Không gian tách được: ${rooms.length}`)
-  return { W, H, ppp, mpp, wall, lab, doors, closures, rooms, unresolved, log }
+  return { W, H, ppp, mpp, wall, lab, doors, closures, rooms, unresolved, log, extra }
 }
 
 const PALETTE = ['#cfe3f5', '#f5d9c8', '#d6efc9', '#f1e2a6', '#e3cdf0', '#c8efe9', '#f6c9d6', '#dcdcdc', '#c9d6f6', '#e6f0b8']
