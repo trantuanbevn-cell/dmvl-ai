@@ -104,6 +104,12 @@ export async function removeFromCell(d: ProjectData, roomId: string, e: Entry, c
   if (!ids.length) return
   const { error } = await supabase.from('occurrences').delete().in('id', ids); if (error) throw new Error(error.message)
 }
+/** Chuyển mã (kèm ảnh khoanh) của ô này sang phòng khác */
+export async function moveToRoom(d: ProjectData, fromRoom: string, toRoom: string, e: Entry, cat: string) {
+  const ids = d.occ.filter(o => o.room_id === fromRoom && o.entry_id === e.id && catOf(o, e) === cat).map(o => o.id)
+  if (!ids.length) return
+  const { error } = await supabase.from('occurrences').update({ room_id: toRoom }).in('id', ids); if (error) throw new Error(error.message)
+}
 export async function createRoom(d: ProjectData, v: { name_vn: string; name_en: string; room_type: string; floor?: string }, copyFrom?: string): Promise<Room> {
   if (!d.project) throw new Error('Chưa tải dự án')
   const sort = Math.max(0, ...d.rooms.map(r => r.sort ?? 0)) + 1

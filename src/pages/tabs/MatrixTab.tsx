@@ -5,8 +5,10 @@ import type { Entry, Room } from '../../lib/types'
 import { CATEGORIES, ROOM_TYPES, roomTypeLabel } from '../../lib/codes'
 import { symbolMap } from '../../lib/sections'
 import { useAuth } from '../../lib/auth'
+import EntryPanel from '../../components/EntryPanel'
+import OccCrop from '../../components/OccCrop'
 import { toast } from '../../lib/toast'
-import { buildMatrix, copyCells, addToCell, removeFromCell, shotsIn, createRoom, updateRoom, moveRoomRow, deleteRoom, renumberRooms, cellTree, FLOORS, floorLabel, type Row } from '../../lib/roomMatrix'
+import { buildMatrix, copyCells, addToCell, removeFromCell, moveToRoom, shotsIn, createRoom, updateRoom, moveRoomRow, deleteRoom, renumberRooms, cellTree, FLOORS, floorLabel, type Row } from '../../lib/roomMatrix'
 
 type Filter = 'all' | 'missing' | 'norender' | 'none'
 const catVn = (k: string) => CATEGORIES.find(c => c.key === k)?.vn ?? k
@@ -17,6 +19,7 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
   const sym = useMemo(() => symbolMap(d.entries), [d.entries])
   const [flt, setFlt] = useState<Filter>('all')
   const [cell, setCell] = useState<{ roomId: string; cat: string } | null>(null)
+  const [chk, setChk] = useState<{ roomId: string; cat: string; id: string } | null>(null)
   const [copy, setCopy] = useState<{ from?: string; to: string; cats?: string[]; fixedCat?: string } | null>(null)
   const [edit, setEdit] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
@@ -92,7 +95,7 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
                 {cats.map(c => {
                   const es = r.cells.get(c.key) ?? [], miss = r.missing.includes(c.key)
                   return <td key={c.key} className={'mx-c' + (miss && r.state !== 'none' ? ' mx-miss' : '')} draggable={canEdit && es.length > 0} onDragStart={e => e.dataTransfer.setData('text/plain', JSON.stringify({ room: r.room.id, cat: c.key }))} onDragOver={e => canEdit && e.preventDefault()} onDrop={e => onDrop(e, r.room.id, c.key)} onClick={() => setCell({ roomId: r.room.id, cat: c.key })}>
-                    {(() => { const t = cellTree(es, e => sym.get(e.id) ?? e.code); return t.top.map(e => <span key={e.id} className={'mx-chip ' + e.status} title={`${e.name_vn}${e.brand ? ' · ' + e.brand : ''}${t.kids.get(e.id)?.length ? ' · gồm ' + t.kids.get(e.id)!.map(x => sym.get(x.id) ?? x.code).join(', ') : ''}`}>{sym.get(e.id) ?? e.code}</span>) })()}
+                    {(() => { const t = cellTree(es, e => sym.get(e.id) ?? e.code); return t.top.map(e => <span key={e.id} className={'mx-chip ' + e.status} style={{ cursor: 'pointer' }} onClick={ev => { ev.stopPropagation(); setChk({ roomId: r.room.id, cat: c.key, id: e.id }) }} title={`Bấm để kiểm tra vị trí · ${e.name_vn}${e.brand ? ' · ' + e.brand : ''}${t.kids.get(e.id)?.length ? ' · gồm ' + t.kids.get(e.id)!.map(x => sym.get(x.id) ?? x.code).join(', ') : ''}`}>{sym.get(e.id) ?? e.code}</span>) })()}
                     {!es.length && r.need.includes(c.key) && r.state !== 'none' && <span className="mx-hint">thiếu</span>}
                   </td>
                 })}
@@ -103,6 +106,7 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
       </div>
 
       {zoom && <Modal title={`${zoom.code} ${zoom.name_vn} – mặt bằng`} onClose={() => setZoom(null)} w={900}><img src={imgSrc(zoom).replace(/\.png$/, '-ctx.png')} alt="" style={{ width: '100%', background: '#fff' }} /><p className="small muted">Cắt từ bộ mặt bằng khách sạn (PDF) kèm khu vực xung quanh; khung xanh = vùng ảnh nhỏ, vòng tròn xanh = vị trí phòng. Chỉ để đối chiếu đúng / thừa / thiếu.</p></Modal>}
+      {chk && rows.find(r => r.room.id === chk.roomId) && d.entries.find(e => e.id === chk.id) && <EntryCheck d={d} sym={sym} rows={rows} row={rows.find(r => r.room.id === chk.roomId)!} cat={chk.cat} entry={d.entries.find(e => e.id === chk.id)!} canEdit={canEdit} run={run} imgSrc={imgSrc} onEditCell={() => { setCell({ roomId: chk.roomId, cat: chk.cat }); setChk(null) }} onClose={() => setChk(null)} />}
       {cell && <CellDialog d={d} sym={sym} row={rows.find(r => r.room.id === cell.roomId)!} cat={cell.cat} canEdit={canEdit} run={run} onCopy={() => setCopy({ to: cell.roomId, cats: [cell.cat], fixedCat: cell.cat })} onClose={() => setCell(null)} />}
       {copy && <CopyDialog d={d} rows={rows} init={copy} run={run} onClose={() => setCopy(null)} />}
       {edit && <RoomDialog d={d} room={d.rooms.find(r => r.id === edit)!} run={run} onClose={() => setEdit(null)} />}
@@ -123,6 +127,46 @@ function State({ r }: { r: Row }) {
 
 function Modal({ title, onClose, children, w = 560 }: { title: string; onClose: () => void; children: React.ReactNode; w?: number }) {
   return <div className="modal-bg center" style={{ zIndex: 80 }} onMouseDown={onClose}><div className="modal" style={{ width: w, maxHeight: '90vh', overflow: 'auto' }} onMouseDown={e => e.stopPropagation()}><div className="row between"><h3 style={{ margin: 0 }}>{title}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>{children}</div></div>
+}
+
+function EntryCheck({ d, sym, rows, row, cat, entry, canEdit, run, imgSrc, onEditCell, onClose }: { d: ProjectData; sym: Map<string, string>; rows: Row[]; row: Row; cat: string; entry: Entry; canEdit: boolean; run: (f: () => Promise<unknown>, ok?: string) => Promise<void>; imgSrc: (r: Room) => string; onEditCell: () => void; onClose: () => void }) {
+  const [to, setTo] = useState('')
+  const code = sym.get(entry.id) ?? entry.code
+  const mine = d.occ.filter(o => o.room_id === row.room.id && o.entry_id === entry.id && (o.category ?? entry.category ?? '') === cat)
+  const shots = mine.filter(o => o.bbox)
+  const others = [...new Set(d.occ.filter(o => o.entry_id === entry.id && o.room_id && o.room_id !== row.room.id).map(o => o.room_id!))].map(id => d.rooms.find(r => r.id === id)).filter(Boolean) as Room[]
+  const pageNo = (o: typeof mine[number]) => d.pages.find(p => p.id === o.page_id)?.page_no
+  const parents = d.entries.filter(p => p.id !== entry.id && (p.id === entry.parent_id || (p.product_code ?? '').split(/\s+/).includes(code) || (p.product_code ?? '').split(/\s+/).includes(entry.code)))
+  const why = mine.length === 0 ? 'Không có vị trí riêng ở phòng này.' : mine.map(o => `${(o as { origin?: string }).origin === 'manual' ? 'thêm tay / đã chỉnh' : 'AI/phần mềm gán'}${pageNo(o) ? ` · trang concept ${pageNo(o)}` : ''}${o.bbox ? ' · có khoanh' : ' · không khoanh (gán theo mã)'}${o.note ? ' · ' + o.note : ''}`).join(' | ')
+  return <div className="modal-bg center" style={{ zIndex: 80 }} onMouseDown={onClose}>
+    <div className="modal" style={{ width: 'min(1400px,96vw)', maxHeight: '94vh', overflow: 'auto' }} onMouseDown={e => e.stopPropagation()}>
+      <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <h3 style={{ margin: 0 }}>Kiểm tra <span className={'mx-chip ' + entry.status}>{code}</span> {entry.name_vn} — {row.room.code} {row.room.name_vn} · {catVn(cat)}</h3>
+        <button className="btn ghost sm" onClick={onClose}>✕</button>
+      </div>
+      <div className="row gap" style={{ flexWrap: 'wrap', margin: '8px 0' }}>
+        <button className="btn primary sm" onClick={onClose}>✓ Giữ nguyên</button>
+        <button className="btn sm danger" disabled={!canEdit} onClick={() => { const n = shotsIn(d, row.room.id, entry, cat); if (n && !confirm(`Mã này có ${n} ảnh phối cảnh ở phòng này – bỏ khỏi phòng sẽ bỏ cả ảnh. Tiếp tục?`)) return; run(() => removeFromCell(d, row.room.id, entry, cat), 'Đã bỏ ' + code).then(onClose) }}>✕ Bỏ khỏi phòng này</button>
+        <select value={to} disabled={!canEdit} onChange={e => setTo(e.target.value)}><option value="">Chuyển sang phòng…</option>{rows.filter(r => r.room.id !== row.room.id).map(r => <option key={r.room.id} value={r.room.id}>{r.room.code} {r.room.name_vn}</option>)}</select>
+        <button className="btn sm" disabled={!canEdit || !to} onClick={() => run(() => moveToRoom(d, row.room.id, to, entry, cat), 'Đã chuyển ' + code).then(onClose)}>⇄ Chuyển</button>
+        <button className="btn ghost sm" onClick={onEditCell}>Sửa cả ô (thêm / sao chép / không cần)…</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(0,1fr)', gap: 14, alignItems: 'start' }}>
+        <div className="stack">
+          <b className="small">Phối cảnh phòng này – khung đỏ/mũi tên = vị trí vật liệu (kích đúp để phóng to)</b>
+          <div className="row gap" style={{ flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            {shots.map(o => <div key={o.id}><OccCrop d={d} o={o} height={300} maxWidth={560} /><div className="small muted">{pageNo(o) ? 'trang ' + pageNo(o) : 'ảnh tải lên'}</div></div>)}
+            {!shots.length && <p className="muted small">Mã này không có ảnh khoanh ở phòng này → nhiều khả năng được gán theo mã (ví dụ là thành phần của đồ rời) chứ không thấy trong phối cảnh.</p>}
+          </div>
+          <div className="small"><b>Vì sao nằm ở đây:</b> {why}</div>
+          {!!parents.length && <div className="small"><b>Liên quan:</b> thuộc / nằm trong cấu tạo của {parents.map(p => <span key={p.id} className="mx-chip">{sym.get(p.id) ?? p.code}</span>)}</div>}
+          <div className="small"><b>Còn dùng ở phòng:</b> {others.length ? others.map(r => `${r.code} ${r.name_vn}`).join(' · ') : 'không phòng nào khác'}</div>
+          {row.room.plan_img && <div><b className="small">Mặt bằng {row.room.code}</b><img src={imgSrc(row.room).replace(/\.png$/, '-ctx.png')} alt="" style={{ width: '100%', background: '#fff', border: '1px solid var(--line)', marginTop: 4 }} onError={e => { (e.target as HTMLImageElement).src = imgSrc(row.room) }} /></div>}
+        </div>
+        <div><EntryPanel d={d} entry={entry} onClose={onClose} /></div>
+      </div>
+    </div>
+  </div>
 }
 
 function CellDialog({ d, sym, row, cat, canEdit, run, onCopy, onClose }: { d: ProjectData; sym: Map<string, string>; row: Row; cat: string; canEdit: boolean; run: (f: () => Promise<unknown>, ok?: string) => Promise<void>; onCopy: () => void; onClose: () => void }) {
