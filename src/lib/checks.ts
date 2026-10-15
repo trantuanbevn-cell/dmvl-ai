@@ -47,6 +47,14 @@ export function checkEntries(d: ProjectData, lang: Lang): EntryIssues[] {
       const bad = SYNC_KEYS.filter(k => grp.some(x => norm(x[k]) !== norm(e[k])))
       if (bad.length) issues.push({ kind: 'err', text: `Lệch với mã liên kết (${bad.map(k => SYNC_LABEL[k].toLowerCase()).join(', ')}) – sửa cho giống nhau`, keys: ['link', ...bad] })
     }
+    // Hạng mục (cột ma trận) phải khớp "Bộ phận áp dụng": đồ rời / đồ liền tường / cửa / trần không được nằm ở Tường – Tường nhấn
+    if (e.category === 'wall' || e.category === 'feature_wall') {
+      const raw = norm(e.part_vn), p = raw.replace(/đồ liền tường/g, 'ĐLT')
+      if (raw && !/tường/.test(p)) {
+        const to = /đồ rời/.test(p) ? 'Đồ rời' : /ĐLT/.test(p) ? 'Đồ liền tường' : /cửa/.test(p) ? 'Cửa & phụ kiện' : /trần/.test(p) ? 'Trần' : ''
+        if (to) issues.push({ kind: 'err', text: `Bộ phận áp dụng là “${e.part_vn}” nhưng hạng mục đang là “${e.category === 'wall' ? 'Tường' : 'Tường nhấn'}” – nên là “${to}” (đổi ô “Bề mặt / mục”)`, keys: ['category', 'part_vn'] })
+      }
+    }
     for (const f of finishIssues(e, fctx)) issues.push({ kind: f.kind === 'err' ? 'err' : 'miss', text: '🎨 ' + f.text, keys: ['finish', 'desc_vn'], finishFix: f.fix, finishKey: f.key })
     if (issues.length) out.push({ e, issues })
   }
