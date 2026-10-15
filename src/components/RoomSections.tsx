@@ -84,17 +84,18 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
 }) {
   const { canEdit, isAdmin, can } = useAuth()
   // Độ rộng cột kéo được (px), nhớ theo từng chế độ ngôn ngữ; null = mặc định
-  const [cw, setCwS] = useState<number[] | null>(() => { try { const j = JSON.parse(localStorage.getItem('dmvl.cw.' + lang) || 'null'); return Array.isArray(j) && j.length === 11 ? j : null } catch { return null } })
-  useEffect(() => { try { const j = JSON.parse(localStorage.getItem('dmvl.cw.' + lang) || 'null'); setCwS(Array.isArray(j) && j.length === 11 ? j : null) } catch { setCwS(null) } }, [lang])
-  const setCw = (v: number[] | null) => { setCwS(v); try { if (v) localStorage.setItem('dmvl.cw.' + lang, JSON.stringify(v)); else localStorage.removeItem('dmvl.cw.' + lang) } catch { /* bỏ qua */ } }
+  const [cw, setCwS] = useState<number[] | null>(() => { try { const j = JSON.parse(localStorage.getItem('dmvl.cw2.' + lang) || 'null'); return Array.isArray(j) && j.length === 11 ? j : null } catch { return null } })
+  useEffect(() => { try { const j = JSON.parse(localStorage.getItem('dmvl.cw2.' + lang) || 'null'); setCwS(Array.isArray(j) && j.length === 11 ? j : null) } catch { setCwS(null) } }, [lang])
+  const setCw = (v: number[] | null) => { setCwS(v); try { if (v) localStorage.setItem('dmvl.cw2.' + lang, JSON.stringify(v)); else localStorage.removeItem('dmvl.cw2.' + lang) } catch { /* bỏ qua */ } }
   const startResize = (ev: React.MouseEvent, i: number) => {
     ev.preventDefault(); ev.stopPropagation()
     const tr = (ev.currentTarget as HTMLElement).closest('tr'); if (!tr) return
     const base = Array.from(tr.children).map(c => Math.round((c as HTMLElement).getBoundingClientRect().width))
     if (base.length !== 11) return
-    const x0 = ev.clientX, w0 = base[i]
-    const mv = (e: MouseEvent) => { const nx = base.slice(); nx[i] = Math.max(40, w0 + e.clientX - x0); setCwS(nx) }
-    const up = (e: MouseEvent) => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); const nx = base.slice(); nx[i] = Math.max(40, w0 + e.clientX - x0); setCw(nx) }
+    const x0 = ev.clientX, T = base.reduce((x, y) => x + y, 0)
+    const calc = (cx: number) => { const dx = Math.max(40 - base[i], Math.min(base[i + 1] - 40, cx - x0)); const nx = base.slice(); nx[i] = base[i] + dx; nx[i + 1] = base[i + 1] - dx; return nx.map(w => (w / T) * 100) }
+    const mv = (e: MouseEvent) => setCwS(calc(e.clientX))
+    const up = (e: MouseEvent) => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); setCw(calc(e.clientX)) }
     window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up)
   }
   const [sugE, setSugE] = useState<Entry | null>(null)
@@ -265,8 +266,8 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
             {bandRow && <div className={'band band-' + bandRow}>{bandTitle(bandRow, lang)}</div>}
             <div className="sec-title">{sectionTitle(section, lang)} <span className="cnt">{items.length}</span>{(() => { const n = items.filter(e => missingOf(e, lang).length).length; return n ? <span className="cnt miss-cnt" title="Số dòng còn thiếu thông tin">⚠ {n} dòng thiếu</span> : <span className="cnt ok-cnt">✓ đủ thông tin</span> })()}
               {canEdit && <button className="btn sm add-sib" style={{ marginLeft: 'auto' }} title="Thêm vật liệu khác vào mục này (vd màu sơn thứ 2)" onClick={() => { const f = items[0]; onAdd({ section_key: f.section_key, group: f.group_code, category: f.category ?? 'decor', name: f.name_vn, part_vn: f.part_vn, parent_id: f.parent_id, hint: `Thêm vật liệu nhận diện thiếu trong mục “${sectionTitle(section, lang)}”.` }) }}>＋ Thêm vật liệu</button>}</div>
-            <table className="sec-table" style={cw ? { width: cw.reduce((a, b) => a + b, 0) } : undefined}>
-              <thead><tr>{[...HEAD[lang], ''].map((t, i) => <th key={i} style={{ width: cw ? cw[i] : (i < 10 ? HW[i] : 112) }}>{t}<span className="col-rs" title="Kéo để đổi độ rộng cột (bấm đúp = về mặc định)" onMouseDown={ev => startResize(ev, i)} onDoubleClick={() => setCw(null)} onClick={ev => ev.stopPropagation()} /></th>)}</tr></thead>
+            <table className="sec-table">
+              <thead><tr>{[...HEAD[lang], ''].map((t, i) => <th key={i} style={{ width: cw ? cw[i] + '%' : (i < 10 ? HW[i] : 112) }}>{t}{i < 10 && <span className="col-rs" title="Kéo để đổi độ rộng cột (bấm đúp = về mặc định)" onMouseDown={ev => startResize(ev, i)} onDoubleClick={() => setCw(null)} onClick={ev => ev.stopPropagation()} />}</th>)}</tr></thead>
               <tbody>{items.map(e => {
                 const os = occ.filter(o => o.entry_id === e.id)
                 const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
