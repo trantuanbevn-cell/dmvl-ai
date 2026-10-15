@@ -1,4 +1,5 @@
 // Tách một "phòng" thực ra gồm nhiều phòng (cùng một slide concept) thành các phòng riêng – không dùng AI.
+import { renumberRooms } from './roomMatrix'
 import { supabase } from './supabase'
 import { autoBackup } from './backup'
 import type { Page, Room, Occurrence } from './types'
@@ -57,13 +58,14 @@ export async function splitRoom(d: ProjectData, room: Room, parts: Part[], choic
   let maxCode = d.rooms.reduce((m, r) => Math.max(m, parseInt(r.code.replace(/\D/g, ''), 10) || 0), 0)
   for (const pt of parts.slice(1)) {
     maxCode++
-    const r = await must(supabase.from('rooms').insert({ project_id: project.id, code: `R${pad(maxCode)}`, name_vn: pt.name_vn, name_en: pt.name_en || null, room_type: room.room_type, concept_counts: [], sort: 9999 }).select().single()) as Room
+    const r = await must(supabase.from('rooms').insert({ project_id: project.id, code: `R${pad(maxCode)}`, name_vn: pt.name_vn, name_en: pt.name_en || null, room_type: room.room_type, concept_counts: [], sort: 9999, floor: room.floor ?? null, matrix_sort: room.matrix_sort ?? null }).select().single()) as Room
     ids.push(r.id)
   }
   const ordered = [...d.rooms].sort((a, b) => a.sort - b.sort)
   const at = ordered.findIndex(r => r.id === room.id)
   const seq = [...ordered.slice(0, at + 1).map(r => r.id), ...ids.slice(1), ...ordered.slice(at + 1).map(r => r.id)]
   for (const [i, id] of seq.entries()) await supabase.from('rooms').update({ sort: i + 1 }).eq('id', id)
+  await renumberRooms(project.id)   // số R dồn lại liên tục theo thứ tự hiển thị
 
   // 2) trang: phòng chính của trang = phòng của ô ảnh đầu; camera ghép với ô ảnh nào thì đứng trong phòng đó
   const pages = d.pages.filter(p => p.room_id === room.id)

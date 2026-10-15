@@ -47,6 +47,21 @@ export function buildMatrix(d: ProjectData): Row[] {
 
 const nextCode = (rooms: Room[]) => 'R' + String(Math.max(0, ...rooms.map(r => parseInt(r.code.replace(/\D/g, '') || '0', 10))) + 1).padStart(2, '0')
 
+/** Đánh lại số R01, R02… theo đúng thứ tự hiển thị (tầng thấp → cao, rồi thứ tự trong tầng) và ghi cùng thứ tự vào rooms.sort / matrix_sort
+ *  để mọi tab đều thấy cùng một thứ tự. CHỈ đổi chữ mã + thứ tự – không đụng dữ liệu vật liệu/ảnh của phòng (gắn theo id, không theo mã). */
+export async function renumberRooms(projectId: string): Promise<number> {
+  const { data, error } = await supabase.from('rooms').select('id,code,sort,matrix_sort,floor').eq('project_id', projectId)
+  if (error) throw new Error(error.message)
+  const rs = (data ?? []) as Pick<Room, 'id' | 'code' | 'sort' | 'matrix_sort' | 'floor'>[]
+  const ord = (r: (typeof rs)[number]) => r.matrix_sort ?? 1e6 + (r.sort ?? 0)
+  const num = (c: string) => parseInt(c.replace(/\D/g, '') || '0', 10)
+  rs.sort((a, b) => floorRank(a.floor) - floorRank(b.floor) || ord(a) - ord(b) || num(a.code) - num(b.code))
+  const todo = rs.map((r, i) => ({ r, i, code: 'R' + String(i + 1).padStart(2, '0') })).filter(({ r, i, code }) => r.code !== code || r.sort !== i || r.matrix_sort !== i)
+  const res = await Promise.all(todo.map(({ r, i, code }) => supabase.from('rooms').update({ code, sort: i, matrix_sort: i }).eq('id', r.id)))
+  const bad = res.find(x => x.error); if (bad?.error) throw new Error(bad.error.message)
+  return todo.length
+}
+
 /** Sao chép vật liệu giữa phòng: chỉ thêm VỊ TRÍ (mã dùng chung) – không sao chép ảnh phối cảnh của phòng gốc. Trả số vị trí đã thêm */
 export async function copyCells(d: ProjectData, fromId: string, toId: string, cats: string[]): Promise<number> {
   const rows = buildMatrix(d); const from = rows.find(r => r.room.id === fromId), to = rows.find(r => r.room.id === toId)
@@ -73,11 +88,16 @@ export async function createRoom(d: ProjectData, v: { name_vn: string; name_en: 
   const sort = Math.max(0, ...d.rooms.map(r => r.sort ?? 0)) + 1
   const { data, error } = await supabase.from('rooms').insert({ project_id: d.project.id, code: nextCode(d.rooms), name_vn: v.name_vn, name_en: v.name_en || null, room_type: v.room_type, floor: v.floor || null, sort }).select().single()
   if (error) throw new Error(error.message)
-  const room = data as Room
+  let room = data as Room
+  await renumberRooms(d.project.id)
+  room = { ...room, code: (await supabase.from('rooms').select('code').eq('id', room.id).single()).data?.code ?? room.code }
   if (copyFrom) await copyCells({ ...d, rooms: [...d.rooms, room] }, copyFrom, room.id, CATEGORIES.map(c => c.key))
   return room
 }
-export const updateRoom = async (id: string, patch: Partial<Room>) => { const { error } = await supabase.from('rooms').update(patch).eq('id', id); if (error) throw new Error(error.message) }
+export const updateRoom = async (id: string, patch: Partial<Room>) => {
+  const { data, error } = await supabase.from('rooms').update(patch).eq('id', id).select('project_id').single(); if (error) throw new Error(error.message)
+  if ('floor' in patch && data) await renumberRooms(data.project_id)   // đổi tầng → phòng chuyển nhóm → đánh lại số
+}
 
 /** Đổi thứ tự phòng CHỈ trong bảng Tổng hợp phòng (cột matrix_sort) – không đụng rooms.sort của các bảng khác */
 export async function moveRoomRow(rows: Row[], id: string, toIndex: number) {
@@ -88,6 +108,11 @@ export async function moveRoomRow(rows: Row[], id: string, toIndex: number) {
   const changed = ids.map((rid, i) => ({ rid, i })).filter(({ rid, i }) => rows.find(r => r.room.id === rid)!.room.matrix_sort !== i)
   const res = await Promise.all(changed.map(({ rid, i }) => supabase.from('rooms').update({ matrix_sort: i }).eq('id', rid)))
   const bad = res.find(r => r.error); if (bad?.error) throw new Error(bad.error.message)
+  await renumberRooms(rows[0].room.project_id)
 }
 /** Xoá phòng (kéo theo các vị trí vật liệu / ảnh khoanh của phòng; trang concept chỉ bị bỏ gán phòng). Hoàn tác được bằng nút ↶ */
-export async function deleteRoom(id: string) { const { error } = await supabase.from('rooms').delete().eq('id', id); if (error) throw new Error(error.message) }
+export async function deleteRoom(id: string) {
+  const { data: r } = await supabase.from('rooms').select('project_id').eq('id', id).single()
+  const { error } = await supabase.from('rooms').delete().eq('id', id); if (error) throw new Error(error.message)
+  if (r) await renumberRooms(r.project_id)   // xoá/thêm → số R tự dồn lại liên tục, từ bé đến lớn
+}

@@ -1,12 +1,12 @@
 // Tổng hợp phòng: ma trận Phòng × Hạng mục. Nhìn là biết phòng nào đủ / thiếu gì / chưa có phối cảnh; sửa ngay tại đây – các tab khác tự cập nhật.
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { ProjectData } from '../../lib/useProject'
 import type { Entry, Room } from '../../lib/types'
 import { CATEGORIES, ROOM_TYPES, roomTypeLabel } from '../../lib/codes'
 import { symbolMap } from '../../lib/sections'
 import { useAuth } from '../../lib/auth'
 import { toast } from '../../lib/toast'
-import { buildMatrix, copyCells, addToCell, removeFromCell, shotsIn, createRoom, updateRoom, moveRoomRow, deleteRoom, FLOORS, floorLabel, type Row } from '../../lib/roomMatrix'
+import { buildMatrix, copyCells, addToCell, removeFromCell, shotsIn, createRoom, updateRoom, moveRoomRow, deleteRoom, renumberRooms, FLOORS, floorLabel, type Row } from '../../lib/roomMatrix'
 
 type Filter = 'all' | 'missing' | 'norender' | 'none'
 const catVn = (k: string) => CATEGORIES.find(c => c.key === k)?.vn ?? k
@@ -32,6 +32,9 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
   const hasFloors = rows.some(r => r.room.floor)
   const cats = CATEGORIES.filter(c => rows.some(r => r.cells.get(c.key)?.length) || rows.some(r => r.need.includes(c.key)))
 
+  // số R luôn liền mạch R01…Rn đúng thứ tự đang hiển thị (chỉ đổi chữ mã, không đổi dữ liệu); tự chỉnh khi lệch (vd sau khi thêm/xoá/đổi tầng ở nơi khác)
+  const codesOff = rows.some((r, i) => r.room.code !== 'R' + String(i + 1).padStart(2, '0'))
+  useEffect(() => { if (canEdit && codesOff && d.project && !d.loading) renumberRooms(d.project.id).then(() => d.reload()).catch(() => {}) }, [canEdit, codesOff, d.project?.id])  // eslint-disable-line react-hooks/exhaustive-deps
   const delRoom = (r: Row) => {
     const n = d.occ.filter(o => o.room_id === r.room.id), shots = n.filter(o => o.page_id || o.view).length
     const only = r.cells.size ? [...r.cells.values()].flat().filter(e => !d.occ.some(o => o.entry_id === e.id && o.room_id && o.room_id !== r.room.id)).length : 0
