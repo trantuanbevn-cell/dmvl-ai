@@ -120,6 +120,31 @@ const REPORT_PAGES = {
 
 
 
+const REPORT_PLAN_ISSUES = {
+  name: 'report_plan_issues',
+  description: 'Các lỗi nhìn thấy khi so bản dựng lại mặt bằng với bản vẽ gốc',
+  input_schema: {
+    type: 'object',
+    properties: {
+      issues: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            kind: { type: 'string', enum: ['merged', 'missing_door', 'floating_door', 'missing_wall', 'extra_wall', 'bad_split', 'other'], description: 'merged = hai không gian thật bị tô chung một màu/số (thiếu cửa hoặc vách chặn); missing_door = bản vẽ gốc có cửa nhưng bản dựng không có; floating_door = cửa xanh không nằm trong tường; missing_wall = bản gốc có tường/vách/kính mà bản dựng thiếu; extra_wall = bản dựng có tường mà bản gốc không có; bad_split = một không gian thật bị chia nhầm' },
+            box_2d: { type: 'array', items: { type: 'number' }, description: '[ymin, xmin, ymax, xmax] số nguyên 0..1000 theo ảnh 2 (ảnh bản dựng lại)' },
+            rooms: { type: 'array', items: { type: 'integer' }, description: 'số các không gian liên quan (số in trên ảnh 2), nếu có' },
+            note: { type: 'string', description: '≤ 25 từ, nói rõ chỗ nào sai và vì sao' },
+            confidence: { type: 'number', description: '0..1' },
+          },
+          required: ['kind', 'box_2d', 'note'],
+        },
+      },
+    },
+    required: ['issues'],
+  },
+}
+
 const BASE_SYSTEM = `Bạn là kiến trúc sư nội thất cấp cao chuyên lập Bảng danh mục vật liệu hoàn thiện (DMVL / Finishes & FF&E Schedule) cho khách sạn và văn phòng tại Việt Nam, theo thông lệ quốc tế (CSI MasterFormat, hospitality FF&E) và TCVN.
 Nguyên tắc: không bỏ sót; không bịa phòng không có trong concept; phân biệt rõ cái NHÌN THẤY với cái SUY LUẬN; viết tiếng Việt chuyên ngành ngắn gọn, chính xác; luôn kèm bản tiếng Anh tương đương.
 
@@ -173,6 +198,22 @@ Gọi report_items.`),
         img(p.page),
       ]
       return { model: MODEL, max_tokens: 8000, system: BASE_SYSTEM, tools: [REPORT_ITEMS_LITE], tool_choice: { type: 'tool', name: 'report_items' }, messages: [{ role: 'user', content }] }
+    }
+
+    case 'check_plan': {
+      const content: any[] = [
+        txt(`Bạn là kiến trúc sư kiểm tra bản dựng lại mặt bằng do phần mềm tự đọc từ file CAD.
+Ảnh 1 = bản vẽ gốc (đúng về mặt hình ảnh) của một vùng của tầng "${p.floor ?? ''}". Ảnh 2 = bản phần mềm dựng lại CÙNG vùng đó: tường + cột + vách (gộp một loại) là khối xám viền đen; cửa là nét xanh (cánh + cung), nét xanh đứt = ô cửa không có cung (trượt/ô mở); mỗi không gian kín tô một màu và in "số · diện tích m²". Đồ nội thất đã được bỏ chủ ý.
+Nhiệm vụ: so hai ảnh và CHỈ báo các lỗi RÕ RÀNG của bản dựng (ảnh 2):
+- merged: hai không gian thật (khác phòng) bị gộp thành một màu/số, thường vì thiếu cửa hoặc thiếu vách chặn;
+- missing_door: ảnh 1 có cửa (cánh + cung hoặc ô cửa) mà ảnh 2 không có nét xanh;
+- floating_door: cửa xanh không nằm trong tường;
+- missing_wall / extra_wall: ảnh 2 thiếu / thừa tường, vách thạch cao, vách kính so với ảnh 1;
+- bad_split: một không gian thật bị chia nhầm thành nhiều màu.
+Quy tắc: không báo nếu không chắc; khối đồ nội thất, bàn ghế, thiết bị, chữ, kích thước không phải tường; lối đi mở không cửa là hợp lệ nếu ảnh 1 cũng không có cửa. Tối đa 12 lỗi, ưu tiên lỗi ảnh hưởng tách phòng/diện tích. box_2d theo ảnh 2, thang 0..1000. Gọi report_plan_issues (issues rỗng nếu không thấy lỗi).`),
+        txt('ẢNH 1 – BẢN VẼ GỐC:'), img(p.original), txt('ẢNH 2 – BẢN DỰNG LẠI:'), img(p.result),
+      ]
+      return { model: MODEL, max_tokens: 3000, system: 'Bạn là kiến trúc sư đọc bản vẽ mặt bằng AutoCAD, kiểm tra cẩn thận, chính xác, ngắn gọn bằng tiếng Việt.', tools: [REPORT_PLAN_ISSUES], tool_choice: { type: 'tool', name: 'report_plan_issues' }, messages: [{ role: 'user', content }] }
     }
 
   }
