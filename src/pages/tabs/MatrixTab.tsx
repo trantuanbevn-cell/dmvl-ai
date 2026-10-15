@@ -5,7 +5,7 @@ import type { Entry, Room } from '../../lib/types'
 import { CATEGORIES, ROOM_TYPES, roomTypeLabel } from '../../lib/codes'
 import { symbolMap } from '../../lib/sections'
 import { useAuth } from '../../lib/auth'
-import EntryPanel from '../../components/EntryPanel'
+import RoomSections from '../../components/RoomSections'
 import OccCrop from '../../components/OccCrop'
 import { toast } from '../../lib/toast'
 import { buildMatrix, copyCells, addToCell, removeFromCell, moveToRoom, shotsIn, createRoom, updateRoom, moveRoomRow, deleteRoom, renumberRooms, cellTree, FLOORS, floorLabel, type Row } from '../../lib/roomMatrix'
@@ -130,16 +130,17 @@ function Modal({ title, onClose, children, w = 560 }: { title: string; onClose: 
 }
 
 function EntryCheck({ d, sym, rows, row, cat, entry, canEdit, run, imgSrc, onEditCell, onClose }: { d: ProjectData; sym: Map<string, string>; rows: Row[]; row: Row; cat: string; entry: Entry; canEdit: boolean; run: (f: () => Promise<unknown>, ok?: string) => Promise<void>; imgSrc: (r: Room) => string; onEditCell: () => void; onClose: () => void }) {
-  const [to, setTo] = useState('')
+  const [to, setTo] = useState(''), [idx, setIdx] = useState(0)
   const code = sym.get(entry.id) ?? entry.code
   const mine = d.occ.filter(o => o.room_id === row.room.id && o.entry_id === entry.id && (o.category ?? entry.category ?? '') === cat)
   const shots = mine.filter(o => o.bbox)
+  const cur = shots[Math.min(idx, shots.length - 1)]
   const others = [...new Set(d.occ.filter(o => o.entry_id === entry.id && o.room_id && o.room_id !== row.room.id).map(o => o.room_id!))].map(id => d.rooms.find(r => r.id === id)).filter(Boolean) as Room[]
   const pageNo = (o: typeof mine[number]) => d.pages.find(p => p.id === o.page_id)?.page_no
   const parents = d.entries.filter(p => p.id !== entry.id && (p.id === entry.parent_id || (p.product_code ?? '').split(/\s+/).includes(code) || (p.product_code ?? '').split(/\s+/).includes(entry.code)))
   const why = mine.length === 0 ? 'Không có vị trí riêng ở phòng này.' : mine.map(o => `${(o as { origin?: string }).origin === 'manual' ? 'thêm tay / đã chỉnh' : 'AI/phần mềm gán'}${pageNo(o) ? ` · trang concept ${pageNo(o)}` : ''}${o.bbox ? ' · có khoanh' : ' · không khoanh (gán theo mã)'}${o.note ? ' · ' + o.note : ''}`).join(' | ')
   return <div className="modal-bg center" style={{ zIndex: 80 }} onMouseDown={onClose}>
-    <div className="modal" style={{ width: 'min(1400px,96vw)', maxHeight: '94vh', overflow: 'auto' }} onMouseDown={e => e.stopPropagation()}>
+    <div className="modal" style={{ width: 'min(1500px,97vw)', maxHeight: '94vh', overflow: 'auto' }} onMouseDown={e => e.stopPropagation()}>
       <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
         <h3 style={{ margin: 0 }}>Kiểm tra <span className={'mx-chip ' + entry.status}>{code}</span> {entry.name_vn} — {row.room.code} {row.room.name_vn} · {catVn(cat)}</h3>
         <button className="btn ghost sm" onClick={onClose}>✕</button>
@@ -151,19 +152,25 @@ function EntryCheck({ d, sym, rows, row, cat, entry, canEdit, run, imgSrc, onEdi
         <button className="btn sm" disabled={!canEdit || !to} onClick={() => run(() => moveToRoom(d, row.room.id, to, entry, cat), 'Đã chuyển ' + code).then(onClose)}>⇄ Chuyển</button>
         <button className="btn ghost sm" onClick={onEditCell}>Sửa cả ô (thêm / sao chép / không cần)…</button>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(0,1fr)', gap: 14, alignItems: 'start' }}>
-        <div className="stack">
-          <b className="small">Phối cảnh phòng này – khung đỏ/mũi tên = vị trí vật liệu (kích đúp để phóng to)</b>
-          <div className="row gap" style={{ flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            {shots.map(o => <div key={o.id}><OccCrop d={d} o={o} height={300} maxWidth={560} /><div className="small muted">{pageNo(o) ? 'trang ' + pageNo(o) : 'ảnh tải lên'}</div></div>)}
-            {!shots.length && <p className="muted small">Mã này không có ảnh khoanh ở phòng này → nhiều khả năng được gán theo mã (ví dụ là thành phần của đồ rời) chứ không thấy trong phối cảnh.</p>}
+      <div className="small" style={{ marginBottom: 6 }}><b>Vì sao nằm ở đây:</b> {why}{!!parents.length && <> · <b>Liên quan:</b> nằm trong cấu tạo của {parents.map(p => <span key={p.id} className="mx-chip">{sym.get(p.id) ?? p.code}</span>)}</>} · <b>Còn dùng ở:</b> {others.length ? others.map(r => `${r.code} ${r.name_vn}`).join(' · ') : 'không phòng nào khác'}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div>
+          <b className="small">Phối cảnh – khung đỏ/mũi tên = vị trí vật liệu (kích đúp để phóng to)</b>
+          <div style={{ height: 400, border: '1px solid var(--line)', background: '#f3ede6', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 4, overflow: 'hidden' }}>
+            {cur ? <OccCrop d={d} o={cur} height={396} maxWidth={Math.min(680, Math.round(window.innerWidth * 0.46))} /> : <p className="muted small" style={{ padding: 12 }}>Không có ảnh khoanh ở phòng này → mã được gán theo mã (vd. thành phần của đồ rời), không thấy trong phối cảnh.</p>}
           </div>
-          <div className="small"><b>Vì sao nằm ở đây:</b> {why}</div>
-          {!!parents.length && <div className="small"><b>Liên quan:</b> thuộc / nằm trong cấu tạo của {parents.map(p => <span key={p.id} className="mx-chip">{sym.get(p.id) ?? p.code}</span>)}</div>}
-          <div className="small"><b>Còn dùng ở phòng:</b> {others.length ? others.map(r => `${r.code} ${r.name_vn}`).join(' · ') : 'không phòng nào khác'}</div>
-          {row.room.plan_img && <div><b className="small">Mặt bằng {row.room.code}</b><img src={imgSrc(row.room).replace(/\.png$/, '-ctx.png')} alt="" style={{ width: '100%', background: '#fff', border: '1px solid var(--line)', marginTop: 4 }} onError={e => { (e.target as HTMLImageElement).src = imgSrc(row.room) }} /></div>}
+          {shots.length > 1 && <div className="row gap" style={{ marginTop: 4 }}>{shots.map((o, i) => <button key={o.id} className={'chip' + (i === idx ? ' on' : '')} onClick={() => setIdx(i)}>Ảnh {i + 1}{pageNo(o) ? ` (tr.${pageNo(o)})` : ''}</button>)}</div>}
         </div>
-        <div><EntryPanel d={d} entry={entry} onClose={onClose} /></div>
+        <div>
+          <b className="small">Mặt bằng {row.room.code} {row.room.name_vn}</b>
+          <div style={{ height: 400, border: '1px solid var(--line)', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 4, overflow: 'hidden' }}>
+            {row.room.plan_img ? <img src={imgSrc(row.room).replace(/\.png$/, '-ctx.png')} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} onError={e => { (e.target as HTMLImageElement).src = imgSrc(row.room) }} /> : <span className="muted small">Phòng chưa có mặt bằng</span>}
+          </div>
+        </div>
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <b className="small">Danh mục vật liệu (sửa trực tiếp tại đây – giống tab Theo vật liệu)</b>
+        <RoomSections d={d} room={row.room} entryId={entry.id} lang="vn" filter="all" sel={null} onPick={() => {}} onDetail={() => {}} onRemove={() => {}} onAdd={() => {}} />
       </div>
     </div>
   </div>
