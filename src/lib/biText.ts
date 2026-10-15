@@ -36,9 +36,9 @@ export type EntryCells = { cat: Seg[]; loc: Seg[]; spec: Seg[]; brand: Seg[]; no
 export function entryCells(e: Entry, L: Lang, occCats: string[], locs: { room: { name_vn: string; name_en: string | null } }[], fin: { vn: string; en: string }[] = []): EntryCells {
   const flat = (s: string | null | undefined) => (s ?? '').replace(/\n/g, ' ')
   const cat = occCats.flatMap(k => { const c = CATEGORIES.find(z => z.key === k); return c ? pair(c.vn, c.en, L) : one(k) })
-  // Nhiều phòng (>4): nối thành đoạn văn, tự xuống dòng theo độ rộng cột → hàng không bị kéo dài; song ngữ: 1 đoạn VN + 1 đoạn EN
+  // Nhiều phòng (>10): nối thành đoạn văn, tự xuống dòng theo độ rộng cột → hàng không bị kéo dài; song ngữ: 1 đoạn VN + 1 đoạn EN
   const loc = !locs.length ? pair('(chưa gán phòng)', '(no room assigned)', L)
-    : locs.length > 4 ? pair(locs.map(l => flat(l.room.name_vn)).join('  •  '), locs.map(l => flat(l.room.name_en || l.room.name_vn)).join('  •  '), L).map(s => ({ ...s, t: s.t.replace(/\s+/g, ' ') }))
+    : locs.length > 10 ? pair(locs.map(l => flat(l.room.name_vn)).join('  •  '), locs.map(l => flat(l.room.name_en || l.room.name_vn)).join('  •  '), L).map(s => ({ ...s, t: s.t.replace(/\s+/g, ' ') }))
     : locs.flatMap(l => pair(flat(l.room.name_vn), flat(l.room.name_en), L))
   const lab = (a: string, b: string, vn: string | null | undefined, en: string | null | undefined) => pair(vn ? `${a}: ${vn}` : '', vn || en ? `${b}: ${en || vn}` : '', L)
   // Không in dòng "Bộ phận": cột Hạng mục đã nêu rõ (sàn/tường/trần…)
