@@ -45,6 +45,27 @@ export function buildMatrix(d: ProjectData): Row[] {
   })
 }
 
+/** Nhóm mã là "đồ/thiết bị" (mã lớn); vật liệu cấu tạo bên trong (EWD, MTL, FAB…) được ghi ở cột KÍ HIỆU VL của mã lớn */
+const ITEM_GROUPS = new Set(['FF', 'JN', 'EQ', 'LT', 'SF', 'BA', 'AW', 'DC', 'WT', 'SN', 'FH'])
+const SYM_RE = /[A-Za-z]{2,5}-\d{1,3}/g
+/** Trong MỘT ô (phòng × hạng mục): mã con = (a) có parent_id trỏ tới mã lớn cùng ô, hoặc (b) là vật liệu mà mã lớn (đồ/thiết bị) cùng ô ghi trong "Kí hiệu VL".
+ *  Bảng chỉ hiện mã lớn; mã con xem khi mở ô / mở mã lớn. CHỈ ảnh hưởng hiển thị – dữ liệu và việc tính thiếu/đủ không đổi. */
+export function cellTree(es: Entry[], sym: (e: Entry) => string): { top: Entry[]; kids: Map<string, Entry[]> } {
+  const kids = new Map<string, Entry[]>(), hidden = new Set<string>()
+  const refs = new Map<string, Set<string>>()
+  for (const p of es) if (ITEM_GROUPS.has(p.group_code)) refs.set(p.id, new Set((p.product_code ?? '').match(SYM_RE)?.map(x => x.toUpperCase()) ?? []))
+  const add = (pid: string, e: Entry) => { hidden.add(e.id); kids.set(pid, [...(kids.get(pid) ?? []), e]) }
+  for (const e of es) {
+    const par = e.parent_id ? es.find(x => x.id === e.parent_id) : undefined
+    if (par) { add(par.id, e); continue }
+    if (ITEM_GROUPS.has(e.group_code)) continue
+    const keys = [sym(e), e.code].map(x => x.toUpperCase())
+    const owner = es.find(p => p.id !== e.id && keys.some(k => refs.get(p.id)?.has(k)))
+    if (owner) add(owner.id, e)
+  }
+  return { top: es.filter(e => !hidden.has(e.id)), kids }
+}
+
 const nextCode = (rooms: Room[]) => 'R' + String(Math.max(0, ...rooms.map(r => parseInt(r.code.replace(/\D/g, '') || '0', 10))) + 1).padStart(2, '0')
 
 /** Đánh lại số R01, R02… theo đúng thứ tự hiển thị (tầng thấp → cao, rồi thứ tự trong tầng) và ghi cùng thứ tự vào rooms.sort / matrix_sort

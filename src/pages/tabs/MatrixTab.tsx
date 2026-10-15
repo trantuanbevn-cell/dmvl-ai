@@ -6,7 +6,7 @@ import { CATEGORIES, ROOM_TYPES, roomTypeLabel } from '../../lib/codes'
 import { symbolMap } from '../../lib/sections'
 import { useAuth } from '../../lib/auth'
 import { toast } from '../../lib/toast'
-import { buildMatrix, copyCells, addToCell, removeFromCell, shotsIn, createRoom, updateRoom, moveRoomRow, deleteRoom, renumberRooms, FLOORS, floorLabel, type Row } from '../../lib/roomMatrix'
+import { buildMatrix, copyCells, addToCell, removeFromCell, shotsIn, createRoom, updateRoom, moveRoomRow, deleteRoom, renumberRooms, cellTree, FLOORS, floorLabel, type Row } from '../../lib/roomMatrix'
 
 type Filter = 'all' | 'missing' | 'norender' | 'none'
 const catVn = (k: string) => CATEGORIES.find(c => c.key === k)?.vn ?? k
@@ -92,7 +92,7 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
                 {cats.map(c => {
                   const es = r.cells.get(c.key) ?? [], miss = r.missing.includes(c.key)
                   return <td key={c.key} className={'mx-c' + (miss && r.state !== 'none' ? ' mx-miss' : '')} draggable={canEdit && es.length > 0} onDragStart={e => e.dataTransfer.setData('text/plain', JSON.stringify({ room: r.room.id, cat: c.key }))} onDragOver={e => canEdit && e.preventDefault()} onDrop={e => onDrop(e, r.room.id, c.key)} onClick={() => setCell({ roomId: r.room.id, cat: c.key })}>
-                    {es.map(e => <span key={e.id} className={'mx-chip ' + e.status} title={`${e.name_vn}${e.brand ? ' · ' + e.brand : ''}`}>{sym.get(e.id) ?? e.code}</span>)}
+                    {(() => { const t = cellTree(es, e => sym.get(e.id) ?? e.code); return t.top.map(e => <span key={e.id} className={'mx-chip ' + e.status} title={`${e.name_vn}${e.brand ? ' · ' + e.brand : ''}${t.kids.get(e.id)?.length ? ' · gồm ' + t.kids.get(e.id)!.map(x => sym.get(x.id) ?? x.code).join(', ') : ''}`}>{sym.get(e.id) ?? e.code}</span>) })()}
                     {!es.length && r.need.includes(c.key) && r.state !== 'none' && <span className="mx-hint">thiếu</span>}
                   </td>
                 })}
@@ -134,8 +134,8 @@ function CellDialog({ d, sym, row, cat, canEdit, run, onCopy, onClose }: { d: Pr
   return <Modal title={`${row.room.code} ${row.room.name_vn} · ${catVn(cat)}`} onClose={onClose}>
     <div className="stack">
       {!es.length && <p className="muted small">Ô này chưa có vật liệu.</p>}
-      {es.map(e => <div key={e.id} className="row between" style={{ gap: 8 }}>
-        <div><span className={'mx-chip ' + e.status}>{sym.get(e.id) ?? e.code}</span> {e.name_vn}<div className="small muted">{e.brand ?? ''} {e.product_code ?? ''}</div></div>
+      {(() => { const t = cellTree(es, e => sym.get(e.id) ?? e.code); return t.top.flatMap(e => [e, ...(t.kids.get(e.id) ?? [])].map((x, i) => ({ x, sub: i > 0 }))) })().map(({ x: e, sub }) => <div key={e.id} className="row between" style={{ gap: 8, marginLeft: sub ? 22 : 0, opacity: sub ? 0.85 : 1 }}>
+        <div>{sub && <span className="muted">↳ </span>}<span className={'mx-chip ' + e.status}>{sym.get(e.id) ?? e.code}</span> {e.name_vn}<div className="small muted">{e.brand ?? ''} {e.product_code ?? ''}</div></div>
         <button className="btn sm danger" disabled={!canEdit} onClick={() => { const n = shotsIn(d, row.room.id, e, cat); if (n && !confirm(`Mã này có ${n} ảnh phối cảnh ở phòng này – bỏ khỏi phòng sẽ bỏ cả ảnh. Tiếp tục?`)) return; run(() => removeFromCell(d, row.room.id, e, cat), 'Đã bỏ ' + (sym.get(e.id) ?? e.code)) }}>✕ Bỏ</button>
       </div>)}
       <hr />
