@@ -7,10 +7,13 @@ import type { Project, Room, Page, Entry, Occurrence, Warning, FloorPlan, Projec
 export type ProjectData = {
   project: Project | null; rooms: Room[]; pages: Page[]; entries: Entry[]; occ: Occurrence[]; warnings: Warning[]; floors: FloorPlan[]; rules: ProjectRule[]
   urls: Record<string, string>; loading: boolean; reload: () => Promise<void>
+  /** dữ liệu MỚI NHẤT vừa tải xong (không phải bản của lần render trước) – dùng khi xem trước / xuất file */
+  latest: () => Omit<ProjectData, 'reload' | 'latest'>
 }
 
 export function useProject(id: string): ProjectData {
-  const [s, setS] = useState<Omit<ProjectData, 'reload'>>({ project: null, rooms: [], pages: [], entries: [], occ: [], warnings: [], floors: [], rules: [], urls: {}, loading: true })
+  const [s, setS] = useState<Omit<ProjectData, 'reload' | 'latest'>>({ project: null, rooms: [], pages: [], entries: [], occ: [], warnings: [], floors: [], rules: [], urls: {}, loading: true })
+  const latestRef = useRef<Omit<ProjectData, 'reload' | 'latest'> | null>(null)
   const reload = useCallback(async () => {
     const [p, r, pg, e, w, fl, ru] = await Promise.all([
       supabase.from('projects').select('*').eq('id', id).single(),
@@ -41,7 +44,8 @@ export function useProject(id: string): ProjectData {
     setCustomSections((p.data as any)?.custom_sections)
     setNameOverrides((p.data as any)?.section_names)
     setSectionLayout((p.data as any)?.section_layout)
-    setS({ project: p.data as Project, rooms: (r.data ?? []) as Room[], pages, entries, occ, warnings: (w.data ?? []) as Warning[], floors, rules: (ru.data ?? []) as ProjectRule[], urls, loading: false })
+    const next = { project: p.data as Project, rooms: (r.data ?? []) as Room[], pages, entries, occ, warnings: (w.data ?? []) as Warning[], floors, rules: (ru.data ?? []) as ProjectRule[], urls, loading: false }
+    latestRef.current = next; setS(next)
   }, [id])
   useEffect(() => { reload() }, [reload])
   // Đồng bộ trực tiếp: ai sửa gì, mọi người thấy ngay (gộp nhiều thay đổi liên tiếp thành 1 lần tải lại)
@@ -63,5 +67,5 @@ export function useProject(id: string): ProjectData {
     ch.subscribe()
     return () => { clearTimeout(t); supabase.removeChannel(ch) }
   }, [id, reload])
-  return { ...s, reload }
+  return { ...s, reload, latest: () => latestRef.current ?? s }
 }

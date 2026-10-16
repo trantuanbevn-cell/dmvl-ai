@@ -28,12 +28,13 @@ export default function ExportTab({ d }: { d: ProjectData }) {
   const go = async (label: string, fn: (data: ReturnType<typeof mk>) => Promise<void>) => {
     setBusy(label)
     try {
+      await d.reload()   // luôn tải lại toàn bộ dữ liệu mới nhất trước khi xuất
       if (o.lang !== 'vn' && canEdit) {
-        const r = await syncEnglish(d)
-        if (r.done) { await d.reload(); await new Promise(res => setTimeout(res, 300)) }
+        const r = await syncEnglish(d.latest() as ProjectData)
+        if (r.done) await d.reload()
         if (r.failed > 0 && !confirm(`Còn ${r.failed} ô tiếng Anh chưa dịch được (AI lỗi hoặc hết hạn mức). Vẫn xuất file?`)) { setBusy(''); return }
       }
-      await fn(mk(dRef.current))
+      await fn(mk(d.latest() as ProjectData))
     } catch (e) { alert(String(e)) }
     setBusy('')
   }
@@ -54,8 +55,9 @@ export default function ExportTab({ d }: { d: ProjectData }) {
   const preview = async () => {
     setPrev('loading')
     try {
-      if (o.lang !== 'vn' && canEdit) { const r = await syncEnglish(d); if (r.done) { await d.reload(); await new Promise(res => setTimeout(res, 300)) } }
-      setPrev({ html: await buildScheduleHtml(mk(dRef.current), o, false) })
+      await d.reload()   // xem trước luôn theo dữ liệu mới nhất (không dùng bản đã tải từ trước)
+      if (o.lang !== 'vn' && canEdit) { const r = await syncEnglish(d.latest() as ProjectData); if (r.done) await d.reload() }
+      setPrev({ html: await buildScheduleHtml(mk(d.latest() as ProjectData), o, false) })
     } catch (e) { alert(String(e)); setPrev(null) }
   }
   const shown = allSections().filter(s => (groups.find(g => g.section.key === s.key)?.items.length ?? 0) > 0)

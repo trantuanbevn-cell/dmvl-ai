@@ -150,6 +150,20 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     list.splice(at + (after ? 1 : 0), 0, e)
     const { error } = await supabase.rpc('reorder_entries', { p_ids: list.map(x => x.id) })
     if (error) { alert('Không đổi được thứ tự: ' + error.message); return }
+    // Ký hiệu VL (mã vật liệu) đang ghi theo dãy số của nhóm (vd GWB-01, GWB-02…) → đổi theo ký hiệu bản vẽ MỚI, để hai cột luôn khớp nhau
+    try {
+      const codes = list.map(x => x.code).sort((a, b) => num(a) - num(b) || a.localeCompare(b)), newCode = new Map(list.map((x, i) => [x.id, codes[i]]))
+      const before = symbolMap(d.entries), after = symbolMap(d.entries.map(x => (newCode.has(x.id) ? { ...x, code: newCode.get(x.id)! } : x)))
+      const series = new Set(list.map(x => before.get(x.id)).filter(Boolean) as string[])   // các ký hiệu của chính dãy này
+      const ups: Promise<unknown>[] = []
+      for (const x of list) {
+        const lines = (x.product_code ?? '').split('\n'), nw = after.get(x.id)
+        if (!nw || !lines.some(l => series.has(l.trim()))) continue
+        const next = lines.map(l => (series.has(l.trim()) ? nw : l)).filter((l, i, a) => a.indexOf(l) === i).join('\n')
+        if (next !== (x.product_code ?? '')) ups.push(saveEntry(x, { product_code: next }) as Promise<unknown>)
+      }
+      await Promise.all(ups)
+    } catch { /* không chặn việc đổi thứ tự */ }
     d.reload()
   }
   /** Kéo ảnh phối cảnh từ một vật liệu sang vật liệu khác (giữ Ctrl/Alt để sao chép thay vì chuyển) */
