@@ -39,7 +39,13 @@ const STEP = 120
 const cmp = (a: string, b: string) => a.localeCompare(b, 'vi')
 type Sel = { kind: string; brand: string; fam: string }
 
-export async function loadAll(): Promise<Mat[]> {
+let allCache: { t: number; p: Promise<Mat[]> } | null = null
+/** Tải toàn thư viện (hàng chục nghìn mã, mất 10–20 giây) – dùng chung một lần tải trong 5 phút giữa trang Thư viện và hộp tìm mẫu */
+export function loadAll(force = false): Promise<Mat[]> {
+  if (!force && allCache && Date.now() - allCache.t < 300000) return allCache.p
+  const p = loadAllRaw(); allCache = { t: Date.now(), p }; p.catch(() => { if (allCache?.p === p) allCache = null }); return p
+}
+async function loadAllRaw(): Promise<Mat[]> {
   const out: Mat[] = []
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase.from('materials').select(COLS).order('product_code').order('id').range(from, from + 999)
@@ -62,7 +68,7 @@ export default function Library() {
   const [tp, setTp] = useState('')
   const runTag = async (limit: number) => { (window as any).__tstop = false; setTp('AI đang đọc vân…'); try { const n = await tagLibrary((a, b, m) => setTp(m ?? `AI đã đọc vân ${a}/${b}`), () => (window as any).__tstop === true, limit); setTp(`Xong (${n} mã) – bấm lại để chạy tiếp`) } catch (e: any) { setTp('Lỗi: ' + (e.message ?? e)) } }
   const runFeat = async () => { setFstop(false); setFp('Đang phân tích…'); try { const n = await backfillFeats((a, b) => setFp(`Đã phân tích ${a}/${b}`), () => (window as any).__fstop === true); setFp(`Xong (${n} mã)`) } catch (e: any) { setFp('Lỗi: ' + (e.message ?? e)) } }
-  useEffect(() => { loadAll().then(setAll).catch(e => setErr(String(e.message ?? e))).finally(() => setLoading(false)) }, [reload])
+  useEffect(() => { loadAll(reload > 0).then(setAll).catch(e => setErr(String(e.message ?? e))).finally(() => setLoading(false)) }, [reload])
   useEffect(() => { setShown(STEP) }, [sel, line, color, q])
   useEffect(() => { setLine('') }, [sel])
 

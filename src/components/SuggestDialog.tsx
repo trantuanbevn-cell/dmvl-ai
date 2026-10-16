@@ -6,7 +6,7 @@ import type { ProjectData } from '../lib/useProject'
 import type { Entry } from '../lib/types'
 import OccCrop from './OccCrop'
 import MaterialSuggest from './MaterialSuggest'
-import { MatDetail, type Mat } from '../pages/Library'
+import { MatDetail, loadAll, type Mat } from '../pages/Library'
 import { bboxFeat, bboxQueryCanvas, loadFeatMats, ensureFeats, rank, rankByPat, taggedCount, shortlist, type Cand, type FMat } from '../lib/suggest'
 import { aiPickByPattern, tagQuery, type AiPick } from '../lib/aiMatch'
 import { PAT_LABEL, type Pat } from '../lib/patMatch'
@@ -27,6 +27,7 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
   const [prog, setProg] = useState(''), [allBasic, setAllBasic] = useState(false), [appliedKey, setAppliedKey] = useState('')
   const basics = allBasic ? BASIC_SPECS : relevantSpecs(entry)
   const pickBasic = async (b: typeof BASIC_SPECS[number]) => { const er = await applyBasicSpec(entry, b); if (er) return alert(er.message); setAppliedKey(b.key); d.reload() }
+  useEffect(() => { loadAll().catch(() => {}) }, [])   // nạp sẵn toàn thư viện nền để bảng “Tìm trong thư viện” mở ra là có ngay
   useEffect(() => {
     let off = false
     loadFeatMats().then(async m => {
