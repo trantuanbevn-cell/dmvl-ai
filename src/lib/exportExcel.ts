@@ -127,7 +127,6 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
         if (!firstData) firstData = r; lastData = r
       }
       if (e.product_url) { const lc = row.getCell(ci('sample')); lc.value = { text: '🔗 ' + hostOf(e.product_url), hyperlink: e.product_url }; lc.font = { name: 'Arial', size: 8, color: { argb: 'FF1F4E9A' }, underline: true }; lc.alignment = { vertical: 'bottom', horizontal: 'left', wrapText: false, shrinkToFit: true } }  // link sản phẩm nằm ngay dưới hình vật liệu
-      if (e.source === 'inferred') for (let i = 1; i <= wide; i++) row.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9E5' } }
       const wOf = (k: string) => cols[ci(k) - 1].w
       const l2w = !cl.loc2.length
       row.height = Math.max(150, wrapCount(cl.loc, l2w ? wOf('loc') * 2 : wOf('loc')) * 12.5 + 8, wrapCount(cl.loc2, wOf('loc')) * 12.5 + 8, ...(['cat', 'spec', 'brand', 'note'] as const).map(k => wrapCount(cl[k], wOf(k)) * 12.5 + 8))
