@@ -18,6 +18,7 @@ export function missingOf(e: Entry, lang: Lang): Miss[] {
     if (!has(e.name_en)) out.push({ key: 'name_en', label: 'Item name' })
     if (!has(e.material_en) && !has(e.desc_en)) { out.push({ key: 'material_en', label: 'Material' }); out.push({ key: 'desc_en', label: 'Specification' }) }
   }
+  if (e.spec_stale) out.push({ key: 'spec_stale', label: e.spec_stale === 'incomplete' ? 'Cấu tạo chưa đủ để phân loại' : 'Ký hiệu/thông số cũ chưa rà lại (đã đổi loại vật liệu)' })
   if (!has(e.product_code)) out.push({ key: 'product_code', label: 'Mã sản phẩm' })
   return out
 }

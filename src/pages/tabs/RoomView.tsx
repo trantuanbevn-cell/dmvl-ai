@@ -23,7 +23,7 @@ import { roomPages } from '../../lib/roomPages'
 import { roomStats, heroStyle } from '../../lib/progress'
 import { useAuth } from '../../lib/auth'
 import { useOnline, colorOf } from '../../lib/presence'
-import { roomMissing } from '../../lib/missing'
+import { roomMissing, missingOf } from '../../lib/missing'
 
 export default function RoomView({ d }: { d: ProjectData }) {
   const [sp, setSp] = useSearchParams()
@@ -88,8 +88,11 @@ export default function RoomView({ d }: { d: ProjectData }) {
     setAssignOpen(false); setPendBox(null); await d.reload(); setSel(e.id); setSelOcc(null)
   }
   const approveAll = async () => {
-    const ids = [...new Set(occ.map(o => o.entry_id))].filter(id => entryById.get(id)?.status === 'pending' && entryById.get(id)?.source === 'image')
-    if (!ids.length || !confirm(`Xác nhận ${ids.length} hạng mục nhìn thấy trong ảnh của phòng này? (dòng suy luận vẫn để chờ duyệt)`)) return
+    const all = [...new Set(occ.map(o => o.entry_id))].filter(id => entryById.get(id)?.status === 'pending' && entryById.get(id)?.source === 'image')
+    // chỉ xác nhận dòng đã đủ thông tin; dòng còn đỏ (thiếu mã sản phẩm, cần rà lại…) để người làm xử lý trước
+    const ids = all.filter(id => !missingOf(entryById.get(id)!, lang).length), skip = all.length - ids.length
+    if (!ids.length) return alert(skip ? `Cả ${skip} hạng mục còn thiếu thông tin – hãy điền/chọn vật liệu cho các dòng đỏ trước khi xác nhận.` : 'Không có hạng mục nào cần xác nhận.')
+    if (!confirm(`Xác nhận ${ids.length} hạng mục đủ thông tin?${skip ? ` (${skip} dòng còn thiếu thông tin sẽ KHÔNG được xác nhận)` : ''} Dòng suy luận vẫn để chờ duyệt.`)) return
     await supabase.from('entries').update({ status: 'approved' }).in('id', ids); d.reload()
   }
   const addItem = () => { if (!room) return; setDlg({ group: add.group, category: add.category, name: add.name, hint: 'Hệ thống sẽ kiểm tra xem vật liệu này đã có mã chưa.' }); setAdd({ ...add, name: '' }) }
