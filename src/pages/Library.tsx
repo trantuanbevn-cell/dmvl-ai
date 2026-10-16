@@ -131,8 +131,8 @@ export default function Library() {
           <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10 }}>
             {list.slice(0, shown).map(m => (
               <div key={m.id} className="card" style={{ cursor: 'pointer', padding: 6 }} onClick={() => setOpen(m)}>
-                <div style={{ aspectRatio: '2/1', borderRadius: 6, background: '#eee', overflow: 'hidden' }}>
-                  <img src={m.tex_url ?? ''} alt="" decoding="async" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
+                <div style={{ aspectRatio: '2/1', borderRadius: 6, background: !m.tex_url && m.attrs.color ? m.attrs.color : '#eee', overflow: 'hidden' }}>
+                  {m.tex_url && <img src={m.tex_url} alt="" decoding="async" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />}
                 </div>
                 <div style={{ fontWeight: 600, marginTop: 5, fontSize: 13 }}>{m.product_code}</div>
                 <div className="small">{m.name}</div>
@@ -176,7 +176,9 @@ export function MatDetail({ m, onClose, onPick, pickLabel }: { m: Mat; onClose: 
         {zoom && <div onMouseDown={e => { e.stopPropagation(); setZoom(false) }} style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(20,15,10,.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out', padding: 16 }}><img src={pick?.tex || m.tex_url || ''} alt="" referrerPolicy="no-referrer" style={{ maxWidth: '96vw', maxHeight: '94vh', objectFit: 'contain', borderRadius: 6, background: '#fff' }} /><span style={{ position: 'fixed', top: 14, right: 22, color: '#fff', fontSize: 13 }}>Bấm bất kỳ đâu để đóng</span></div>}
         <div className="row between"><h3>{m.product_code} — {m.name}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
         <div className="row" style={{ gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <img src={pick?.tex || m.tex_url || ''} alt="" title="Bấm để phóng to map" onClick={() => setZoom(true)} referrerPolicy="no-referrer" style={{ cursor: 'zoom-in', width: 340, maxWidth: '100%', aspectRatio: '2/1', objectFit: 'cover', borderRadius: 8, background: '#eee' }} />
+          {(pick?.tex || m.tex_url)
+            ? <img src={pick?.tex || m.tex_url || ''} alt="" title="Bấm để phóng to map" onClick={() => setZoom(true)} referrerPolicy="no-referrer" style={{ cursor: 'zoom-in', width: 340, maxWidth: '100%', aspectRatio: '2/1', objectFit: 'cover', borderRadius: 8, background: '#eee' }} />
+            : <div title={A.color ?? ''} style={{ width: 340, maxWidth: '100%', aspectRatio: '2/1', borderRadius: 8, background: A.color || '#eee', border: '1px solid #ddd' }} />}
           <div style={{ flex: '1 1 260px' }} className="small">
             <div><b>Hãng:</b> {m.brand}</div><div><b>Dòng:</b> {m.line}</div>
             {A.pattern && <div><b>Loại vân:</b> {A.pattern}</div>}{A.species && <div><b>Loại gỗ:</b> {A.species}</div>}{A.material && <div><b>Vật liệu:</b> {A.material}</div>}{A.color && <div><b>Màu:</b> {A.color}</div>}{A.finish && <div><b>Bề mặt:</b> {A.finish}</div>}

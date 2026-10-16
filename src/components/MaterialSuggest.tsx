@@ -64,8 +64,8 @@ export default function MaterialSuggest({ entry, used, onClose, onDone }: { entr
               {list.slice(0, shown).map(m => {
                 const on = picks.some(p => p.m.id === m.id)
                 return <div key={m.id} className="card" style={{ cursor: 'pointer', padding: 6, outline: on ? '2px solid var(--brown)' : undefined }} onClick={() => setOpen(m)}>
-                  <div style={{ aspectRatio: '2/1', borderRadius: 6, background: '#eee', overflow: 'hidden' }}>
-                    <img src={m.tex_url ?? ''} alt="" decoding="async" loading="lazy" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />
+                  <div style={{ aspectRatio: '2/1', borderRadius: 6, background: !m.tex_url && m.attrs.color ? m.attrs.color : '#eee', overflow: 'hidden' }}>
+                    {m.tex_url && <img src={m.tex_url} alt="" decoding="async" loading="lazy" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />}
                   </div>
                   <div style={{ fontWeight: 600, marginTop: 4, fontSize: 13 }}>{m.product_code}</div>
                   <div className="small">{m.name}</div>
