@@ -259,7 +259,7 @@ export function renderBuild(st0: BuildState) {
     }
   }
   const extra = (st.extra ?? '').trim()
-  if (extra) { vn.push(extra); en.push(extra) }
+  if (extra) vn.push(extra)   // chữ tự viết là tiếng Việt: không chép sang bản EN (tránh lẫn tiếng Việt), dùng nút dịch của phần mềm
   return { vn, en, composition: comp.join(' + '), state: st }
 }
 
@@ -325,6 +325,18 @@ function namesOfBuild(st: BuildState) {
     name_vn: `${head(false)} ${fv.join(', ')}`.trim(), name_en: `${head(true)} – ${fe.join(', ')}`.trim(),
     material_vn: [...fv, ...(c0 ? ['cốt ' + short(c0, false)] : [])].join('; '), material_en: [...fe, ...(c0 ? ['core: ' + short(c0, true)] : [])].join('; '),
   }
+}
+/** Gợi ý từ tên/mô tả sẵn có của mã (vd "giật cấp", "khe hắt đèn") để mẫu nhanh không ghi đè thành kiểu khác */
+export function hintsOf(e: Pick<Entry, 'name_vn' | 'desc_vn' | 'part_vn'>, sys: System['k']): Sel {
+  const t = `${e.name_vn ?? ''} ${e.desc_vn ?? ''} ${e.part_vn ?? ''}`.toLowerCase(), h: Sel = {}
+  if (sys === 'ceiling') {
+    if (/giật cấp|hộc đèn|khe hắt|hắt đèn/.test(t)) h.type = ['drop']
+    else if (/cong|lượn|sóng/.test(t)) h.type = ['curve']
+    else if (/trần thả|t-bar|tbar/.test(t)) h.type = ['tbar']
+    else if (/lam/.test(t)) h.type = ['slat']
+    if (/hắt đèn|hộc đèn|khe sáng|led/.test(t)) h.extra = ['cove']
+  }
+  return h
 }
 const SIZE_VN = /^Kích thước\s*:.*$/im, SIZE_EN = /^Size\s*:.*$/im
 /** Ghi vào mục: THAY toàn bộ thông số cũ bằng nội dung sinh từ cấu tạo (giữ riêng dòng "Kích thước" đã chọn từ thư viện) + ô Cấu tạo, lưu lựa chọn, xoá cờ "cần xem lại" */

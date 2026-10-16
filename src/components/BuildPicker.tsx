@@ -1,11 +1,14 @@
 // Chọn cấu tạo lớp tường / trần / sàn bằng cách tích: khung → cốt → hoàn thiện (sơn: bả, lót, phủ) → tự sinh thông số kỹ thuật đúng vật liệu.
 import { useMemo, useState } from 'react'
 import type { Entry } from '../lib/types'
-import { PRESETS, groupOfBuild, SYSTEMS, systemOf, guessSystem, cleanSel, renderBuild, applyBuild, type BuildState, type System } from '../lib/construction'
+import { hintsOf, PRESETS, groupOfBuild, SYSTEMS, systemOf, guessSystem, cleanSel, renderBuild, applyBuild, type BuildState, type System } from '../lib/construction'
+
+/** Mô tả sẵn có (trừ dòng Kích thước) đưa vào ô "Mô tả thêm" để không mất chữ của người làm khi áp cấu tạo */
+const keepText = (e: Entry) => (e.desc_vn ?? '').split('\n').filter(l => l.trim() && !/^Kích thước\s*:/i.test(l.trim()) && !/^-\s/.test(l.trim())).join('\n').slice(0, 400)
 
 export default function BuildPicker({ entry, all, onDone }: { entry: Entry; all: Entry[]; onDone: () => void }) {
   const init: BuildState = entry.build?.sys ? entry.build : { sys: guessSystem(entry), sel: {}, vars: {} }
-  const [st, setSt] = useState<BuildState>(init), [busy, setBusy] = useState(false), [show, setShow] = useState(!!entry.build)
+  const [st, setSt] = useState<BuildState>(entry.build?.sys ? init : { ...init, extra: keepText(entry) }), [busy, setBusy] = useState(false), [show, setShow] = useState(!!entry.build)
   const sys = systemOf(st.sys), cl = useMemo(() => cleanSel(sys, st), [sys, st])
   const pv = useMemo(() => renderBuild(cl), [cl])
   const layers = sys.layers.filter(l => !l.when || l.when(cl.sel))
@@ -17,7 +20,7 @@ export default function BuildPicker({ entry, all, onDone }: { entry: Entry; all:
   const setVar = (lk: string, ok: string, v: string) => setSt(s => ({ ...s, vars: { ...s.vars, [`${lk}/${ok}`]: v } }))
   const apply = async () => { setBusy(true); const er = await applyBuild(entry, cl, all); setBusy(false); if (er) return alert(er.message); onDone() }
   const grp = groupOfBuild(cl)
-  const preset = (i: number) => { const p = PRESETS[i]; if (p) setSt({ sys: p.sys, sel: p.sel, vars: p.vars ?? {}, extra: st.extra }) }
+  const preset = (i: number) => { const p = PRESETS[i]; if (p) { const h = hintsOf(entry, p.sys); const sel = { ...p.sel, ...(h.type ? { type: h.type } : {}), ...(h.extra ? { extra: [...new Set([...(p.sel.extra ?? []), ...h.extra])] } : {}) }; setSt({ sys: p.sys, sel, vars: p.vars ?? {}, extra: st.extra }) } }
   const chg = (k: System['k']) => setSt({ sys: k, sel: {}, vars: {}, extra: st.extra })
   return <div style={{ marginBottom: 12 }}>
     <div className="row between"><b>🧱 Cấu tạo lớp (tích chọn)</b><a className="small" style={{ cursor: 'pointer' }} onClick={() => setShow(!show)}>{show ? 'thu gọn' : 'mở'}</a></div>
