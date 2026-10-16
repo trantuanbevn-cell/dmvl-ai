@@ -1,4 +1,5 @@
 // Bảng "Vật Liệu Đề Xuất": trái = ảnh phối cảnh có khoanh vị trí; phải = CHỈ các mẫu thư viện khớp ≥90% (không lộ phần còn lại của thư viện).
+import { symOf } from '../lib/sections'
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import type { ProjectData } from '../lib/useProject'
@@ -82,7 +83,7 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
   return (
     <div className="modal-bg center no-export" style={{ zIndex: 80 }} onMouseDown={e => { e.stopPropagation(); onClose() }}>
       <div className="modal" style={{ width: 'min(1180px, 97vw)', height: '88vh', maxHeight: '88vh' }} onMouseDown={e => e.stopPropagation()}>
-        <div className="row between"><h3>Vật Liệu Đề Xuất — {entry.code} {entry.name_vn}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
+        <div className="row between"><h3>Vật Liệu Đề Xuất — {symOf(d.entries, entry)} {entry.name_vn}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, flex: 1, minHeight: 0 }}>
           <div className="card" style={{ overflow: 'auto' }}>
             <b>Phối cảnh (vị trí được khoanh)</b>
@@ -133,7 +134,7 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
         </div>
       </div>
       {open && <div style={{ position: 'relative', zIndex: 90 }} onMouseDown={e => e.stopPropagation()}><MatDetail m={open} onClose={() => setOpen(null)} onPick={addPick} pickLabel="Chọn vào danh mục" /></div>}
-      {browse && <div style={{ position: 'relative', zIndex: 85 }} onMouseDown={e => e.stopPropagation()}><MaterialSuggest entry={entry} onClose={() => setBrowse(false)} onDone={() => { d.reload(); onClose() }} /></div>}
+      {browse && <div style={{ position: 'relative', zIndex: 85 }} onMouseDown={e => e.stopPropagation()}><MaterialSuggest entry={entry} label={symOf(d.entries, entry)} onClose={() => setBrowse(false)} onDone={() => { d.reload(); onClose() }} /></div>}
     </div>
   )
 }

@@ -5,7 +5,7 @@ import type { Entry } from '../lib/types'
 import { applyPicks, kindOfGroup, sizeText, type Pick } from '../lib/suggestApply'
 
 const STEP = 90
-export default function MaterialSuggest({ entry, used, onClose, onDone }: { entry: Entry; used?: { brand: string; code: string }[]; onClose: () => void; onDone: () => void }) {
+export default function MaterialSuggest({ entry, label, used, onClose, onDone }: { entry: Entry; label?: string; used?: { brand: string; code: string }[]; onClose: () => void; onDone: () => void }) {
   const [all, setAll] = useState<Mat[]>([]), [loading, setLoading] = useState(true)
   const [kind, setKind] = useState(kindOfGroup(entry.group_code) ?? 'tile'), [brand, setBrand] = useState(''), [fam, setFam] = useState('')
   const [line, setLine] = useState(''), [color, setColor] = useState(''), [q, setQ] = useState(''), [shown, setShown] = useState(STEP)
@@ -34,7 +34,7 @@ export default function MaterialSuggest({ entry, used, onClose, onDone }: { entr
   return (
     <div className="modal-bg center" onMouseDown={e => { e.stopPropagation(); onClose() }}>
       <div className="modal" style={{ width: 'min(1200px, 97vw)', height: '92vh', maxHeight: '92vh' }} onMouseDown={e => e.stopPropagation()}>
-        <div className="row between"><h3>Vật Liệu Đề Xuất — {entry.code} {entry.name_vn}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
+        <div className="row between"><h3>Vật Liệu Đề Xuất — {label ?? entry.code} {entry.name_vn}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input autoFocus placeholder="Gõ mã / tên để tìm nhanh (MS 325, Oak…)" value={q} onChange={e => setQ(e.target.value)} style={{ width: 280 }} />
           <select value={color} onChange={e => setColor(e.target.value)}><option value="">Mọi màu</option>{COLORS.map(b => <option key={b}>{b}</option>)}</select>

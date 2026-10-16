@@ -313,19 +313,34 @@ export function groupOfBuild(st0: BuildState): string | null {
   return 'WP'
 }
 
+/** Tên hạng mục + vật liệu sinh từ cấu tạo (chỉ dùng khi nhóm vật liệu bị đổi, để tên cũ không mâu thuẫn) */
+function namesOfBuild(st: BuildState) {
+  const sys = systemOf(st.sys), pick = (l: string) => (st.sel[l] ?? []).map(k => sys.layers.find(x => x.k === l)?.opts.find(o => o.k === k)).filter(Boolean) as Opt[]
+  const fin = pick('finish'), top = pick('top'), core = pick('core')
+  const short = (o: Opt, en: boolean) => (en ? o.en : o.vn).replace(/\s*\(.*$/, '')
+  const fv = fin.map(o => o.k === 'paint' && top[0] ? short(top[0], false) : short(o, false)), fe = fin.map(o => o.k === 'paint' && top[0] ? short(top[0], true) : short(o, true))
+  const head = (en: boolean) => (en ? sys.en.split(' / ')[0] : sys.vn.split(' – ')[0])
+  const c0 = core.filter(o => o.k !== 'none')[0]
+  return {
+    name_vn: `${head(false)} ${fv.join(', ')}`.trim(), name_en: `${head(true)} – ${fe.join(', ')}`.trim(),
+    material_vn: [...fv, ...(c0 ? ['cốt ' + short(c0, false)] : [])].join('; '), material_en: [...fe, ...(c0 ? ['core: ' + short(c0, true)] : [])].join('; '),
+  }
+}
 const SIZE_VN = /^Kích thước\s*:.*$/im, SIZE_EN = /^Size\s*:.*$/im
 /** Ghi vào mục: THAY toàn bộ thông số cũ bằng nội dung sinh từ cấu tạo (giữ riêng dòng "Kích thước" đã chọn từ thư viện) + ô Cấu tạo, lưu lựa chọn, xoá cờ "cần xem lại" */
 export async function applyBuild(e0: Entry, st0: BuildState, all: Entry[] = []) {
   const r = renderBuild(st0), grp = groupOfBuild(r.state)
   let e = e0
+  const extra: Record<string, unknown> = {}
   // đủ dữ liệu → phần mềm tự biết nhóm vật liệu: đổi nhóm + ký hiệu bản vẽ, hàng tự chuyển về đúng cụm
-  if (grp && grp !== e.group_code) { const er = await changeGroup(e, grp, all); if (er) return er; e = { ...e, group_code: grp } }
+  if (grp && grp !== e.group_code) { const er = await changeGroup(e, grp, all); if (er) return er; e = { ...e, group_code: grp }; Object.assign(extra, namesOfBuild(r.state)) }
   const keep = (t: string | null | undefined, re: RegExp) => (t ?? '').match(re)?.[0] ?? ''
   const join = (lines: string[], size: string) => [...lines.map(l => (l.startsWith('  ') ? l : '- ' + l)), size].filter(Boolean).join('\n')
   return saveEntry(e, {
     desc_vn: join(r.vn, keep(e.desc_vn, SIZE_VN)) || null,
     desc_en: join(r.en, keep(e.desc_en, SIZE_EN)) || null,
     composition: r.composition || e.composition,
+    ...extra,
     build: r.state,
     spec_stale: grp ? null : 'incomplete',   // chưa tích đủ → không đủ dữ liệu phân loại: ô bên ngoài hiện đỏ để người làm bổ sung
   })

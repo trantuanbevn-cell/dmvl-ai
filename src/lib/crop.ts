@@ -2,8 +2,13 @@ const imgCache = new Map<string, Promise<HTMLImageElement>>()
 export function loadImage(url: string): Promise<HTMLImageElement> {
   let p = imgCache.get(url)
   if (!p) {
-    p = new Promise((ok, fail) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => ok(im); im.onerror = () => fail(new Error('load ' + url)); im.src = url })
+    p = new Promise((ok, fail) => {
+      const im = new Image(); im.crossOrigin = 'anonymous'
+      const t = setTimeout(() => { fail(new Error('timeout ' + url)); imgCache.delete(url) }, 12000)   // ảnh treo/chậm không được làm kẹt cả bản xuất
+      im.onload = () => { clearTimeout(t); ok(im) }; im.onerror = () => { clearTimeout(t); fail(new Error('load ' + url)) }; im.src = url
+    })
     imgCache.set(url, p)
+    p.catch(() => imgCache.delete(url))
   }
   return p
 }

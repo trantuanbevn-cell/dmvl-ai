@@ -269,6 +269,9 @@ export function symbolOf(e: Entry, _lang?: Lang, _legacy?: Map<string, string>, 
 }
 /** Bản đồ ký hiệu cho cả danh sách (các nhóm cùng tiền tố – vd gỗ tự nhiên + melamine – dùng chung một dãy số, không trùng) */
 export const symbolMap = (entries: Entry[]) => exportSymbols(entries.filter(e => e.status !== 'rejected'), true).en
+const symCache = new WeakMap<Entry[], Map<string, string>>()
+/** Ký hiệu bản vẽ HIỂN THỊ của một mã (đúng như trong bảng) – mọi hộp thoại/xác nhận phải dùng cái này, không dùng e.code nội bộ */
+export const symOf = (all: Entry[], e: Entry) => { let m = symCache.get(all); if (!m) { m = symbolMap(all); symCache.set(all, m) } return m.get(e.id) ?? e.code }
 /** Ký hiệu dùng khi xuất: tính trên đúng danh sách được xuất, có thể đánh lại số liên tục (bỏ khoảng trống do mã bị loại) */
 export function exportSymbols(list: Entry[], renumber: boolean) {
   const legacy = legacyCodes(list)

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { symOf } from '../lib/sections'
 import { createPortal } from 'react-dom'
 import { readProductPage, planFill, applyFill, type Extracted, type FieldChange } from '../lib/productRead'
 import type { Entry } from '../lib/types'
@@ -25,7 +26,7 @@ export default function ProductReadDialog({ d, entry, onClose }: { d: ProjectDat
   return createPortal(
     <div className="modal-bg center" onMouseDown={onClose}>
       <div className="modal" style={{ width: 'min(720px, 96vw)', maxHeight: '90vh', overflow: 'auto' }} onMouseDown={e => e.stopPropagation()}>
-        <div className="row between"><h3 style={{ margin: 0 }}>Thông số đọc từ link · {entry.code} {entry.name_vn}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
+        <div className="row between"><h3 style={{ margin: 0 }}>Thông số đọc từ link · {symOf(d.entries, entry)} {entry.name_vn}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
         <div className="small muted" style={{ wordBreak: 'break-all' }}>{entry.product_url}</div>
         {!ex && !err && <p>Đang tải và đọc trang sản phẩm…</p>}
         {err && <p className="warn-text">{err}</p>}

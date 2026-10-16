@@ -33,6 +33,21 @@ export async function buildScheduleHtml(d: ExportData, o: ExportOpts, print: boo
   const H = [hd('STT', 'No.'), hd('KÍ HIỆU BẢN VẼ', 'DRAWING CODE'), hd('KÍ HIỆU VL', 'MATERIAL CODE'), hd('Hạng mục', 'Item'), hd('Vị trí', 'Location'), hd('Hình ảnh phối cảnh', 'Render image'), hd('Thông số kỹ thuật', 'Specification'), hd('Xuất xứ/ Thương hiệu', 'Origin / Brand'), hd('Hình ảnh vật liệu', 'Material image'), hd('Ghi chú', 'Remarks')]
   const sym = exportSymbols(list, o.renumber)
   const catL = (k: string) => { const c = CATEGORIES.find(x => x.key === k); return c ? tx(c.vn, c.en, L) : k }
+  // ảnh từng dòng dựng SONG SONG (6 luồng) trước khi ghép bảng – trước đây dựng tuần tự nên 100 mã chạy rất lâu
+  const prep = async (e: typeof list[number]) => {
+      const occ = d.occ.filter(o => o.entry_id === e.id)
+      const best = occ.filter(o => o.bbox && (o.page_id || o.view?.img)).sort((a, b) => (b.note ? 1 : 0) - (a.note ? 1 : 0) || (b.confidence ?? 0) - (a.confidence ?? 0))[0]
+      let img = ''
+      if (best) { const p = best.page_id ? pageById.get(best.page_id) : undefined; if (p || best.view?.img) { try { img = `<img src="${(await viewCanvas(p ? urls[p.image_path] : undefined, best.bbox!, best.view, best.view?.img ? urls[best.view.img] : undefined, 900, true)).toDataURL('image/jpeg', 0.92)}">` + (best.note ? `<small style="color:#c00;display:block">${esc(best.note)}</small>` : '') } catch { /* */ } } }
+      let matUrl = ''
+      try { matUrl = (await matMontage(e, urls)) ?? '' } catch { /* */ }
+      const mvSrc = e.mat_view?.img ? urls[e.mat_view.img] : e.product_image_url
+      if (!matUrl && mvSrc && (e.mat_view?.img || e.mat_view?.region)) { try { matUrl = (await regionCanvas(mvSrc, e.mat_view?.region, 300)).toDataURL('image/png') } catch { /* */ } }
+      const map = matUrl ? `<img src="${matUrl}">` : e.product_image_url ? `<img src="${esc(e.product_image_url)}">` : ''
+    return { occ, img, map }
+  }
+  const pre = new Map<string, { occ: typeof d.occ; img: string; map: string }>()
+  { const q = [...list]; await Promise.all(Array.from({ length: 6 }, async () => { for (let e = q.shift(); e; e = q.shift()) { try { pre.set(e.id, await prep(e)) } catch { /* dòng lỗi ảnh vẫn xuất chữ */ } } })) }
   let rows = '', lastBand = ''
   const sheets = planSheets(groupBySection(list), o)
   for (const [si, sh] of sheets.entries()) {
@@ -43,15 +58,7 @@ export async function buildScheduleHtml(d: ExportData, o: ExportOpts, print: boo
     let stt = 0
     for (const e of items) {
       stt++
-      const occ = d.occ.filter(o => o.entry_id === e.id)
-      const best = occ.filter(o => o.bbox && (o.page_id || o.view?.img)).sort((a, b) => (b.note ? 1 : 0) - (a.note ? 1 : 0) || (b.confidence ?? 0) - (a.confidence ?? 0))[0]
-      let img = ''
-      if (best) { const p = best.page_id ? pageById.get(best.page_id) : undefined; if (p || best.view?.img) { try { img = `<img src="${(await viewCanvas(p ? urls[p.image_path] : undefined, best.bbox!, best.view, best.view?.img ? urls[best.view.img] : undefined, 900, true)).toDataURL('image/jpeg', 0.92)}">` + (best.note ? `<small style="color:#c00;display:block">${esc(best.note)}</small>` : '') } catch { /* */ } } }
-      let matUrl = ''
-      try { matUrl = (await matMontage(e, urls)) ?? '' } catch { /* */ }
-      const mvSrc = e.mat_view?.img ? urls[e.mat_view.img] : e.product_image_url
-      if (!matUrl && mvSrc && (e.mat_view?.img || e.mat_view?.region)) { try { matUrl = (await regionCanvas(mvSrc, e.mat_view?.region, 300)).toDataURL('image/png') } catch { /* */ } }
-      const map = matUrl ? `<img src="${matUrl}">` : e.product_image_url ? `<img src="${esc(e.product_image_url)}">` : ''
+      const { occ, img, map } = pre.get(e.id) ?? { occ: d.occ.filter(o => o.entry_id === e.id), img: '', map: '' }
       const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
       const cl = entryCells(e, L, [...new Set(occ.map(o => o.category ?? e.category).filter(Boolean) as string[])], locs, finishLines(e, d.entries, y => symbolOf(y, L, sym.legacy, sym.en)), allRoomsCount(locs, d.rooms))
       rows += `<tr class="${e.source === 'inferred' ? 'inf' : ''}"><td>${stt}</td><td class="code">${esc(symbolOf(e, L, sym.legacy, sym.en))}</td><td class="code">${esc(e.product_code ?? '').replace(/\n/g, '<br>')}</td><td>${html1(cl.cat)}</td><td>${cl.loc2.length ? `<div style="display:flex;gap:8px"><div style="flex:1">${html1(cl.loc)}</div><div style="flex:1">${html1(cl.loc2)}</div></div>` : html1(cl.loc)}</td><td class="im">${img}</td>

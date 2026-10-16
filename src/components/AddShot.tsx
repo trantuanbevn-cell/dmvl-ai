@@ -1,4 +1,5 @@
 import { roomPages } from '../lib/roomPages'
+import { symOf } from '../lib/sections'
 import { useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { uploadImage } from '../lib/imageUpload'
@@ -44,7 +45,7 @@ export default function AddShot({ d, entry, roomId, onClose }: { d: ProjectData;
   return (
     <div className="modal-bg center" onMouseDown={onClose}>
       <div className="modal" style={{ width: 'min(900px, 96vw)', maxHeight: '94vh', overflow: 'auto' }} onMouseDown={e => e.stopPropagation()}>
-        <div className="row between"><h3 style={{ margin: 0 }}>Thêm hình phối cảnh cho {entry.code} {entry.name_vn}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
+        <div className="row between"><h3 style={{ margin: 0 }}>Thêm hình phối cảnh cho {symOf(d.entries, entry)} {entry.name_vn}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
         <div className="row gap sm-gap" style={{ flexWrap: 'wrap' }}>
           <label className="small">Phòng <select value={rid} onChange={e => { setRid(e.target.value); setPageId(''); setBox(null) }}><option value="">— không gán phòng —</option>{d.rooms.map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}</select></label>
           <button className={'chip' + (tab === 'page' ? ' on' : '')} onClick={() => setTab('page')}>Khoanh từ trang concept</button>

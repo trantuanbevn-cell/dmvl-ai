@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import LinkCell from './LinkCell'
 import { toast } from '../lib/toast'
 import { saveEntry, linkedWith } from '../lib/entryLink'
+import { symOf } from '../lib/sections'
 import { kindOfGroup } from '../lib/suggestApply'
 import { KIND_VN } from '../lib/construction'
 import { CATEGORIES, CATEGORY_GROUPS } from '../lib/codes'
@@ -125,10 +126,10 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   const del = async (e: Entry) => {
     const others = room ? [...new Set(d.occ.filter(o => o.entry_id === e.id && o.room_id && o.room_id !== room.id).map(o => o.room_id!))] : []
     if (room && others.length) {
-      if (!confirm(`${e.code} ${e.name_vn} còn dùng ở ${others.length} phòng khác → chỉ bỏ khỏi phòng ${room.code}. Tiếp tục?`)) return
+      if (!confirm(`${symOf(d.entries, e)} ${e.name_vn} còn dùng ở ${others.length} phòng khác → chỉ bỏ khỏi phòng ${room.code}. Tiếp tục?`)) return
       await supabase.from('occurrences').delete().eq('entry_id', e.id).eq('room_id', room.id)
     } else {
-      if (!confirm(`Xoá hẳn ${e.code} ${e.name_vn}? Không hoàn tác được.`)) return
+      if (!confirm(`Xoá hẳn ${symOf(d.entries, e)} ${e.name_vn}? Không hoàn tác được.`)) return
       await supabase.from('entries').update({ parent_id: null }).eq('parent_id', e.id)
       await supabase.from('occurrences').delete().eq('entry_id', e.id)
       const { error } = await supabase.from('entries').delete().eq('id', e.id)
@@ -230,7 +231,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     const have = new Set(d.occ.filter(o => o.entry_id === e.id).map(o => o.room_id))
     const todo = realRooms().filter(r => !have.has(r.id))
     if (!todo.length) return
-    if (!confirm(`Gắn ${e.code} ${e.name_vn} vào ${todo.length} phòng còn lại (tất cả ${realRooms().length} phòng của dự án)?\nPhòng thêm sau này cần gắn lại bằng cách chọn “Tất cả các phòng” lần nữa.`)) return
+    if (!confirm(`Gắn ${symOf(d.entries, e)} ${e.name_vn} vào ${todo.length} phòng còn lại (tất cả ${realRooms().length} phòng của dự án)?\nPhòng thêm sau này cần gắn lại bằng cách chọn “Tất cả các phòng” lần nữa.`)) return
     const cat = d.occ.find(o => o.entry_id === e.id)?.category ?? e.category ?? 'decor'
     const { error } = await supabase.from('occurrences').insert(todo.map(r => ({ entry_id: e.id, room_id: r.id, category: cat, origin: 'manual' })))
     if (error) { alert(error.message); return }
@@ -238,11 +239,11 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   }
   const delAllLoc = async (e: Entry) => {
     const ids = realRooms().map(r => r.id)
-    if (!confirm(`Bỏ ${e.code} ${e.name_vn} khỏi tất cả ${ids.length} phòng? (hình phối cảnh của các phòng cũng bị bỏ)`)) return
+    if (!confirm(`Bỏ ${symOf(d.entries, e)} ${e.name_vn} khỏi tất cả ${ids.length} phòng? (hình phối cảnh của các phòng cũng bị bỏ)`)) return
     await supabase.from('occurrences').delete().eq('entry_id', e.id).in('room_id', ids); d.reload()
   }
   const delLoc = async (e: Entry, r: Room) => {
-    if (!confirm(`Bỏ ${e.code} ${e.name_vn} khỏi phòng ${r.code} ${r.name_vn}? (hình phối cảnh của phòng này cũng bị bỏ)`)) return
+    if (!confirm(`Bỏ ${symOf(d.entries, e)} ${e.name_vn} khỏi phòng ${r.code} ${r.name_vn}? (hình phối cảnh của phòng này cũng bị bỏ)`)) return
     await supabase.from('occurrences').delete().eq('entry_id', e.id).eq('room_id', r.id); d.reload()
   }
   /** Đổi hạng mục = chuyển sang tab (nhóm vật liệu) khác: đổi nhóm mã + đánh lại mã → tự sang tab mới. Danh sách lấy từ chính các tab nên luôn khớp (kể cả tên đã đổi). */
