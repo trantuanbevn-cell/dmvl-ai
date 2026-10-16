@@ -96,8 +96,8 @@ async function callTranslate(context: string | undefined, items: { id: string; v
 }
 
 /** Đồng bộ toàn bộ tiếng Anh với tiếng Việt: dịch ô trống + dịch lại ô tự dịch cũ mà tiếng Việt đã đổi. Dùng khi chuyển EN/song ngữ và trước khi xuất file. */
-export async function syncEnglish(d: ProjectData, log: (s: string) => void = () => {}, force = false): Promise<{ done: number; failed: number }> {
-  const plan = planFill(d, force); if (!plan.length) return { done: 0, failed: 0 }
+export async function syncEnglish(d: ProjectData, log: (s: string) => void = () => {}, force = false, onlyBlank = false): Promise<{ done: number; failed: number }> {
+  const plan = planFill(d, force).filter(i => !onlyBlank || i.prevEn == null); if (!plan.length) return { done: 0, failed: 0 }
   const n1 = await fillByDictionary(d, plan)
   const left = plan.filter(i => !i.ok)
   const n2 = left.length ? await fillByAI(d, left, log) : 0
