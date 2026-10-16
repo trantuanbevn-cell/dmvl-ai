@@ -29,7 +29,7 @@ function LinesCanvas({ base, vb, size }: { base: VecPage; vb: Box; size: { w: nu
     })
     return () => cancelAnimationFrame(raf)
   }, [runs, vb, size])
-  return <canvas ref={ref} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', mixBlendMode: 'multiply' }} />
+  return <canvas ref={ref} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
 }
 
 export default function PlanView({ vec, res, showRooms, showDoors, showLabels, issues, diffs, ppp, base }: {
@@ -64,7 +64,7 @@ export default function PlanView({ vec, res, showRooms, showDoors, showLabels, i
     onPointerMove={e => { const d = drag.current; if (!d) return; const r = e.currentTarget.getBoundingClientRect(); const s = d.vb.w / r.width; setVb({ ...d.vb, x: d.vb.x - (e.clientX - d.x) * s, y: d.vb.y - (e.clientY - d.y) * s }) }}
     onPointerUp={() => { drag.current = null }} onDoubleClick={() => setVb(full)}>
     <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: '100%', display: 'block' }}>
-      {showRooms && vec.rooms.map(r => <path key={r.id} d={r.d} fill={r.c} fillRule="evenodd" />)}
+      {showRooms && vec.rooms.map(r => <path key={r.id} d={r.d} fill={r.c} fillRule="evenodd" stroke={base?.draw?.length ? r.c : undefined} strokeWidth={base?.draw?.length ? 1.6 : undefined} strokeLinejoin="round" />)}
       {!base?.draw?.length && <path d={vec.walls} fill="#9a9a9a" fillRule="evenodd" stroke="#000" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
       {res.extra.map((s, i) => <line key={i} x1={s[0]} y1={s[1]} x2={s[2]} y2={s[3]} stroke="#e07000" strokeWidth={1.6} vectorEffect="non-scaling-stroke" />)}
       {showDoors && <g fill="none" stroke="#1e5ac8" strokeWidth={1.2} strokeLinecap="round" vectorEffect="non-scaling-stroke">

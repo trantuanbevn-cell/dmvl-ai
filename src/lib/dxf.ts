@@ -49,8 +49,23 @@ function rawHatches(txt: string): { model: any[]; blocks: Record<string, any[]> 
     const loops: HatchLoop[] = []
     let cur: HatchLoop | null = null, mode: 'poly' | 'edge' | '' = '', edge = 0, nv = 0, bul = 0
     const pts: number[][] = []
-    let edges: Pt[][] = []
+    let edges: Pt[][] = [], bl: number[] = []
     const flush = () => {
+      if (mode === 'poly' && cur && bl.some(b => b)) { // đỉnh có bulge → cung tròn giữa hai đỉnh (không được nối thẳng thành dây cung)
+        const o: Pt[] = [], n = cur.length
+        for (let q = 0; q < n; q++) {
+          const a = cur[q], b = cur[(q + 1) % n], g = bl[q] || 0; o.push(a)
+          if (g && Math.hypot(b[0] - a[0], b[1] - a[1]) > 1e-9) {
+            const th = 4 * Math.atan(g), ch = Math.hypot(b[0] - a[0], b[1] - a[1]), rr = ch / (2 * Math.sin(Math.abs(th) / 2)), mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2
+            const h = rr * Math.cos(th / 2), ux = -(b[1] - a[1]) / ch, uy = (b[0] - a[0]) / ch, sg = g > 0 ? 1 : -1
+            const cx = mx + sg * ux * h, cy = my + sg * uy * h
+            const a0 = Math.atan2(a[1] - cy, a[0] - cx), m = Math.max(2, Math.ceil(Math.abs(th) / (Math.PI / 24)))
+            for (let k = 1; k < m; k++) { const f = a0 + th * k / m; o.push([cx + rr * Math.cos(f), cy + rr * Math.sin(f)]) }
+          }
+        }
+        cur = o
+      }
+      bl = []
       if (mode === 'edge' && edges.length) { // nối các cạnh rời thành đường khép kín (cạnh có thể đảo chiều/không theo thứ tự)
         const used = new Array(edges.length).fill(false), out: Pt[] = [...edges[0]]; used[0] = true
         for (let n = 1; n < edges.length; n++) {
@@ -71,7 +86,8 @@ function rawHatches(txt: string): { model: any[]; blocks: Record<string, any[]> 
       else if (cc === 92) { flush(); cur = []; mode = (+vv & 2) ? 'poly' : 'edge'; edge = 0; nv = 0; pts.length = 0 }
       else if (cur && mode === 'poly') {
         if (cc === 72) bul = +vv
-        else if (cc === 10) cur.push([+vv, 0])
+        else if (cc === 42) bl[cur.length - 1] = +vv
+        else if (cc === 10) { cur.push([+vv, 0]); bl.push(0) }
         else if (cc === 20 && cur.length) cur[cur.length - 1][1] = +vv
       } else if (cur && mode === 'edge') {
         if (cc === 72) { edge = +vv; pts.length = 0 }
@@ -82,6 +98,12 @@ function rawHatches(txt: string): { model: any[]; blocks: Record<string, any[]> 
           const n = Math.max(2, Math.ceil(sw / (Math.PI / 18)))
           const ar: Pt[] = []; for (let k = 0; k <= n; k++) { const f = a0 + (sw * k) / n, an = ccw ? f : -f; ar.push([pts[0][0] + r * Math.cos(an), pts[0][1] + r * Math.sin(an)]) } edges.push(ar)
           pts.length = 0 } }
+        else if (edge === 3) { if (cc === 10) pts[0] = [+vv, 0]; else if (cc === 20 && pts[0]) pts[0][1] = +vv; else if (cc === 11) pts[1] = [+vv, 0]; else if (cc === 21 && pts[1]) pts[1][1] = +vv; else if (cc === 40) pts[2] = [+vv, 0]; else if (cc === 50) pts[3] = [+vv, 0]; else if (cc === 51) pts[4] = [+vv, 0]; else if (cc === 73 && pts[0] && pts[1] && pts[2] && pts[3] && pts[4]) {
+          const ccw = +vv !== 0, mx = pts[1][0], my = pts[1][1], ra = pts[2][0], a0 = (pts[3][0] * Math.PI) / 180, a1 = (pts[4][0] * Math.PI) / 180, rot = Math.atan2(my, mx), A = Math.hypot(mx, my), B = A * ra
+          let sw = a1 - a0; while (sw <= 0) sw += Math.PI * 2
+          const n = Math.max(8, Math.ceil(sw / (Math.PI / 24))), ar: Pt[] = []
+          for (let k = 0; k <= n; k++) { const f = a0 + (sw * k) / n, t = ccw ? f : -f, ex = A * Math.cos(t), ey = B * Math.sin(t); ar.push([pts[0][0] + ex * Math.cos(rot) - ey * Math.sin(rot), pts[0][1] + ex * Math.sin(rot) + ey * Math.cos(rot)]) }
+          edges.push(ar); pts.length = 0 } }
       }
     }
     void bul; void nv
