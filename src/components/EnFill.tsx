@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ProjectData } from '../lib/useProject'
 import type { Lang } from '../lib/sections'
 import { useAuth } from '../lib/auth'
-import { planFill, syncEnglish } from '../lib/translateEn'
+import { planFill, syncEnglish, loadChangeTimes, type ChangeTimes } from '../lib/translateEn'
 import { toast } from '../lib/toast'
 
 /** Chuyển sang English / Song ngữ: TỰ ĐỘNG điền mọi ô tiếng Anh còn trống từ tiếng Việt – từ điển chuyên ngành trước, phần phức tạp thì AI (Gemini miễn phí).
@@ -14,7 +14,10 @@ export default function EnFill({ d, lang }: { d: ProjectData; lang: Lang }) {
   const [err, setErr] = useState('')
   const [nonce, setNonce] = useState(0)
   const tried = useRef('')
-  const all = useMemo(() => (lang === 'vn' ? [] : planFill(d)), [d.entries, d.rooms, lang])
+  const [times, setTimes] = useState<ChangeTimes | undefined>()
+  const pid = d.project?.id
+  useEffect(() => { if (lang !== 'vn' && canEdit && pid) loadChangeTimes(pid).then(setTimes).catch(() => {}) }, [pid, lang, canEdit, d.entries.length])
+  const all = useMemo(() => (lang === 'vn' ? [] : planFill(d, false, times)), [d.entries, d.rooms, lang, times])
   const plan = useMemo(() => all.filter(i => i.prevEn == null), [all])   // tự động chỉ điền ô EN còn TRỐNG
   const changed = useMemo(() => all.filter(i => i.prevEn != null), [all]) // ô VN đã đổi so với lần dịch trước (hoặc EN còn lẫn tiếng Việt) → chờ người dùng bấm
   const planSig = plan.map(i => i.key).join(',')
@@ -35,11 +38,15 @@ export default function EnFill({ d, lang }: { d: ProjectData; lang: Lang }) {
     })()
   }, [lang, planSig, canEdit, nonce])
   const redoChanged = async () => {
-    if (!changed.length) { toast('Không có ô nào đổi so với lần dịch trước – tiếng Anh đang khớp tiếng Việt', 'info'); return }
-    const lab = [...new Set(changed.map(i => i.label))]
-    if (!confirm(`Phát hiện ${changed.length} ô tiếng Việt đã thay đổi (hoặc EN còn lẫn tiếng Việt) kể từ lần dịch trước, ở ${lab.length} mục:\n${lab.slice(0, 8).join('\n')}${lab.length > 8 ? '\n…' : ''}\n\nChỉ dịch lại các ô này, những ô không đổi giữ nguyên. Tiếp tục?`)) return
+    setBusy(true); setMsg('Đang quét nội dung và đối chiếu với lần dịch gần nhất…')
+    let tm = times, ch = changed
+    try { if (pid) { tm = await loadChangeTimes(pid); setTimes(tm) } ch = planFill(d, false, tm).filter(i => i.prevEn != null) } catch { /* dùng bản cũ */ }
+    setBusy(false); setMsg('')
+    if (!ch.length) { toast('Đã quét toàn bộ: không có ô nào đổi so với lần dịch gần nhất – tiếng Anh đang khớp tiếng Việt', 'info'); return }
+    const lab = [...new Set(ch.map(i => `${i.label} (${i.field.replace('_en', '')})`))]
+    if (!confirm(`Quét xong: ${ch.length} ô đã thay đổi so với lần dịch gần nhất, ở ${new Set(ch.map(i => i.id)).size} mục:\n${lab.slice(0, 10).join('\n')}${lab.length > 10 ? '\n…' : ''}\n\nChỉ dịch lại đúng các ô này; ô không đổi giữ nguyên. Tiếp tục?`)) return
     setBusy(true); setErr('')
-    try { const { done, failed } = await syncEnglish(d, setMsg); toast(`Đã dịch lại ${done} ô đã thay đổi${failed ? `, ${failed} ô chưa được` : ''}`, failed ? 'info' : 'ok'); if (failed) setErr(`AI chưa dịch được ${failed} ô – bấm Thử lại sau ít phút`) }
+    try { const { done, failed } = await syncEnglish(d, setMsg, false, false, tm); toast(`Đã dịch lại ${done} ô đã thay đổi${failed ? `, ${failed} ô chưa được` : ''}`, failed ? 'info' : 'ok'); if (failed) setErr(`AI chưa dịch được ${failed} ô – bấm Thử lại sau ít phút`) }
     catch (e) { setErr(String(e).replace(/^Error: /, '')) }
     await d.reload(); setBusy(false); setMsg('')
   }

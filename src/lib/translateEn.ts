@@ -17,7 +17,19 @@ const blank = (v: unknown) => v == null || String(v).trim() === ''
 
 /** Các ô tiếng Anh cần dịch: (1) còn trống; (2) do phần mềm tự dịch trước đây, tiếng Việt đã đổi sau đó và tiếng Anh chưa bị ai sửa tay → dịch lại cho đồng bộ.
  *  Ô tiếng Anh người dùng tự gõ / sửa thì không bao giờ bị đụng tới. */
-export function planFill(d: ProjectData, force = false): TrItem[] {
+export type ChangeTimes = Map<string, Record<string, number>>
+/** Lịch sử sửa (undo_log): thời điểm gần nhất mỗi ô của mỗi dòng bị sửa – để biết VN đã đổi SAU lần EN được ghi hay chưa, kể cả ô chưa có dấu vết dịch */
+export async function loadChangeTimes(projectId: string): Promise<ChangeTimes> {
+  const m: ChangeTimes = new Map()
+  for (let from = 0; from < 20000; from += 1000) {
+    const { data, error } = await supabase.from('undo_log').select('row_id,at,new_vals').eq('project_id', projectId).in('tbl', ['entries', 'rooms']).eq('op', 'UPDATE').eq('reverted', false).not('new_vals', 'is', null).order('id').range(from, from + 999)
+    if (error || !data) break
+    for (const r of data as any[]) { const t = Date.parse(r.at); let o = m.get(r.row_id); if (!o) m.set(r.row_id, (o = {})); for (const k of Object.keys(r.new_vals ?? {})) if (!(o[k] > t)) o[k] = t }
+    if (data.length < 1000) break
+  }
+  return m
+}
+export function planFill(d: ProjectData, force = false, times?: ChangeTimes): TrItem[] {
   const out: TrItem[] = []
   const add = (kind: 'entry' | 'room', row: any, label: string, ef: string, vi: unknown, prevEn?: string, forceAI = false) => {
     const s = String(vi ?? '').trim(); if (!s) return
@@ -31,6 +43,9 @@ export function planFill(d: ProjectData, force = false): TrItem[] {
     if (force) { const sc = (row.en_src as EnSrc | null)?.[ef]; if (!(sc && sc.en === row[ef] && norm(sc.vi) === norm(row[vf]))) return add(kind, row, label, ef, row[vf], row[ef], true) }
     const src = (row.en_src as EnSrc | null)?.[ef]
     if (src && src.en === row[ef] && norm(src.vi) !== norm(row[vf])) return add(kind, row, label, ef, row[vf], row[ef])
+    // đối chiếu lịch sử sửa: tiếng Việt được sửa SAU lần tiếng Anh được ghi gần nhất → đã đổi, cần dịch lại
+    const tt = times?.get(row.id), tv = tt?.[vf], te = tt?.[ef]
+    if (tv && (!te || tv > te)) return add(kind, row, label, ef, row[vf], row[ef], true)
     // Ô tiếng Anh đang lẫn chữ tiếng Việt (chép nguyên từ bản Việt / trang hãng, chưa dịch) → dịch lại bằng AI
     if (viWords(row[ef]) >= 2) add(kind, row, label, ef, row[vf], row[ef], true)
   }
@@ -96,8 +111,8 @@ async function callTranslate(context: string | undefined, items: { id: string; v
 }
 
 /** Đồng bộ toàn bộ tiếng Anh với tiếng Việt: dịch ô trống + dịch lại ô tự dịch cũ mà tiếng Việt đã đổi. Dùng khi chuyển EN/song ngữ và trước khi xuất file. */
-export async function syncEnglish(d: ProjectData, log: (s: string) => void = () => {}, force = false, onlyBlank = false): Promise<{ done: number; failed: number }> {
-  const plan = planFill(d, force).filter(i => !onlyBlank || i.prevEn == null); if (!plan.length) return { done: 0, failed: 0 }
+export async function syncEnglish(d: ProjectData, log: (s: string) => void = () => {}, force = false, onlyBlank = false, times?: ChangeTimes): Promise<{ done: number; failed: number }> {
+  const plan = planFill(d, force, times).filter(i => !onlyBlank || i.prevEn == null); if (!plan.length) return { done: 0, failed: 0 }
   const n1 = await fillByDictionary(d, plan)
   const left = plan.filter(i => !i.ok)
   const n2 = left.length ? await fillByAI(d, left, log) : 0
