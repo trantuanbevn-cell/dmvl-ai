@@ -1,5 +1,5 @@
 // Khung xem mặt bằng dạng VECTOR (SVG): cuộn chuột để zoom tại con trỏ, kéo để di chuyển, bấm đúp để về vừa khung.
-import { memo, useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { VecPage } from '../lib/vector'
 import { isAnnoLayer } from '../lib/dims'
 import type { PlanVec } from '../lib/planSvg'
@@ -7,25 +7,41 @@ import type { PlanResult } from '../lib/planRead'
 import type { PlanIssue } from '../lib/planAi'
 
 type Box = { x: number; y: number; w: number; h: number }
-/** Nét bản vẽ gốc dạng VECTOR đúng từng đỉnh (tường/cột tô xám đặc, nét đồ nội thất, cung cửa…) – thay cho đường tường dò từ ảnh (bị bo vát chéo, mất nét cửa/nội thất) */
-const LinesLayer = memo(function LinesLayer({ base }: { base: VecPage }) {
-  const ps: JSX.Element[] = []
-  base.draw!.forEach((r, i) => {
-    if (isAnnoLayer(base.classes[r.cls]?.layer ?? '')) return
-    const w = Math.max(r.lw, 0.1), eo = r.eo ? 'evenodd' : 'nonzero'
-    if (r.hp) ps.push(<path key={i} d={r.d} fill={r.rl === 'col' ? '#7d7d7d' : '#b4b4b4'} fillRule="evenodd" stroke="#000" strokeWidth={0.1} />)
-    else ps.push(<path key={i} d={r.d} fill={r.fc ?? 'none'} fillRule={eo} stroke={r.sc ?? 'none'} strokeWidth={r.sc ? w : undefined} />)
-  })
-  return <g style={{ mixBlendMode: 'multiply', isolation: 'isolate' }} strokeLinejoin="round" strokeLinecap="round" pointerEvents="none"><rect x={0} y={0} width={base.w} height={base.h} fill="#fff" stroke="none" />{ps}</g>
-})
+/** Nét bản vẽ gốc dạng VECTOR đúng từng đỉnh (tường/cột tô xám đặc, nét đồ nội thất, cung cửa…) – thay cho đường tường dò từ ảnh (bị bo vát chéo, mất nét cửa/nội thất).
+ *  Vẽ bằng canvas (Path2D dựng sẵn, vẽ lại theo khung nhìn) đặt chồng lên màu sàn bằng "multiply": nhẹ hơn rất nhiều so với hàng trăm nghìn đỉnh trong SVG khi zoom. */
+function LinesCanvas({ base, vb, size }: { base: VecPage; vb: Box; size: { w: number; h: number } }) {
+  const ref = useRef<HTMLCanvasElement>(null)
+  const runs = useMemo(() => base.draw!.filter(r => !isAnnoLayer(base.classes[r.cls]?.layer ?? '')).map(r => ({ r, p: new Path2D(r.d) })), [base])
+  useEffect(() => {
+    const c = ref.current; if (!c || !size.w || !size.h) return
+    const raf = requestAnimationFrame(() => {
+      const dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.round(size.w * dpr), H = Math.round(size.h * dpr)
+      if (c.width !== W || c.height !== H) { c.width = W; c.height = H }
+      const g = c.getContext('2d')!; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H)
+      const k = Math.min(size.w / vb.w, size.h / vb.h) * dpr, ox = (W - vb.w * k) / 2 - vb.x * k, oy = (H - vb.h * k) / 2 - vb.y * k
+      g.setTransform(k, 0, 0, k, ox, oy); g.lineJoin = 'round'; g.lineCap = 'round'
+      const minW = 0.6 / k   // nét không mảnh hơn ~0,6 px màn hình
+      for (const { r, p } of runs) {
+        if (r.hp) { g.fillStyle = r.rl === 'col' ? '#7d7d7d' : '#b4b4b4'; g.fill(p, 'evenodd'); g.strokeStyle = '#000'; g.lineWidth = Math.max(0.1, minW); g.stroke(p); continue }
+        if (r.fc) { g.fillStyle = r.fc; g.fill(p, r.eo ? 'evenodd' : 'nonzero') }
+        if (r.sc) { g.strokeStyle = r.sc; g.lineWidth = Math.max(r.lw, 0.1, minW); g.stroke(p) }
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [runs, vb, size])
+  return <canvas ref={ref} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', mixBlendMode: 'multiply' }} />
+}
+
 export default function PlanView({ vec, res, showRooms, showDoors, showLabels, issues, diffs, ppp, base }: {
   base?: VecPage | null; vec: PlanVec; res: PlanResult; showRooms: boolean; showDoors: boolean; showLabels: boolean
   issues: PlanIssue[] | null; diffs: { kind: string; x: number; y: number; w: number; h: number }[] | null; ppp: number
 }) {
   const full: Box = { x: 0, y: 0, w: vec.w, h: vec.h }
+  const [size, setSize] = useState({ w: 0, h: 0 })
   const [vb, setVb] = useState<Box>(full), el = useRef<HTMLDivElement>(null), drag = useRef<{ x: number; y: number; vb: Box } | null>(null)
   useEffect(() => setVb({ x: 0, y: 0, w: vec.w, h: vec.h }), [vec])
   const asp = vec.h / vec.w
+  useEffect(() => { const e = el.current; if (!e || typeof ResizeObserver === 'undefined') return; const ro = new ResizeObserver(() => setSize({ w: e.clientWidth, h: e.clientHeight })); ro.observe(e); setSize({ w: e.clientWidth, h: e.clientHeight }); return () => ro.disconnect() }, [])
   // wheel: phải gắn thủ công (passive:false) để chặn cuộn trang
   useEffect(() => {
     const e = el.current; if (!e) return
@@ -49,7 +65,7 @@ export default function PlanView({ vec, res, showRooms, showDoors, showLabels, i
     onPointerUp={() => { drag.current = null }} onDoubleClick={() => setVb(full)}>
     <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: '100%', display: 'block' }}>
       {showRooms && vec.rooms.map(r => <path key={r.id} d={r.d} fill={r.c} fillRule="evenodd" />)}
-      {base?.draw?.length ? <LinesLayer base={base} /> : <path d={vec.walls} fill="#9a9a9a" fillRule="evenodd" stroke="#000" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
+      {!base?.draw?.length && <path d={vec.walls} fill="#9a9a9a" fillRule="evenodd" stroke="#000" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
       {res.extra.map((s, i) => <line key={i} x1={s[0]} y1={s[1]} x2={s[2]} y2={s[3]} stroke="#e07000" strokeWidth={1.6} vectorEffect="non-scaling-stroke" />)}
       {showDoors && <g fill="none" stroke="#1e5ac8" strokeWidth={1.2} strokeLinecap="round" vectorEffect="non-scaling-stroke">
         {res.doors.map((d, i) => <path key={i} d={arc(d)} vectorEffect="non-scaling-stroke" />)}
@@ -59,6 +75,7 @@ export default function PlanView({ vec, res, showRooms, showDoors, showLabels, i
       {issues?.map(it => <g key={it.n}><rect x={it.box[0] / ppp} y={it.box[1] / ppp} width={(it.box[2] - it.box[0]) / ppp} height={(it.box[3] - it.box[1]) / ppp} fill="none" stroke="#d4202a" strokeWidth={2} vectorEffect="non-scaling-stroke" />
         <text x={it.box[0] / ppp + 1} y={it.box[1] / ppp - 1.5} fill="#d4202a" fontSize={fs * 1.3} fontWeight="bold" fontFamily="Arial">{it.n}</text></g>)}
     </svg>
+    {base?.draw?.length ? <LinesCanvas base={base} vb={vb} size={size} /> : null}
     <div style={{ position: 'absolute', right: 6, bottom: 6, display: 'flex', gap: 4 }} onPointerDown={e => e.stopPropagation()}>
       <button className="btn sm" onClick={() => setVb(v => ({ x: v.x + v.w * 0.25, y: v.y + v.h * 0.25, w: v.w / 2, h: v.h / 2 }))}>＋</button>
       <button className="btn sm" onClick={() => setVb(v => ({ x: v.x - v.w * 0.5, y: v.y - v.h * 0.5, w: v.w * 2, h: v.h * 2 }))}>－</button>
