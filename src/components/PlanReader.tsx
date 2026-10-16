@@ -29,7 +29,7 @@ export default function PlanReader() {
     reset(); setBusy('Đang đọc PDF…')
     try {
       const ab = await f.arrayBuffer(); bufRef.current = ab
-      const v = await readVectorPage(ab, pg, s => setBusy(s)); nameBareLayers(v); const sug = suggestRoles(v), sv = saved(f.name)
+      const v = await readVectorPage(ab, pg, s => setBusy(s), { draw: true }); nameBareLayers(v); const sug = suggestRoles(v), sv = saved(f.name)
       if (sv) for (const r of sug) if (sv[r.layer]) r.role = sv[r.layer]
       setPv(v); setPRows(sug)
     } catch (e) { setErr(String(e instanceof Error ? e.message : e)) }
@@ -38,7 +38,7 @@ export default function PlanReader() {
   const loadDxf = async (f: File) => {
     reset(); setBusy('Đang đọc DXF…')
     try {
-      const v = (await readVectorPage(await f.arrayBuffer(), 1, s => setBusy(s))) as Dv; const sug = suggestRoles(v), sv = saved(f.name)
+      const v = (await readVectorPage(await f.arrayBuffer(), 1, s => setBusy(s), { draw: true })) as Dv; const sug = suggestRoles(v), sv = saved(f.name)
       if (sv) for (const r of sug) if (sv[DX + r.layer]) r.role = sv[DX + r.layer]
       setDv(v); setDRows(sug)
     } catch (e) { setErr(String(e instanceof Error ? e.message : e)) }
@@ -150,7 +150,7 @@ export default function PlanReader() {
           {focus && <div className="row" style={{ gap: 8, marginTop: 8 }}><div style={{ flex: 1 }}><div className="muted">Bản vẽ gốc</div><img src={crop(orig, focus.box)} style={{ width: '100%' }} /></div>
             <div style={{ flex: 1 }}><div className="muted">Bản dựng lại</div><img src={crop(canvas, focus.box)} style={{ width: '100%' }} /></div></div>}
         </div>}
-        {vec ? <PlanView vec={vec} res={res} showRooms={showRooms} showDoors={showDoors} showLabels={showLabels} issues={showIssues ? issues : null} diffs={showDiff && mg ? mg.diffs : null} ppp={res.ppp} /> : <div className="muted small">Đang dựng bản vector…</div>}
+        {vec ? <PlanView base={pv ?? dv} vec={vec} res={res} showRooms={showRooms} showDoors={showDoors} showLabels={showLabels} issues={showIssues ? issues : null} diffs={showDiff && mg ? mg.diffs : null} ppp={res.ppp} /> : <div className="muted small">Đang dựng bản vector…</div>}
         <details style={{ marginTop: 8 }}><summary><b>Danh sách không gian</b></summary>
           <table className="tbl small"><thead><tr><th>#</th><th>Diện tích (m²)</th><th>Ghi trên bản vẽ</th><th>Chữ trong phòng</th></tr></thead>
             <tbody>{[...res.rooms].sort((a, b) => b.area - a.area).map(r => <tr key={r.id}><td>{r.id}</td><td>{r.area.toFixed(2)}</td><td>{r.labelArea ?? ''}</td><td>{r.names.join(' · ')}</td></tr>)}</tbody></table></details>

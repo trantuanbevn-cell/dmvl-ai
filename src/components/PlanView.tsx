@@ -1,12 +1,25 @@
 // Khung xem mặt bằng dạng VECTOR (SVG): cuộn chuột để zoom tại con trỏ, kéo để di chuyển, bấm đúp để về vừa khung.
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
+import type { VecPage } from '../lib/vector'
+import { isAnnoLayer } from '../lib/dims'
 import type { PlanVec } from '../lib/planSvg'
 import type { PlanResult } from '../lib/planRead'
 import type { PlanIssue } from '../lib/planAi'
 
 type Box = { x: number; y: number; w: number; h: number }
-export default function PlanView({ vec, res, showRooms, showDoors, showLabels, issues, diffs, ppp }: {
-  vec: PlanVec; res: PlanResult; showRooms: boolean; showDoors: boolean; showLabels: boolean
+/** Nét bản vẽ gốc dạng VECTOR đúng từng đỉnh (tường/cột tô xám đặc, nét đồ nội thất, cung cửa…) – thay cho đường tường dò từ ảnh (bị bo vát chéo, mất nét cửa/nội thất) */
+const LinesLayer = memo(function LinesLayer({ base }: { base: VecPage }) {
+  const ps: JSX.Element[] = []
+  base.draw!.forEach((r, i) => {
+    if (isAnnoLayer(base.classes[r.cls]?.layer ?? '')) return
+    const w = Math.max(r.lw, 0.1), eo = r.eo ? 'evenodd' : 'nonzero'
+    if (r.hp) ps.push(<path key={i} d={r.d} fill={r.rl === 'col' ? '#7d7d7d' : '#b4b4b4'} fillRule="evenodd" stroke="#000" strokeWidth={0.1} />)
+    else ps.push(<path key={i} d={r.d} fill={r.fc ?? 'none'} fillRule={eo} stroke={r.sc ?? 'none'} strokeWidth={r.sc ? w : undefined} />)
+  })
+  return <g style={{ mixBlendMode: 'multiply', isolation: 'isolate' }} strokeLinejoin="round" strokeLinecap="round" pointerEvents="none"><rect x={0} y={0} width={base.w} height={base.h} fill="#fff" stroke="none" />{ps}</g>
+})
+export default function PlanView({ vec, res, showRooms, showDoors, showLabels, issues, diffs, ppp, base }: {
+  base?: VecPage | null; vec: PlanVec; res: PlanResult; showRooms: boolean; showDoors: boolean; showLabels: boolean
   issues: PlanIssue[] | null; diffs: { kind: string; x: number; y: number; w: number; h: number }[] | null; ppp: number
 }) {
   const full: Box = { x: 0, y: 0, w: vec.w, h: vec.h }
@@ -36,7 +49,7 @@ export default function PlanView({ vec, res, showRooms, showDoors, showLabels, i
     onPointerUp={() => { drag.current = null }} onDoubleClick={() => setVb(full)}>
     <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: '100%', display: 'block' }}>
       {showRooms && vec.rooms.map(r => <path key={r.id} d={r.d} fill={r.c} fillRule="evenodd" />)}
-      <path d={vec.walls} fill="#9a9a9a" fillRule="evenodd" stroke="#000" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+      {base?.draw?.length ? <LinesLayer base={base} /> : <path d={vec.walls} fill="#9a9a9a" fillRule="evenodd" stroke="#000" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
       {res.extra.map((s, i) => <line key={i} x1={s[0]} y1={s[1]} x2={s[2]} y2={s[3]} stroke="#e07000" strokeWidth={1.6} vectorEffect="non-scaling-stroke" />)}
       {showDoors && <g fill="none" stroke="#1e5ac8" strokeWidth={1.2} strokeLinecap="round" vectorEffect="non-scaling-stroke">
         {res.doors.map((d, i) => <path key={i} d={arc(d)} vectorEffect="non-scaling-stroke" />)}
