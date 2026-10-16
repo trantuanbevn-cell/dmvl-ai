@@ -200,7 +200,27 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
   pick(l => core.test(l) && !/dim/i.test(l)); if (xs.length < 400) pick(l => !/defpoints/i.test(l))
   const insu = +(dxf.header?.$INSUNITS ?? 0)
   let x0 = q(xs, 0.02), x1 = q(xs, 0.98), y0 = q(ys, 0.02), y1 = q(ys, 0.98)
-  const mx = (x1 - x0) * 0.25, my = (y1 - y0) * 0.25; x0 -= mx; x1 += mx; y0 -= my; y1 += my
+  let tight = false
+  { // vật thể lạc xa (xref, khối ngoại lai) làm khung phình to → mặt bằng nhỏ lại: chia lưới 120×120 trên mọi nét, giữ cụm ô liền nhau (cho phép hở 2 ô) có nhiều điểm nhất
+    const ax: number[] = [], ay: number[] = []; for (const p of paths) if (!/defpoints/i.test(p.layer)) for (const pt of p.pts) { ax.push(pt[0]); ay.push(pt[1]) }
+    if (ax.length > 2000) {
+      const N = 120, gx0 = q(ax, 0), gx1 = q(ax, 1), gy0 = q(ay, 0), gy1 = q(ay, 1), cw = (gx1 - gx0) / N || 1, ch = (gy1 - gy0) / N || 1
+      const cnt = new Array<number>(N * N).fill(0)
+      for (let i = 0; i < ax.length; i++) cnt[Math.min(N - 1, ((ax[i] - gx0) / cw) | 0) * N + Math.min(N - 1, ((ay[i] - gy0) / ch) | 0)]++
+      const comp = new Array<number>(N * N).fill(-1); let best = -1, bestN = 0, nc = 0
+      for (let s0 = 0; s0 < N * N; s0++) {
+        if (!cnt[s0] || comp[s0] >= 0) continue
+        let tot = 0; const st = [s0]; comp[s0] = nc
+        while (st.length) { const c = st.pop()!, ci = (c / N) | 0, cj = c % N; tot += cnt[c]
+          for (let di = -3; di <= 3; di++) for (let dj = -3; dj <= 3; dj++) { const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= N || j >= N) continue; const n = i * N + j; if (cnt[n] && comp[n] < 0) { comp[n] = nc; st.push(n) } } }
+        if (tot > bestN) { bestN = tot; best = nc } nc++
+      }
+      if (best >= 0) { let a0 = N, a1 = 0, b0 = N, b1 = 0; for (let c = 0; c < N * N; c++) if (comp[c] === best) { const i = (c / N) | 0, j = c % N; a0 = Math.min(a0, i); a1 = Math.max(a1, i + 1); b0 = Math.min(b0, j); b1 = Math.max(b1, j + 1) }
+        const nx0 = gx0 + a0 * cw, nx1 = gx0 + a1 * cw, ny0 = gy0 + b0 * ch, ny1 = gy0 + b1 * ch
+        if ((nx1 - nx0) * (ny1 - ny0) < (x1 - x0) * (y1 - y0) * 1.5) { x0 = nx0; x1 = nx1; y0 = ny0; y1 = ny1; tight = true } }
+    }
+  }
+  const mx = (x1 - x0) * (tight ? 0.05 : 0.25), my = (y1 - y0) * (tight ? 0.05 : 0.25); x0 -= mx; x1 += mx; y0 -= my; y1 += my
   let mmU = MM_PER_UNIT[insu] ?? 0, unit = ['', 'inch', 'feet', 'dặm', 'mm', 'cm', 'm'][insu] ?? `mã ${insu}`
   const span = Math.max(x1 - x0, y1 - y0)
   // $INSUNITS trong file thường sai (vd. để inch dù vẽ bằng mm) → kiểm tra bằng kích thước toà nhà thật (8–400 m), sai thì đoán lại
