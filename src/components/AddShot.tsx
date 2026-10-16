@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { uploadImage } from '../lib/imageUpload'
 import type { ProjectData } from '../lib/useProject'
 import type { Entry, Room } from '../lib/types'
-import { floorLabel, floorRank } from '../lib/roomMatrix'
+import { FLOORS, floorLabel, floorRank } from '../lib/roomMatrix'
 import { heroStyle } from '../lib/progress'
 
 /** Thêm hình ảnh phối cảnh cho một vật liệu: khoanh vùng trên trang concept, hoặc tải ảnh từ máy */
@@ -65,7 +65,7 @@ export default function AddShot({ d, entry, roomId, onClose }: { d: ProjectData;
             <span className={'chip' + (fl === 'all' ? ' on' : '')} onClick={() => setFl('all')}>Tất cả ({d.rooms.length})</span>
             {floorsHave.map(([k, n]) => <span key={k} className={'chip' + (fl === k ? ' on' : '')} onClick={() => setFl(k)}>{floorLabel(k || null)} ({n})</span>)}
             <input placeholder="Tìm phòng…" value={q} onChange={e => setQ(e.target.value)} style={{ width: 160 }} />
-            <span className="small muted">Bấm vào ảnh phòng để chọn, rồi khoanh trực tiếp bên dưới.</span>
+            <span className="small muted">Bấm vào ảnh phòng để chọn, rồi khoanh trực tiếp bên dưới. Phòng chưa có tầng: gán ngay ở ô chọn tầng dưới mỗi ảnh.</span>
           </div>
           <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8, marginTop: 8, maxHeight: 260, overflow: 'auto' }}>
             {shownRooms.map(r => {
@@ -73,7 +73,10 @@ export default function AddShot({ d, entry, roomId, onClose }: { d: ProjectData;
               return <div key={r.id} className="card" style={{ padding: 5, cursor: 'pointer', outline: on ? '3px solid #c57542' : undefined, opacity: pg ? 1 : 0.55 }} onClick={() => { setRid(r.id); setPageId(''); setBox(null); setTab('page'); setGallery(false) }}>
                 <div style={{ aspectRatio: '16/9', borderRadius: 6, background: '#eee', backgroundSize: 'cover', backgroundPosition: 'center', ...(st ?? {}) }} />
                 <div className="small" style={{ fontWeight: 600, marginTop: 3 }}>{r.code} {r.name_vn}</div>
-                <div className="small muted">{floorLabel(r.floor)} · {pg ? `${renderOf(r).length} trang` : 'chưa có trang'}{shotRooms.has(r.id) ? ' · ✓ đã khoanh' : ''}</div>
+                <div className="small muted">{pg ? `${renderOf(r).length} trang` : 'chưa có trang'}{shotRooms.has(r.id) ? ' · ✓ đã khoanh' : ''}</div>
+                <select className="small" value={r.floor ?? ''} title="Gán tầng cho phòng này (dùng chung cho Tổng hợp phòng)" onClick={ev => ev.stopPropagation()} onChange={async ev => { const v = ev.target.value || null; const { error } = await supabase.from('rooms').update({ floor: v }).eq('id', r.id); if (error) alert(error.message); else d.reload() }} style={{ width: '100%', marginTop: 2 }}>
+                  <option value="">Chưa gán tầng</option>{FLOORS.map(f => <option key={f.key} value={f.key}>{f.vn}</option>)}
+                </select>
               </div>
             })}
             {!shownRooms.length && <span className="muted small">Không có phòng nào khớp.</span>}
