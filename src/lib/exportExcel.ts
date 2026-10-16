@@ -109,7 +109,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
       const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
       const cl = cells.get(e.id)!
       const sy = symbolOf(e, L, sym.legacy, sym.en)
-      const v: Record<string, any> = { stt, sym: sy, mavl: e.product_code || sy, qty: e.qty != null ? `${e.qty}${e.unit ? ' ' + e.unit : ''}` : '',
+      const v: Record<string, any> = { stt, sym: sy, mavl: e.product_code ?? '', qty: e.qty != null ? `${e.qty}${e.unit ? ' ' + e.unit : ''}` : '',
         q_qty: e.qty, q_unit: e.unit, i_src: (L === 'en' ? SOURCE_EN : SOURCE_VN)[e.source], i_st: (L === 'en' ? STATUS_EN : STATUS_VN)[e.status], i_flag: e.qty_flag === 'ok' ? 'OK' : '⚠' }
       const row = ws.getRow(r)
       cols.forEach((col, i) => {
