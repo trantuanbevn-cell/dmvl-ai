@@ -1,6 +1,6 @@
 // Áp vật liệu chọn từ thư viện vào mã danh mục: chỉ ghi ĐÚNG kích thước đã chọn.
 import type { Entry } from './types'
-import type { Mat, Var } from '../pages/Library'
+import { normSizes, type Mat, type Var } from '../pages/Library'
 import { saveEntry } from './entryLink'
 
 export type Pick = { m: Mat; v: Var | null }
@@ -42,11 +42,19 @@ export async function applyPicks(entry: Entry, picks: Pick[], mark = true) {
   // đổi sang loại vật liệu khác nhóm mã (vd gỗ → sơn): ký hiệu bản vẽ + thông số cũ không còn đúng → đánh dấu đỏ cho người làm sửa
   const ek = kindOfGroup(entry.group_code), mk = picks[0].m.kind
   patch.spec_stale = ek && mk && ek !== mk ? mk : null
-  const o = picks[0].m.attrs.origin; if (o) patch.origin = o
+  // xuất xứ: lấy của mẫu thư viện; thư viện chưa có thì bỏ giá trị cũ (do AI đoán theo vật liệu khác) để ô báo thiếu và người làm điền đúng
+  patch.origin = picks[0].m.attrs.origin || null
+  // kích thước: biến thể đã chọn, hoặc mẫu chỉ có đúng 1 khổ
+  const only = picks.length === 1 && !picks[0].v?.size ? normSizes(picks[0].m.attrs.sizes) : []
+  const sz = picks[0].v?.size || (only.length === 1 ? only[0] : '')
+  if (sz) {   // sửa các chỗ cũ ghi khổ khác ("khổ 800x800mm") để mô tả không mâu thuẫn mẫu đã chọn
+    const fix = (t: string | null) => t ? t.replace(/(\bkhổ\s*|\bsize\s*)\d+(?:[.,]\d+)?\s*[x×*]\s*\d+(?:[.,]\d+)?(?:\s*(?:mm|cm))?/gi, (_m, p) => p + sz) : t
+    patch.desc_vn = fix(entry.desc_vn); patch.desc_en = fix(entry.desc_en)
+  }
   const vn = picks.map(p => (two ? p.m.brand + ': ' : '') + sizeText(p)).filter(s => s.replace(/^.*: /, '')).join('; ')
   if (vn) {
-    patch.desc_vn = setLine(entry.desc_vn, /^Kích thước\s*:.*$/im, 'Kích thước: ' + vn)
-    patch.desc_en = setLine(entry.desc_en, /^Size\s*:.*$/im, 'Size: ' + vn.replace(/dày/g, 'thickness'))
+    patch.desc_vn = setLine((patch.desc_vn as string | null | undefined) ?? entry.desc_vn, /^Kích thước\s*:.*$/im, 'Kích thước: ' + vn)
+    patch.desc_en = setLine((patch.desc_en as string | null | undefined) ?? entry.desc_en, /^Size\s*:.*$/im, 'Size: ' + vn.replace(/dày/g, 'thickness'))
   }
   return saveEntry(entry, patch)
 }
