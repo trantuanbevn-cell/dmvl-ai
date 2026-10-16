@@ -89,7 +89,7 @@ const lev1 = (a: string, b: string) => {
 const britishOk = (w: string) => {
   if (!en) return false
   const l = w.toLowerCase()
-  const c = [l.replace(/our(s|ed|ing|less)?$/, 'or$1'), l.replace(/ise(s|d)?$/, 'ize$1'), l.replace(/isation/, 'ization'), l.replace(/(tre|tres)$/, m => (m === 'tre' ? 'ter' : 'ters')), l.replace(/(ll)(ed|ing|er)$/, 'l$2'), l.replace(/ae/, 'e'), l.replace(/ou/, 'o'), l.replace(/ogue$/, 'og'), l.replace(/grey/, 'gray')]
+  const c = [l.replace(/our(s|ed|ing|less)?$/, 'or$1'), l.replace(/ise(s|d)?$/, 'ize$1'), l.replace(/isation/, 'ization'), l.replace(/(tre|tres)$/, m => (m === 'tre' ? 'ter' : 'ters')), l.replace(/(ll)(ed|ing|er)$/, 'l$2'), l.replace(/ae/, 'e'), l.replace(/ou/, 'o'), l.replace(/ogue$/, 'og'), l.replace(/grey/, 'gray'), l.replace(/(bre|res)$/, m => (m === 'bre' ? 'ber' : 'res')), l.replace(/ium(s)?$/, 'um$1'), l.replace(/yse(d|s)?$/, 'yze$1')]
   return c.some(x => x !== l && en!.correct(x))
 }
 /** a và b chỉ khác nhau theo kiểu Anh–Anh / Anh–Mỹ (colour–color, centre–center, moulded–molded…) */

@@ -72,7 +72,7 @@ const WALL: System = {
       o('none', 'Không có lớp cốt – hoàn thiện trực tiếp lên nền', 'No core – finish applied directly to the substrate', undefined, 'không cốt'),
     ] },
     { k: 'finish', vn: 'Lớp hoàn thiện bề mặt', en: 'Surface finish', multi: true, opts: [
-      o('paint', 'Sơn (xem hệ sơn bên dưới)', 'Paint (see paint system below)', undefined, 'sơn'),
+      o('paint', 'Sơn', 'Paint', undefined, 'sơn'),
       o('melamine', 'Melamine (phủ melamine hai mặt, nẹp cạnh cùng màu)', 'Melamine face (both sides), matching edge banding', undefined, 'melamine'),
       o('hpl', 'Laminate HPL dán', 'HPL laminate, bonded', ['0,6 mm', '0,7 mm', '0,8 mm', '1,0 mm'], 'laminate HPL'),
       o('acrylic', 'Acrylic bóng (tấm MDF phủ acrylic)', 'High-gloss acrylic-faced board', undefined, 'acrylic'),
@@ -142,7 +142,7 @@ const CEILING: System = {
       o('pvc', 'Tấm nhựa PVC / nhựa composite', 'PVC / composite plastic panels', undefined, 'tấm nhựa'),
     ] },
     { k: 'finish', vn: 'Lớp hoàn thiện bề mặt', en: 'Surface finish', multi: true, opts: [
-      o('paint', 'Sơn (xem hệ sơn bên dưới)', 'Paint (see paint system below)', undefined, 'sơn'),
+      o('paint', 'Sơn', 'Paint', undefined, 'sơn'),
       o('factory', 'Bề mặt hoàn thiện sẵn từ nhà máy (không sơn thêm)', 'Factory-finished surface (no further paint)', undefined, 'hoàn thiện sẵn'),
       o('wallpaper', 'Giấy / vải dán trần', 'Wallpaper / fabric wallcovering', undefined, 'giấy dán'),
       o('veneer', 'Veneer gỗ tự nhiên dán, phủ PU/NC', 'Natural wood veneer with PU/NC lacquer', undefined, 'veneer'),
@@ -234,8 +234,10 @@ export function cleanSel(sys: System, st: BuildState): BuildState {
   return { ...st, sel, vars }
 }
 
+const VAR_EN: [RegExp, string][] = [[/lớp/g, 'coats'], [/bán bóng/g, 'satin'], [/bóng cao/g, 'high gloss'], [/bóng/g, 'gloss'], [/mờ/g, 'matt'], [/hoàn thiện cao cấp/g, 'premium finish'], [/gỗ/g, 'timber'], [/nhựa\/PVC/g, 'plastic/PVC'], [/đá/g, 'stone'], [/nhôm/g, 'aluminum'], [/Sồi/g, 'Oak'], [/Óc chó/g, 'Walnut'], [/Tần bì/g, 'Ash'], [/Gỗ khác theo mẫu/g, 'Other timber per sample'], [/Thép sơn tĩnh điện/g, 'Powder-coated steel'], [/bông dày/g, 'wool thickness'], [/mút/g, 'foam'], [/ron/g, 'joint']]
+const viVar = (v: string) => VAR_EN.reduce((a, [r, t]) => a.replace(r, t), v)
 const txt = (l: Layer, op: Opt, st: BuildState, en: boolean) => {
-  const v = st.vars[`${l.k}/${op.k}`]
+  const v0 = st.vars[`${l.k}/${op.k}`], v = v0 && en ? viVar(v0) : v0
   const base = en ? op.en : op.vn
   return v ? `${base} – ${v}` : base
 }
@@ -251,7 +253,8 @@ export function renderBuild(st0: BuildState) {
     en.push(`${l.en}: ${picked.map(p => txt(l, p, st, true)).join('; ')}`)
     for (const p of picked) {
       const v = st.vars[`${l.k}/${p.k}`]
-      if (['base', 'core', 'finish', 'frame', 'top', 'type'].includes(l.k) && !(l.k === 'type' || (l.k === 'base' && p.k === 'masonry'))) comp.push([p.s ?? p.vn, v].filter(Boolean).join(' '))
+      const generic = p.k === 'none' || (l.k === 'finish' && p.k === 'paint')   // "không cốt", "sơn" chung chung: để dòng sơn phủ nói rõ
+      if (['base', 'core', 'finish', 'frame', 'top', 'type'].includes(l.k) && !generic && !(l.k === 'type' || (l.k === 'base' && p.k === 'masonry'))) comp.push([p.s ?? p.vn, v].filter(Boolean).join(' '))
       if (p.note) { vn.push('  ' + p.note[0]); en.push('  ' + p.note[1]) }
     }
   }
