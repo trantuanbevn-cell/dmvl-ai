@@ -9,6 +9,8 @@ import type { Entry, Occurrence, Page, Project, Room } from './types'
 
 /** Ngưỡng tối thiểu tuyệt đối; ngoài ra chỉ giữ mẫu cách mẫu tốt nhất ≤ SUGGEST_BAND (so khớp theo hạng, không theo ngưỡng cố định) */
 export const SUGGEST_MIN = 0.6
+/** Tự điền vào bảng vật liệu chỉ khi khớp trên 95%; dưới đó để trống cho người làm tự tìm */
+export const AUTO_MIN = 0.95
 export const SUGGEST_BAND = 0.12
 export type Feat = number[]   // [L,a,b, sdL,sda,sdb, edge, 8 ô histogram sáng]
 
@@ -165,12 +167,13 @@ export async function autoPickRoom(project: Project, room: Room, urlOf: (p: Page
     if (!e || !pg || done.has(e.id) || e.product_code || e.brand || e.source === 'inferred') continue
     done.add(e.id)
     try {
-      const best = rank(await bboxFeat(await urlOf(pg), o.bbox!), mats, e.group_code)[0]
-      if (!best) continue
+      const best = rank(await bboxFeat(await urlOf(pg), o.bbox!), mats, e.group_code, AUTO_MIN)[0]
+      const ek = kindOfGroup(e.group_code)
+      if (!best || best.score < AUTO_MIN || (ek && best.m.kind && ek !== best.m.kind)) continue
       await applyPicks(e, [{ m: best.m, v: await singleVariant(best.m) } as Pick], false); n++
     } catch { /* bỏ qua mục lỗi ảnh */ }
   }
-  if (n) log(`  ${room.code} – tự chọn ${n} mẫu thư viện khớp nhất (khớp bề mặt nhất)`)
+  if (n) log(`  ${room.code} – tự chọn ${n} mẫu thư viện khớp trên 95%`)
   return n
 }
 

@@ -39,6 +39,9 @@ export async function applyPicks(entry: Entry, picks: Pick[], mark = true) {
     mat_view: null,
     lib_id: mark ? picks[0].m.id : null,
   }
+  // đổi sang loại vật liệu khác nhóm mã (vd gỗ → sơn): ký hiệu bản vẽ + thông số cũ không còn đúng → đánh dấu đỏ cho người làm sửa
+  const ek = kindOfGroup(entry.group_code), mk = picks[0].m.kind
+  patch.spec_stale = ek && mk && ek !== mk ? mk : null
   const o = picks[0].m.attrs.origin; if (o) patch.origin = o
   const vn = picks.map(p => (two ? p.m.brand + ': ' : '') + sizeText(p)).filter(s => s.replace(/^.*: /, '')).join('; ')
   if (vn) {

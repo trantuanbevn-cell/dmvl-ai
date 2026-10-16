@@ -107,14 +107,18 @@ export function relevantSpecs(e: Pick<Entry, 'group_code' | 'name_vn' | 'part_vn
   return []
 }
 
+const SZ_VN = /^Kích thước\s*:.*$/im, SZ_EN = /^Size\s*:.*$/im
 /** Ghi thông số chuẩn vào mục: thêm khối thông số dưới phần mô tả hiện có (áp lại thì thay khối cũ cùng tiêu đề), điền ô Cấu tạo */
 export async function applyBasicSpec(e: Entry, s: BasicSpec) {
   const [hv, he] = s.head ?? [HEAD_VN, HEAD_EN]
   const block = (head: string, ls: string[]) => head + '\n' + ls.map(l => '- ' + l).join('\n')
   const join = (a: string, b: string) => (a ? a + '\n' : '') + b
+  // thông số cũ đã bị đánh dấu sai (đổi loại vật liệu) → bỏ hết, chỉ giữ dòng kích thước
+  const base = (t: string | null, re: RegExp) => e.spec_stale ? ((t ?? '').match(re)?.[0] ?? '') : strip(t ?? '', e.spec_stale ? '' : (re === SZ_VN ? hv : he))
   return saveEntry(e, {
-    desc_vn: join(strip(e.desc_vn ?? '', hv), block(hv, s.vn)),
-    desc_en: join(strip(e.desc_en ?? '', he), block(he, s.en)),
+    desc_vn: join(base(e.desc_vn, SZ_VN), block(hv, s.vn)),
+    desc_en: join(base(e.desc_en, SZ_EN), block(he, s.en)),
     composition: s.composition,
+    spec_stale: null,
   })
 }

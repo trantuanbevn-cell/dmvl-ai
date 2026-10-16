@@ -6,6 +6,7 @@ export const FEATURES: { key: string; label: string; editorDefault?: boolean }[]
   { key: 'library', label: 'Thư viện vật liệu' },
   { key: 'matrix', label: 'Tổng hợp phòng (ma trận vật liệu theo phòng, thêm phòng, sao chép vật liệu)' },
   { key: 'undo', label: 'Hoàn tác / lịch sử thay đổi (quay lại bước trước)' },
+  { key: 'build', label: 'Cấu tạo lớp tường – trần – sàn (tích chọn trong Vật liệu đề xuất)' },
   { key: 'suggest', label: 'Vật liệu đề xuất (nối thư viện vào danh mục)', editorDefault: true },
 ]
 export const editorHas = (key: string) => !!FEATURES.find(f => f.key === key)?.editorDefault

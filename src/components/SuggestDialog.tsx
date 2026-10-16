@@ -10,10 +10,11 @@ import { bboxFeat, bboxQueryCanvas, loadFeatMats, ensureFeats, rank, rankByPat, 
 import { aiPickByPattern, tagQuery, type AiPick } from '../lib/aiMatch'
 import { PAT_LABEL, type Pat } from '../lib/patMatch'
 import { BASIC_SPECS, relevantSpecs, applyBasicSpec } from '../lib/basicSpecs'
+import BuildPicker from './BuildPicker'
 import { applyPicks, sizeText, type Pick } from '../lib/suggestApply'
 
 export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d: ProjectData; entry: Entry; occId?: string; onClose: () => void }) {
-  const { isAdmin, canEdit } = useAuth(), canAi = canEdit
+  const { isAdmin, canEdit, can } = useAuth(), canAi = canEdit
   const entry = d.entries.find(e => e.id === entry0.id) ?? entry0   // luôn lấy bản mới nhất: đổi nhóm vật liệu thì danh sách đề xuất tự rà lại theo nhóm mới
   const occs = useMemo(() => d.occ.filter(o => o.entry_id === entry.id && o.bbox && (o.page_id || o.view?.img)), [d.occ, entry.id])
   const [oid, setOid] = useState(occId ?? occs[0]?.id ?? '')
@@ -90,6 +91,7 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
             <p className="small muted">Phần mềm so màu, vân (hướng vân, độ dày vân, hoa văn) của vùng khoanh với toàn bộ map trong thư viện – không giới hạn theo loại vật liệu – rồi xếp mẫu giống nhất lên đầu.</p>
           </div>
           <div className="card" style={{ overflow: 'auto' }}>
+            {can('build') && <BuildPicker key={entry.id} entry={entry} onDone={() => d.reload()} />}
             {(basics.length > 0 || !allBasic) && <div style={{ marginBottom: 12 }}>
               <div className="row between"><b>Vật liệu cơ bản – thông số chuẩn</b>{!allBasic && <a className="small" style={{ cursor: 'pointer' }} onClick={() => setAllBasic(true)}>xem tất cả</a>}</div>
               {!basics.length && <p className="muted small">Chưa có thông số chuẩn cho nhóm này.</p>}

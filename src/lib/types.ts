@@ -19,6 +19,8 @@ export type Entry = {
   finish_refs?: string[] | null
   finish_ok?: string[] | null
   lib_id?: string | null
+  build?: any | null
+  spec_stale?: string | null
   en_src?: EnSrc | null
   section_key?: string | null
   mat_view?: { img?: string | null; region?: number[] | null } | null
