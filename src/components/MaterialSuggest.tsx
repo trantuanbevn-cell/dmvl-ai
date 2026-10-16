@@ -11,7 +11,8 @@ export default function MaterialSuggest({ entry, label, used, onClose, onDone }:
   const [line, setLine] = useState(''), [color, setColor] = useState(''), [q, setQ] = useState(''), [shown, setShown] = useState(STEP)
   const [tab, setTab] = useState<'all' | 'used'>('all')
   const [open, setOpen] = useState<Mat | null>(null), [picks, setPicks] = useState<Pick[]>([]), [busy, setBusy] = useState(false)
-  useEffect(() => { loadAll().then(setAll).finally(() => setLoading(false)) }, [])
+  const [loadErr, setLoadErr] = useState('')
+  useEffect(() => { loadAll().then(setAll).catch(e => setLoadErr(String(e?.message ?? e))).finally(() => setLoading(false)) }, [])
   useEffect(() => { setShown(STEP) }, [kind, brand, fam, line, color, q, tab])
   useEffect(() => { setLine('') }, [kind, brand, fam])
   const usedSet = useMemo(() => new Set((used ?? []).map(u => u.brand + '|' + u.code)), [used])
@@ -75,7 +76,8 @@ export default function MaterialSuggest({ entry, label, used, onClose, onDone }:
               })}
             </div>
             {list.length > shown && <div style={{ textAlign: 'center', margin: 12 }}><button className="btn" onClick={() => setShown(shown + STEP)}>Xem thêm ({list.length - shown})</button></div>}
-            {!loading && !list.length && <div className="card muted">Không có mã nào. {q && tab === 'all' && <button className="btn sm" onClick={() => { setBrand(''); setFam(''); setKind('') }}>Tìm ở mọi nhóm</button>}</div>}
+            {loadErr && <div className="note warn">⚠ Không tải được thư viện: {loadErr} — thử mở lại sau vài giây.</div>}
+            {!loading && !list.length && !loadErr && <div className="card muted">Không có mã nào. {q && tab === 'all' && <button className="btn sm" onClick={() => { setBrand(''); setFam(''); setKind('') }}>Tìm ở mọi nhóm</button>}</div>}
           </div>
         </div>
         <div className="row" style={{ gap: 10, alignItems: 'center', borderTop: '1px solid #e6dccf', paddingTop: 8, flexWrap: 'wrap' }}>

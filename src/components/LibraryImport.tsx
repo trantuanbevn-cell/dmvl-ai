@@ -17,7 +17,7 @@ export default function LibraryImport({ onClose, onDone }: { onClose: () => void
         setMsg('Đang cập nhật quy cách…')
         const ex: { id: string; product_code: string; name: string | null; attrs: any }[] = []
         for (let from = 0; ; from += 1000) {
-          const { data, error } = await supabase.from('materials').select('id,product_code,name,attrs').eq('brand', brand).range(from, from + 999)
+          const { data, error } = await supabase.from('materials').select('id,product_code,name,attrs').eq('brand', brand).order('id').range(from, from + 999)
           if (error) throw error
           ex.push(...(data ?? []) as any); if (!data || data.length < 1000) break
         }

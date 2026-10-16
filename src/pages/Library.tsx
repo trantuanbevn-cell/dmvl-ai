@@ -30,7 +30,7 @@ export const GROUPS: { kind: string; label: string }[] = [
   { kind: 'floor', label: 'Sàn gỗ' },
   { kind: 'stone', label: 'Đá tự nhiên' },
   { kind: 'tile', label: 'Gạch ốp lát' },
-  { kind: 'paint', label: 'Sơn hiệu ứng' },
+  { kind: 'paint', label: 'Sơn (bảng màu & hiệu ứng)' },
   { kind: 'moulding', label: 'Phào chỉ & ốp trang trí' },
   { kind: 'sanitary', label: 'Thiết bị vệ sinh' },
 ]
@@ -42,7 +42,7 @@ type Sel = { kind: string; brand: string; fam: string }
 export async function loadAll(): Promise<Mat[]> {
   const out: Mat[] = []
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await supabase.from('materials').select(COLS).order('product_code').range(from, from + 999)
+    const { data, error } = await supabase.from('materials').select(COLS).order('product_code').order('id').range(from, from + 999)
     if (error) throw error
     out.push(...((data ?? []) as Mat[]))
     if (!data || data.length < 1000) break

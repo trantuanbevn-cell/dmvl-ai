@@ -51,8 +51,9 @@ export function entryCells(e: Entry, L: Lang, occCats: string[], locs: { room: {
   const noPart = (ls: Seg[]) => ls.filter(l => !/^\s*(bộ phận|part)\s*:/i.test(l.t))
   const spec = [...pair(e.name_vn, e.name_en, L), ...noPart(descPairs(e, L)), ...fin.flatMap(f => pair(f.vn, f.en, L)),
     ...(e.composition ? lab('Cấu tạo', 'Composition', e.composition, compEn(e.composition)) : [])]
+  const originEn = (v: string) => v.replace(/hoặc tương đương/gi, 'or equivalent').replace(/\bViệt Nam\b/g, 'Vietnam').replace(/\bTrung Quốc\b/g, 'China').replace(/\bNhật Bản\b/g, 'Japan').replace(/\bHàn Quốc\b/g, 'South Korea').replace(/\bÝ\b/g, 'Italy').replace(/\bĐức\b/g, 'Germany').replace(/\bTây Ban Nha\b/g, 'Spain').replace(/\bThái Lan\b/g, 'Thailand').replace(/\bMalaysia\b/g, 'Malaysia').replace(/\bẤn Độ\b/g, 'India').replace(/\bThổ Nhĩ Kỳ\b/g, 'Turkey').replace(/\bPháp\b/g, 'France').replace(/\bMỹ\b/g, 'USA').replace(/\bĐài Loan\b/g, 'Taiwan').replace(/\bchâu Âu\b/gi, 'Europe').replace(/\bnhập khẩu\b/gi, 'imported')
   const o = (e.origin ?? '').trim(), b = (e.brand ?? '').trim()   // dòng 1: xuất xứ; dòng 2: hãng / thương hiệu – luôn kèm nhãn
-  const brand = [...(o ? pair(`Xuất xứ: ${o}`, `Origin: ${o}`, L) : []), ...(b ? pair(`Thương hiệu: ${b}`, `Brand: ${b}`, L) : [])]
+  const brand = [...(o ? pair(`Xuất xứ: ${o}`, `Origin: ${originEn(o)}`, L) : []), ...(b ? pair(`Thương hiệu: ${b}`, `Brand: ${b}`, L) : [])]
   const note = [...pair(e.note_vn, e.note_en, L), ...(e.status !== 'approved' ? pair(`[${STATUS_VN[e.status]}]`, `[${STATUS_EN[e.status]}]`, L) : [])]
   return { cat, loc, loc2, spec, brand, note }
 }
