@@ -42,9 +42,11 @@ export function entryCells(e: Entry, L: Lang, occCats: string[], locs: { room: {
   const roomLines = (ls: typeof locs) => ls.flatMap(l => pair(flat(l.room.name_vn), flat(l.room.name_en), L))
   const split = locs.length > 10 && !(allRooms > 1 && locs.length >= allRooms)
   const half = Math.ceil(locs.length / 2)
-  const loc: Seg[] = !locs.length ? pair('(chưa gán phòng)', '(no room assigned)', L)
+  const locNote = pair(e.loc_note_vn, e.loc_note_en, L)
+  const loc0: Seg[] = !locs.length ? pair('(chưa gán phòng)', '(no room assigned)', L)
     : allRooms > 1 && locs.length >= allRooms ? pair('★ Tất cả các phòng', '★ All rooms', L) // áp dụng cho mọi phòng → ghi gọn, không liệt kê
     : split ? roomLines(locs.slice(0, half)) : roomLines(locs)
+  const loc: Seg[] = [...loc0, ...locNote]
   const loc2: Seg[] = split ? roomLines(locs.slice(half)) : []
   const lab = (a: string, b: string, vn: string | null | undefined, en: string | null | undefined) => pair(vn ? `${a}: ${vn}` : '', vn || en ? `${b}: ${en || vn}` : '', L)
   // Không in dòng "Bộ phận": cột Hạng mục đã nêu rõ (sàn/tường/trần…)

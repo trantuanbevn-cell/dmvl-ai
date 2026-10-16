@@ -14,6 +14,7 @@ export type Entry = {
   candidates: Candidate[]
   qty: number | null; unit: string | null; qty_flag: string | null; qty_note: string | null
   source: 'image' | 'inferred' | 'manual'; status: 'pending' | 'approved' | 'rejected' | 'review'
+  loc_note_vn?: string | null; loc_note_en?: string | null
   note_vn: string | null; note_en: string | null; enriched: boolean; sort: number
   link_id?: string | null
   finish_refs?: string[] | null
