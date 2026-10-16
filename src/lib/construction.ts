@@ -3,6 +3,7 @@
 // Việt Nam (TCVN/QCVN, catalogue Vĩnh Tường – Gyproc, hệ sơn nước nội thất, hệ sơn gỗ PU/NC); số liệu cụ thể để dạng chọn, người làm chốt theo thiết kế.
 import type { Entry } from './types'
 import { saveEntry } from './entryLink'
+import { changeGroup } from './entryGroup'
 
 export type Opt = { k: string; vn: string; en: string; s?: string; vars?: string[]; note?: [string, string] }
 export type Layer = { k: string; vn: string; en: string; multi?: boolean; when?: (sel: Sel) => boolean; opts: Opt[]; hint?: string }
@@ -259,10 +260,63 @@ export function renderBuild(st0: BuildState) {
   return { vn, en, composition: comp.join(' + '), state: st }
 }
 
+/** Mẫu nhanh (thay cho "Vật liệu cơ bản – thông số chuẩn"): chọn sẵn các lớp phổ biến, người làm tích sửa tiếp */
+export type Preset = { label: string; sys: System['k']; sel: Sel; vars?: Record<string, string> }
+export const PRESETS: Preset[] = [
+  { label: 'Trần thạch cao tiêu chuẩn – khung chìm, sơn', sys: 'ceiling', sel: { type: ['flat'], frame: ['conc'], core: ['gyp'], finish: ['paint'], prep: ['joint', 'skim'], primer: ['gypPrimer'], top: ['matt'] }, vars: { 'frame/conc': 'C600', 'core/gyp': '9 mm', 'prep/skim': '2 lớp', 'top/matt': '2 lớp' } },
+  { label: 'Trần thạch cao siêu chịu ẩm – khung chìm, sơn chống nấm mốc', sys: 'ceiling', sel: { type: ['flat'], frame: ['conc'], core: ['gypM'], finish: ['paint'], prep: ['joint', 'skim'], primer: ['gypPrimer'], top: ['mould'] }, vars: { 'frame/conc': 'C600', 'core/gypM': '9 mm' } },
+  { label: 'Trần thạch cao chống cháy – khung chìm, sơn', sys: 'ceiling', sel: { type: ['flat'], frame: ['conc'], core: ['gypF'], finish: ['paint'], prep: ['joint', 'skim'], primer: ['gypPrimer'], top: ['matt'] }, vars: { 'frame/conc': 'C600', 'core/gypF': '12,5 mm' } },
+  { label: 'Trần thả khung nổi T-bar – tấm 600×600', sys: 'ceiling', sel: { type: ['tbar'], frame: ['expo'], core: ['mineral'], finish: ['factory'] } },
+  { label: 'Vách thạch cao khung C – bả, sơn', sys: 'wall', sel: { base: ['cstud'], core: ['gyp'], finish: ['paint'], fix: ['screw'], prep: ['joint', 'skim'], primer: ['gypPrimer'], top: ['matt'] }, vars: { 'base/cstud': 'C75', 'core/gyp': '12,5 mm' } },
+  { label: 'Tường xây trát – bả, sơn nước', sys: 'wall', sel: { base: ['masonry'], core: ['none'], finish: ['paint'], prep: ['crack', 'skim'], primer: ['alk'], top: ['matt'] }, vars: { 'prep/skim': '2 lớp', 'primer/alk': '1 lớp', 'top/matt': '2 lớp' } },
+  { label: 'Ốp tường MDF chống ẩm phủ melamine, khung thép hộp', sys: 'wall', sel: { base: ['steel'], core: ['mdfM'], finish: ['melamine'], fix: ['screw', 'trim'] }, vars: { 'core/mdfM': '17 mm' } },
+  { label: 'Ốp tường MDF phủ veneer, khung thép hộp', sys: 'wall', sel: { base: ['steel'], core: ['mdfM'], finish: ['veneer'], fix: ['screw', 'trim'] }, vars: { 'core/mdfM': '17 mm' } },
+  { label: 'Ốp tường lam sóng MDF sơn PU', sys: 'wall', sel: { base: ['steel'], core: ['wave'], finish: ['paint'], fix: ['glue', 'nail'], prep: ['sandMdf'], primer: ['pu'], top: ['pu2k'] }, vars: { 'core/wave': '15 mm', 'top/pu2k': 'mờ' } },
+  { label: 'Ốp tường tiêu âm: khung, bông, vải bọc', sys: 'wall', sel: { base: ['timber'], core: ['mdf'], finish: ['acoustic'], extra: ['rockwool'] }, vars: { 'core/mdf': '12 mm', 'finish/acoustic': 'bông dày 25 mm' } },
+  { label: 'Sàn gỗ công nghiệp HDF khóa hèm', sys: 'floor', sel: { base: ['screed'], under: ['foam'], finish: ['lam'], extra: ['skirting'] }, vars: { 'finish/lam': '12 mm' } },
+  { label: 'Sàn gỗ kỹ thuật (engineered)', sys: 'floor', sel: { base: ['screed'], under: ['foam'], finish: ['eng'], extra: ['skirting'] } },
+  { label: 'Sàn SPC khóa hèm', sys: 'floor', sel: { base: ['screed'], under: ['foam'], finish: ['spc'], extra: ['skirting'] }, vars: { 'finish/spc': '5 mm' } },
+  { label: 'Sàn gạch porcelain – khu ướt có chống thấm', sys: 'floor', sel: { base: ['screed'], wp: ['cem'], under: ['tileglue'], finish: ['tile'] } },
+]
+
+const has2 = (st: BuildState, l: string, k: string) => !!st.sel[l]?.includes(k)
+/** Từ cấu tạo đã tích → nhóm mã (null = chưa đủ dữ liệu để phân loại) */
+export function groupOfBuild(st0: BuildState): string | null {
+  const sys = systemOf(st0.sys), st = cleanSel(sys, st0), h = (l: string, k: string) => has2(st, l, k)
+  const fin = st.sel.finish ?? [], core = st.sel.core?.[0], base = st.sel.base?.[0]
+  if (st.sys === 'floor') {
+    const f = fin[0]; if (!f) return null
+    return ({ tile: 'CT', stone: 'ST', terrazzo: 'ST', engstone: 'ES', solid: 'WD', eng: 'EWD', lam: 'EWD', spc: 'LVT', lvt: 'LVT', carpetT: 'CTL', broadloom: 'CPT' } as Record<string, string>)[f] ?? null
+  }
+  if (!fin.length || !core) return null
+  if (fin.includes('paint') && !(st.sel.top?.length)) return null     // đã chọn sơn thì phải chọn sơn phủ
+  const sk = (x: string) => fin.includes(x)
+  if (st.sys === 'ceiling') {
+    if (h('type', 'tbar') || core === 'mineral') return 'ACT'
+    if (['gyp', 'gypM', 'gypF', 'perf'].includes(core)) return core === 'gypM' ? 'MGWB' : core === 'gypF' ? 'FGWB' : 'GWB'
+    if (core === 'cement') return 'GWB'
+    if (sk('paint') && h('frame', 'none')) return 'PT'
+    return 'WP'
+  }
+  if (sk('wallpaper') || sk('fabricwc')) return 'WC'
+  if (sk('stone')) return 'ST'
+  if (sk('engstone')) return 'ES'
+  if (sk('tile')) return 'CT'
+  if (sk('mirror')) return 'MR'
+  if (sk('glass')) return 'GL'
+  if (sk('metal') || sk('acp')) return 'MT'
+  if (sk('paint') && fin.length === 1 && core === 'none' && (base === 'masonry' || base === 'direct')) return 'PT'
+  if (sk('wpc')) return 'WPC'
+  return 'WP'
+}
+
 const SIZE_VN = /^Kích thước\s*:.*$/im, SIZE_EN = /^Size\s*:.*$/im
 /** Ghi vào mục: THAY toàn bộ thông số cũ bằng nội dung sinh từ cấu tạo (giữ riêng dòng "Kích thước" đã chọn từ thư viện) + ô Cấu tạo, lưu lựa chọn, xoá cờ "cần xem lại" */
-export async function applyBuild(e: Entry, st0: BuildState) {
-  const r = renderBuild(st0)
+export async function applyBuild(e0: Entry, st0: BuildState, all: Entry[] = []) {
+  const r = renderBuild(st0), grp = groupOfBuild(r.state)
+  let e = e0
+  // đủ dữ liệu → phần mềm tự biết nhóm vật liệu: đổi nhóm + ký hiệu bản vẽ, hàng tự chuyển về đúng cụm
+  if (grp && grp !== e.group_code) { const er = await changeGroup(e, grp, all); if (er) return er; e = { ...e, group_code: grp } }
   const keep = (t: string | null | undefined, re: RegExp) => (t ?? '').match(re)?.[0] ?? ''
   const join = (lines: string[], size: string) => [...lines.map(l => (l.startsWith('  ') ? l : '- ' + l)), size].filter(Boolean).join('\n')
   return saveEntry(e, {
@@ -270,9 +324,9 @@ export async function applyBuild(e: Entry, st0: BuildState) {
     desc_en: join(r.en, keep(e.desc_en, SIZE_EN)) || null,
     composition: r.composition || e.composition,
     build: r.state,
-    spec_stale: null,
+    spec_stale: grp ? null : 'incomplete',   // chưa tích đủ → không đủ dữ liệu phân loại: ô bên ngoài hiện đỏ để người làm bổ sung
   })
 }
 
 /** Nhãn loại vật liệu thư viện dùng để báo "đã đổi sang …" */
-export const KIND_VN: Record<string, string> = { paint: 'sơn', wood: 'gỗ', tile: 'gạch', stone: 'đá', floor: 'sàn nhựa/gỗ', sanitary: 'thiết bị vệ sinh', moulding: 'phào chỉ' }
+export const KIND_VN: Record<string, string> = { incomplete: 'cấu tạo chưa đủ để phân loại', paint: 'sơn', wood: 'gỗ', tile: 'gạch', stone: 'đá', floor: 'sàn nhựa/gỗ', sanitary: 'thiết bị vệ sinh', moulding: 'phào chỉ' }

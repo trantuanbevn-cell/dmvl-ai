@@ -91,8 +91,8 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
             <p className="small muted">Phần mềm so màu, vân (hướng vân, độ dày vân, hoa văn) của vùng khoanh với toàn bộ map trong thư viện – không giới hạn theo loại vật liệu – rồi xếp mẫu giống nhất lên đầu.</p>
           </div>
           <div className="card" style={{ overflow: 'auto' }}>
-            {can('build') && <BuildPicker key={entry.id} entry={entry} onDone={() => d.reload()} />}
-            {(basics.length > 0 || !allBasic) && <div style={{ marginBottom: 12 }}>
+            {can('build') && <BuildPicker key={entry.id} entry={entry} all={d.entries} onDone={() => d.reload()} />}
+            {!can('build') && (basics.length > 0 || !allBasic) && <div style={{ marginBottom: 12 }}>
               <div className="row between"><b>Vật liệu cơ bản – thông số chuẩn</b>{!allBasic && <a className="small" style={{ cursor: 'pointer' }} onClick={() => setAllBasic(true)}>xem tất cả</a>}</div>
               {!basics.length && <p className="muted small">Chưa có thông số chuẩn cho nhóm này.</p>}
               {basics.map(b => <div key={b.key} className="card" style={{ padding: 8, marginTop: 6, outline: appliedKey === b.key ? '2px solid var(--brown)' : undefined }}>
