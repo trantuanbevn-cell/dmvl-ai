@@ -10,7 +10,7 @@ import type { EnSrc } from './types'
 
 export type TrItem = { key: string; kind: 'entry' | 'room'; id: string; field: string; vi: string; draft: string; ok: boolean; label: string; prevEn?: string; src?: EnSrc | null }
 const norm = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim()
-const EF: [string, string, string][] = [['name_vn', 'name_en', 'tên'], ['part_vn', 'part_en', 'bộ phận'], ['material_vn', 'material_en', 'vật liệu'], ['desc_vn', 'desc_en', 'thông số'], ['perf_vn', 'perf_en', 'tính chất'], ['note_vn', 'note_en', 'ghi chú']]
+const EF: [string, string, string][] = [['name_vn', 'name_en', 'tên'], ['part_vn', 'part_en', 'bộ phận'], ['material_vn', 'material_en', 'vật liệu'], ['desc_vn', 'desc_en', 'thông số'], ['perf_vn', 'perf_en', 'tính chất'], ['note_vn', 'note_en', 'ghi chú'], ['loc_note_vn', 'loc_note_en', 'ghi chú vị trí']]
 /** Số từ tiếng Việt (có dấu) lẫn trong một ô tiếng Anh */
 const viWords = (v: unknown) => (String(v ?? '').match(/[\p{L}]*[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ][\p{L}]*/giu) ?? []).length
 const blank = (v: unknown) => v == null || String(v).trim() === ''
