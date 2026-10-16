@@ -1,16 +1,19 @@
 // Chọn cấu tạo lớp tường / trần / sàn bằng cách tích: khung → cốt → hoàn thiện (sơn: bả, lót, phủ) → tự sinh thông số kỹ thuật đúng vật liệu.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Entry } from '../lib/types'
 import { hintsOf, PRESETS, groupOfBuild, SYSTEMS, systemOf, guessSystem, cleanSel, renderBuild, applyBuild, type BuildState, type System } from '../lib/construction'
 
 /** Mô tả sẵn có (trừ dòng Kích thước) đưa vào ô "Mô tả thêm" để không mất chữ của người làm khi áp cấu tạo */
-const keepText = (e: Entry) => (e.desc_vn ?? '').split('\n').filter(l => l.trim() && !/^Kích thước\s*:/i.test(l.trim()) && !/^-\s/.test(l.trim())).join('\n').slice(0, 400)
+export type BuildSeed = Pick<Entry, 'name_vn' | 'desc_vn' | 'part_vn' | 'group_code' | 'category'> & { build?: BuildState | null }
+const keepText = (e: Pick<Entry, 'desc_vn'>) => (e.desc_vn ?? '').split('\n').filter(l => l.trim() && !/^Kích thước\s*:/i.test(l.trim()) && !/^-\s/.test(l.trim())).join('\n').slice(0, 400)
 
-export default function BuildPicker({ entry, all, onDone }: { entry: Entry; all: Entry[]; onDone: () => void }) {
+/** Chế độ lưu: entry là mã đã có (nút Áp dụng cấu tạo). Chế độ nháp (draft): dùng khi đang tạo mã mới – chỉ trả lựa chọn ra ngoài, áp dụng sau khi mã được tạo. */
+export default function BuildPicker({ entry, all, onDone, draft }: { entry: BuildSeed | Entry; all?: Entry[]; onDone?: () => void; draft?: (st: BuildState | null) => void }) {
   const init: BuildState = entry.build?.sys ? entry.build : { sys: guessSystem(entry), sel: {}, vars: {} }
-  const [st, setSt] = useState<BuildState>(entry.build?.sys ? init : { ...init, extra: keepText(entry) }), [busy, setBusy] = useState(false), [show, setShow] = useState(!!entry.build)
+  const [st, setSt] = useState<BuildState>(entry.build?.sys ? init : { ...init, extra: keepText(entry) }), [busy, setBusy] = useState(false), [show, setShow] = useState(!!entry.build || !!draft)
   const sys = systemOf(st.sys), cl = useMemo(() => cleanSel(sys, st), [sys, st])
   const pv = useMemo(() => renderBuild(cl), [cl])
+  useEffect(() => { draft?.(Object.values(cl.sel).some(a => a.length) ? cl : null) }, [cl]) // eslint-disable-line
   const layers = sys.layers.filter(l => !l.when || l.when(cl.sel))
   const toggle = (lk: string, ok: string, multi?: boolean) => setSt(s => {
     const cur = cleanSel(systemOf(s.sys), s).sel[lk] ?? []
@@ -18,7 +21,7 @@ export default function BuildPicker({ entry, all, onDone }: { entry: Entry; all:
     return cleanSel(systemOf(s.sys), { ...s, sel: { ...s.sel, [lk]: next } })
   })
   const setVar = (lk: string, ok: string, v: string) => setSt(s => ({ ...s, vars: { ...s.vars, [`${lk}/${ok}`]: v } }))
-  const apply = async () => { setBusy(true); const er = await applyBuild(entry, cl, all); setBusy(false); if (er) return alert(er.message); onDone() }
+  const apply = async () => { setBusy(true); const er = await applyBuild(entry as Entry, cl, all ?? []); setBusy(false); if (er) return alert(er.message); onDone?.() }
   const grp = groupOfBuild(cl)
   const preset = (i: number) => { const p = PRESETS[i]; if (p) { const h = hintsOf(entry, p.sys); const sel = { ...p.sel, ...(h.type ? { type: h.type } : {}), ...(h.extra ? { extra: [...new Set([...(p.sel.extra ?? []), ...h.extra])] } : {}) }; setSt({ sys: p.sys, sel, vars: p.vars ?? {}, extra: st.extra }) } }
   const chg = (k: System['k']) => setSt({ sys: k, sel: {}, vars: {}, extra: st.extra })
@@ -53,7 +56,7 @@ export default function BuildPicker({ entry, all, onDone }: { entry: Entry; all:
       </div>}
       <div className="row" style={{ justifyContent: 'flex-end', marginTop: 6, gap: 8, alignItems: 'center' }}>
         <span className="small" style={{ color: grp ? '#2f7d4f' : '#b45309' }}>{grp ? `✓ Đủ dữ liệu → nhóm ${grp}, tự chuyển ký hiệu/hạng mục` : 'Chưa tích đủ (cốt + hoàn thiện) → chưa phân loại, ô bên ngoài sẽ hiện đỏ'}</span>
-        <button className="btn sm primary" disabled={busy || !pv.vn.length} onClick={apply}>{busy ? 'Đang lưu…' : 'Áp dụng cấu tạo'}</button>
+        {draft ? <span className="small muted">Sẽ áp dụng khi bấm “Tạo mã mới”</span> : <button className="btn sm primary" disabled={busy || !pv.vn.length} onClick={apply}>{busy ? 'Đang lưu…' : 'Áp dụng cấu tạo'}</button>}
       </div>
     </div>}
   </div>

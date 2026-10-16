@@ -7,6 +7,9 @@ import { findSimilar } from '../lib/similar'
 import type { ProjectData } from '../lib/useProject'
 import { loadLibrary, searchLibrary, syncLibrary, type LibRow } from '../lib/matLibrary'
 import type { Room, Entry } from '../lib/types'
+import { useAuth } from '../lib/auth'
+import BuildPicker from './BuildPicker'
+import { applyBuild, type BuildState } from '../lib/construction'
 
 export type AddPreset = { section_key?: string | null; name_en?: string; copy?: string; group: string; category: string; name: string; part_vn?: string | null; parent_id?: string | null; hint?: string }
 
@@ -14,6 +17,9 @@ export type AddPreset = { section_key?: string | null; name_en?: string; copy?: 
 export default function AddMaterial({ d, room: room0, preset, onClose, onDone }: { d: ProjectData; room: Room | null; preset: AddPreset; onClose: () => void; onDone: (entryId: string) => void }) {
   const [f, setF] = useState({ group: preset.group, category: preset.category, name: preset.name, material: '', color: '', useColor: false })
   const [busy, setBusy] = useState(false)
+  const { can } = useAuth()
+  const [bld, setBld] = useState<BuildState | null>(null)
+  const showBuild = can('build') && (['floor', 'wall', 'feature_wall', 'ceiling'].includes(f.category) || /^(PT|SP|WC|WP|GWB|FGWB|MGWB|ACT|CT|ST|ES|LVT|WD|EWD|WPC)$/.test(f.group))
   const [roomSel, setRoomSel] = useState<string>(room0?.id ?? '')
   const room = d.rooms.find(r => r.id === roomSel) ?? null
   const [src, setSrc] = useState<string>(preset.copy ?? '')
@@ -47,6 +53,7 @@ export default function AddMaterial({ d, room: room0, preset, onClose, onDone }:
       const e = await addManualEntry(d.project!, room, f.group, f.name.trim(), f.category, {
         ...base, ...(preset.section_key ? { section_key: preset.section_key } : {}), material_vn: f.material.trim() || undefined, color_hex: f.useColor ? f.color : null,
       })
+      if (bld && showBuild) { const er = await applyBuild(e, bld, [...d.entries, e]); if (er) throw new Error(er.message) }   // cấu tạo đã tích → điền thông số, tự phân nhóm
       syncLibrary(d.project!.id, [e])
       await d.reload(); onDone(e.id)
     } catch (e: any) { alert(e.message) }
@@ -75,6 +82,8 @@ export default function AddMaterial({ d, room: room0, preset, onClose, onDone }:
         <label className="row gap sm-gap small"><input type="checkbox" checked={f.useColor} onChange={e => setF({ ...f, useColor: e.target.checked, color: f.color || '#888888' })} /> Có màu đại diện
           {f.useColor && <input type="color" value={f.color} onChange={e => setF({ ...f, color: e.target.value })} style={{ padding: 0, width: 36, height: 26 }} />}
           <span className="muted">(giúp so với các mã đã có cùng tông màu)</span></label>
+
+        {showBuild && <BuildPicker key={f.group} entry={{ name_vn: f.name, desc_vn: null, part_vn: null, group_code: f.group, category: f.category }} draft={setBld} />}
 
         {libHits.length > 0 && !libSrc && (
           <div className="dup-box" style={{ background: '#eef5ff', borderColor: '#b7d0f0' }}>
