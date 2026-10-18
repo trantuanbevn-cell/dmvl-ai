@@ -9,7 +9,7 @@ import type { PlanIssue } from '../lib/planAi'
 type Box = { x: number; y: number; w: number; h: number }
 /** Nét bản vẽ gốc dạng VECTOR đúng từng đỉnh (tường/cột tô xám đặc, nét đồ nội thất, cung cửa…) – thay cho đường tường dò từ ảnh (bị bo vát chéo, mất nét cửa/nội thất).
  *  Vẽ bằng canvas (Path2D dựng sẵn, vẽ lại theo khung nhìn) đặt chồng lên màu sàn bằng "multiply": nhẹ hơn rất nhiều so với hàng trăm nghìn đỉnh trong SVG khi zoom. */
-function LinesCanvas({ base, vb, size }: { base: VecPage; vb: Box; size: { w: number; h: number } }) {
+export function LinesCanvas({ base, vb, size }: { base: VecPage; vb: Box; size: { w: number; h: number } }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const runs = useMemo(() => base.draw!.filter(r => !isAnnoLayer(base.classes[r.cls]?.layer ?? '')).map(r => ({ r, p: new Path2D(r.d) })), [base])
   useEffect(() => {
