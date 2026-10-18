@@ -4,10 +4,13 @@ import { readDxfPage } from '../lib/dxf'
 import type { VecPage } from '../lib/vector'
 import { LinesCanvas } from './PlanView'
 import Scene3D from './Scene3D'
-import { DOOR_KINDS, WALL_KINDS, centerline, centroid, doorRect, floodRoom, footprint, kindOf, modelFromVec, polyArea, snapToWall, uid, type Dim, type Door, type DoorKind, type Model, type Pt, type Room, type Wall } from '../lib/plan3d/model'
+import LibraryBrowser from './LibraryBrowser'
+import { DoorElevSection, DoorPlanSection, WallLayerSection } from './Sections'
+import { COL_LIB, DOOR_LIB, FINISHES, WALL_TYPES, doorSpec, finishOf, type DoorSpec, type Finish } from '../lib/plan3d/library'
+import { WALL_KINDS, centerline, centroid, doorRect, floodRoom, footprint, kindOf, modelFromVec, polyArea, snapToWall, uid, type Dim, type Door, type Model, type Pt, type Room, type Wall } from '../lib/plan3d/model'
 
 type Box = { x: number; y: number; w: number; h: number }
-type Tool = 'select' | 'wall' | 'dim' | 'room' | 'roomPoly' | DoorKind
+type Tool = 'select' | 'wall' | 'dim' | 'room' | 'roomPoly' | 'door' | 'col'
 type Sel = { t: 'wall' | 'door' | 'room' | 'dim'; id: string } | null
 const KEY = 'plan3d-model-v1'
 const ringPath = (r: Pt[]) => 'M' + r.map(p => p[0].toFixed(3) + ' ' + p[1].toFixed(3)).join('L') + 'Z'
@@ -54,6 +57,11 @@ export default function Plan3D() {
   const hist = useRef<Model[]>([]), [nh, setNh] = useState(0)
   const [vb, setVb] = useState<Box>({ x: 0, y: 0, w: 100, h: 60 }), [size, setSize] = useState({ w: 0, h: 0 })
   const box = useRef<HTMLDivElement>(null), drag = useRef<any>(null)
+  const ls = <T,>(k: string, d: T): T => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) as T : d } catch { return d } }
+  const [custom, setCustom] = useState<Finish[]>(() => ls('plan3d-custom-finishes', [])), [customDoors, setCustomDoors] = useState<DoorSpec[]>(() => ls('plan3d-custom-doors', []))
+  useEffect(() => { try { localStorage.setItem('plan3d-custom-finishes', JSON.stringify(custom)) } catch { setErr('Ảnh vật liệu quá nặng, không lưu thêm được trong trình duyệt.') } }, [custom])
+  useEffect(() => { try { localStorage.setItem('plan3d-custom-doors', JSON.stringify(customDoors)) } catch { /* bỏ */ } }, [customDoors])
+  const [libDoor, setLibDoor] = useState('dr-flush09'), [libCol, setLibCol] = useState('cl-r40'), [newKind, setNewKind] = useState('brick'), [showLib, setShowLib] = useState(false), [ceiling, setCeiling] = useState(false)
   const [pending, setPending] = useState<Pt | null>(null), [cursor, setCursor] = useState<Pt | null>(null), [pts, setPts] = useState<Pt[]>([])
 
   const commit = useCallback((n: Model, push = true) => { setM(cur => { if (push && cur) { hist.current.push(cur); if (hist.current.length > 60) hist.current.shift(); setNh(hist.current.length) } return n }) }, [])
@@ -106,7 +114,7 @@ export default function Plan3D() {
       const q = snapPt(p, pending)
       if (!pending) { setPending(q); return }
       if (Math.hypot(q[0] - pending[0], q[1] - pending[1]) < 0.05) { setPending(null); return }
-      const w: Wall = { id: uid('w'), role: 'wall', kind: 'brick', shape: { type: 'seg', a: pending, b: q, t: 0.2 } }
+      const w: Wall = { id: uid('w'), role: 'wall', kind: newKind, shape: { type: 'seg', a: pending, b: q, t: kindOf(newKind).t } }
       commit({ ...M, walls: [...M.walls, w] }); setPending(q); return
     }
     if (tool === 'dim') {
@@ -127,10 +135,15 @@ export default function Plan3D() {
       if (pts.length >= 3 && Math.hypot(q[0] - pts[0][0], q[1] - pts[0][1]) < vb.w / Math.max(300, size.w) * 10) { closePoly(); return }
       setPts([...pts, q]); return
     }
-    if (tool !== 'select') {
-      const s = snapToWall(M, p, 0.6); if (!s) { setErr('Bấm sát vào một đoạn tường để đặt cửa.'); return }
-      setErr(''); const k = DOOR_KINDS.find(x => x.key === tool)!
-      const d: Door = { id: uid('d'), kind: k.key, x: s.x, y: s.y, ang: s.ang, w: k.w, h: k.h, sill: k.sill }
+    if (tool === 'col') {
+      const c = COL_LIB.find(x => x.id === libCol)!, q = snapPt(p), hw = c.w / 2, hd = c.d / 2
+      const ring: Pt[] = c.shape === 'round' ? Array.from({ length: 24 }, (_, i) => [q[0] + hw * Math.cos(i / 24 * 2 * Math.PI), q[1] + hd * Math.sin(i / 24 * 2 * Math.PI)] as Pt) : [[q[0] - hw, q[1] - hd], [q[0] + hw, q[1] - hd], [q[0] + hw, q[1] + hd], [q[0] - hw, q[1] + hd]]
+      const w: Wall = { id: uid('w'), role: 'col', kind: c.kind, finish: c.finish, name: c.name, shape: { type: 'poly', rings: [ring] } }
+      commit({ ...M, walls: [...M.walls, w] }); setSel({ t: 'wall', id: w.id }); return
+    }
+    if (tool === 'door') {
+      const sp = doorSpec(libDoor, customDoors) ?? DOOR_LIB[0], sn = snapToWall(M, p, 0.6); if (!sn) { setErr('Bấm sát vào một đoạn tường để đặt cửa.'); return }
+      setErr(''); const d: Door = { id: uid('d'), kind: sp.kind, lib: sp.id, x: sn.x, y: sn.y, ang: sn.ang, w: sp.w, h: sp.h, sill: sp.sill }
       commit({ ...M, doors: [...M.doors, d] }); setSel({ t: 'door', id: d.id }); return
     }
     setSel(null); drag.current = { k: 'pan', x: e.clientX, y: e.clientY, vb }; (box.current as HTMLElement).setPointerCapture(e.pointerId)
@@ -218,17 +231,30 @@ export default function Plan3D() {
           <button className={'btn sm' + (tool === 'dim' ? ' primary' : '')} onClick={() => { setTool('dim'); setPending(null); setPts([]) }}>📏 Ghi kích thước</button>
           <button className={'btn sm' + (tool === 'room' ? ' primary' : '')} onClick={() => { setTool('room'); setPending(null); setPts([]); setErr('') }}>▣ Phòng (bấm vào trong)</button>
           <button className={'btn sm' + (tool === 'roomPoly' ? ' primary' : '')} onClick={() => { setTool('roomPoly'); setPending(null); setPts([]) }}>✎ Phòng / đo diện tích (vẽ tay)</button>
-          {DOOR_KINDS.map(k => <button key={k.key} className={'btn sm' + (tool === k.key ? ' primary' : '')} onClick={() => { setTool(k.key); setPending(null); setPts([]); setErr('') }}>＋ {k.label}</button>)}
+          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><button className={'btn sm' + (tool === 'door' ? ' primary' : '')} onClick={() => { setTool('door'); setPending(null); setPts([]); setErr('') }}>＋ Cửa</button>
+            <select value={libDoor} onChange={e => { setLibDoor(e.target.value); setTool('door') }} style={{ maxWidth: 190 }}>{['Cửa đi', 'Cửa kính', 'Cửa sổ', 'Khác'].map(g => <optgroup key={g} label={g}>{[...customDoors, ...DOOR_LIB].filter(d => (customDoors.includes(d) ? g === 'Cửa đi' : d.group === g)).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</optgroup>)}</select></span>
+          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><button className={'btn sm' + (tool === 'col' ? ' primary' : '')} onClick={() => { setTool('col'); setPending(null); setPts([]) }}>＋ Cột</button>
+            <select value={libCol} onChange={e => { setLibCol(e.target.value); setTool('col') }} style={{ maxWidth: 160 }}>{COL_LIB.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></span>
+          <label className="small">Tường mới: <select value={newKind} onChange={e => setNewKind(e.target.value)} style={{ maxWidth: 170 }}>{WALL_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}</select></label>
+          <button className={'btn sm' + (showLib ? ' primary' : '')} onClick={() => setShowLib(v => !v)}>📚 Thư viện</button>
           <button className="btn sm" disabled={!nh} onClick={undo}>↩ Hoàn tác</button>
           <label className="small"><input type="checkbox" checked={ortho} onChange={e => setOrtho(e.target.checked)} /> Bắt ngang/dọc</label>
           {base && <label className="small"><input type="checkbox" checked={under} onChange={e => setUnder(e.target.checked)} /> Hiện nét bản vẽ gốc</label>}
           <button className="btn sm" onClick={() => fit(M, size)}>Vừa khung</button>
         </> : <>
           <button className="btn sm" onClick={() => setView3(v => (v === 0 ? 2 : 0))}>Góc nhìn chéo</button><button className="btn sm" onClick={() => setView3(1)}>Từ trên xuống</button>
-          <span className="muted small">Kéo = xoay · cuộn = zoom · chuột phải kéo = dời</span></>}
+          <label className="small"><input type="checkbox" checked={ceiling} onChange={e => setCeiling(e.target.checked)} /> Hiện trần</label><button className={'btn sm' + (showLib ? ' primary' : '')} onClick={() => setShowLib(v => !v)}>📚 Thư viện</button><span className="muted small">Kéo = xoay · cuộn = zoom · chuột phải kéo = dời</span></>}
         <span className="small muted" style={{ marginLeft: 'auto' }}>Cao tường mặc định <input style={{ width: 52 }} defaultValue={M.hWall} key={'hw' + M.hWall} onBlur={e => commit({ ...M, hWall: num(e.target.value, M.hWall) })} /> m · cột <input style={{ width: 52 }} defaultValue={M.hCol} key={'hc' + M.hCol} onBlur={e => commit({ ...M, hCol: num(e.target.value, M.hCol) })} /> m</span>
       </div>
-      {mode === '3d' ? <Scene3D model={M} view={view3} /> :
+      {showLib && <LibraryBrowser custom={custom} customDoors={customDoors} doorSel={libDoor} wallSel={selWall?.kind ?? newKind} colSel={libCol}
+        hint={selWall ? 'Đang chọn 1 tường: bấm loại tường / vật liệu để áp lên tường đó' : selRoom ? 'Đang chọn 1 phòng: bấm vật liệu Sàn / Trần để áp lên phòng' : selDoor ? 'Đang chọn 1 cửa: bấm mẫu cửa hoặc vật liệu để áp lên cửa' : 'Bấm mẫu cửa/cột để đặt; chọn một tường/phòng/cửa trước để áp vật liệu'}
+        onDoor={id => { const sp = doorSpec(id, customDoors); setLibDoor(id); if (selDoor && sp) setDoor(selDoor.id, { lib: sp.id, kind: sp.kind, w: sp.w, h: sp.h, sill: sp.sill, finish: undefined, frameFinish: undefined }); else setTool('door') }}
+        onWall={k => { setNewKind(k); if (selWall) { const kk = kindOf(k); setWall(selWall.id, selWall.shape.type === 'seg' ? { kind: k, finish: undefined, shape: { ...selWall.shape, t: kk.t } } : { kind: k, finish: undefined }) } }}
+        onCol={id => { setLibCol(id); setTool('col') }}
+        onFinish={f => { if (selRoom) { if (f.group === 'Trần') setRoom(selRoom.id, { ceil: f.id }); else setRoom(selRoom.id, { floor: f.id }) } else if (selWall) setWall(selWall.id, { finish: f.id }); else if (selDoor) setDoor(selDoor.id, f.group === 'Cửa / khung' || f.group === 'Của tôi' ? { finish: f.id } : {}) }}
+        onAddImage={async (file, name, sz, group) => { const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file) }); const c = document.createElement('canvas'), k = Math.min(1, 384 / Math.max(img.width, img.height)); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height); setCustom(cs => [{ id: 'my-' + uid(''), group, name, color: '#cccccc', pattern: 'image', size: sz, img: c.toDataURL('image/jpeg', 0.82) }, ...cs]) }}
+        onRemoveCustom={id => setCustom(cs => cs.filter(c => c.id !== id))} />}
+      {mode === '3d' ? <Scene3D model={M} view={view3} custom={custom} customDoors={customDoors} ceiling={ceiling} /> :
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 250px', gap: 10, alignItems: 'start' }}>
           <div ref={box} style={{ position: 'relative', height: '72vh', border: '1px solid #ddd', background: '#fff', overflow: 'hidden', touchAction: 'none', userSelect: 'none', cursor: tool === 'select' ? 'default' : 'crosshair' }}
             onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onDoubleClick={onDouble} onContextMenu={e => { e.preventDefault(); setPending(null); setPts([]) }}>
@@ -258,7 +284,9 @@ export default function Plan3D() {
             {selWall ? <div className="card" style={{ display: 'grid', gap: 6 }}>
               <b>{selWall.role === 'col' ? 'Cột' : 'Tường'} {selWall.shape.type === 'seg' ? '(thêm tay)' : '(từ DXF)'}</b>
               <label>Loại <select value={selWall.role} onChange={e => setWall(selWall.id, { role: e.target.value as 'wall' | 'col' })}><option value="wall">Tường</option><option value="col">Cột</option></select></label>
-              <label>Kết cấu <select value={selWall.kind} onChange={e => setWall(selWall.id, { kind: e.target.value })}>{WALL_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}</select></label>
+              <label>Kết cấu <select value={selWall.kind} style={{ maxWidth: 170 }} onChange={e => { const k = kindOf(e.target.value); setWall(selWall.id, selWall.shape.type === 'seg' ? { kind: e.target.value, finish: undefined, shape: { ...selWall.shape, t: k.t } } : { kind: e.target.value, finish: undefined }) }}>{WALL_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}</select></label>
+              <label>Hoàn thiện <select value={selWall.finish ?? ''} style={{ maxWidth: 170 }} onChange={e => setWall(selWall.id, { finish: e.target.value || undefined })}><option value="">(theo kết cấu)</option>{[...custom, ...FINISHES].filter(f => f.group === 'Tường' || f.group === 'Của tôi' || f.group === 'Sàn').map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+              <WallLayerSection type={kindOf(selWall.kind)} finishColor={finishOf(selWall.finish ?? kindOf(selWall.kind).finish, custom)?.color} />
               <label>Cao (m) <input style={{ width: 70 }} key={selWall.id + (selWall.h ?? 'm')} defaultValue={selWall.h ?? (selWall.role === 'col' ? M.hCol : M.hWall)} onBlur={e => setWall(selWall.id, { h: num(e.target.value, M.hWall) })} /></label>
               {selWall.shape.type === 'seg' && <>
                 <label>Dày (m) <input style={{ width: 70 }} key={'t' + selWall.id + selWall.shape.t} defaultValue={selWall.shape.t} onBlur={e => { const s = selWall.shape as { type: 'seg'; a: Pt; b: Pt; t: number }; setWall(selWall.id, { shape: { ...s, t: Math.max(0.05, num(e.target.value, s.t)) } }) }} /></label>
@@ -271,17 +299,25 @@ export default function Plan3D() {
               <label>Tên (VN) <input style={{ width: 150 }} key={'rn' + selRoom.id} defaultValue={selRoom.name} onBlur={e => setRoom(selRoom.id, { name: e.target.value })} /></label>
               <label>Tên (EN) <input style={{ width: 150 }} key={'re' + selRoom.id} defaultValue={selRoom.en ?? ''} onBlur={e => setRoom(selRoom.id, { en: e.target.value })} /></label>
               <div>Diện tích: <b>{(selRoom.area ?? polyArea(selRoom.poly)).toFixed(2)} m²</b>{selRoom.area ? <span className="muted small"> (đã trừ cột/vách bên trong)</span> : null}</div>
+              <label>Sàn <select value={selRoom.floor ?? ''} style={{ maxWidth: 170 }} onChange={e => setRoom(selRoom.id, { floor: e.target.value || undefined })}><option value="">(chưa chọn)</option>{[...custom, ...FINISHES].filter(f => f.group === 'Sàn' || f.group === 'Của tôi').map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+              <label>Trần <select value={selRoom.ceil ?? ''} style={{ maxWidth: 170 }} onChange={e => setRoom(selRoom.id, { ceil: e.target.value || undefined })}><option value="">Thạch cao sơn trắng</option>{[...custom, ...FINISHES].filter(f => f.group === 'Trần' || f.group === 'Của tôi').map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+              <label>Cao trần (m) <input style={{ width: 60 }} key={'ch' + selRoom.id + (selRoom.ceilH ?? '')} defaultValue={selRoom.ceilH ?? M.hWall} onBlur={e => setRoom(selRoom.id, { ceilH: num(e.target.value, M.hWall) })} /></label>
               <button className="btn sm" onClick={del}>Xoá phòng</button></div> : null}
             {selDim ? <div className="card" style={{ display: 'grid', gap: 6 }}><b>Kích thước</b><div className="muted small">Dài {Math.hypot(selDim.b[0] - selDim.a[0], selDim.b[1] - selDim.a[1]).toFixed(3)} m</div><button className="btn sm" onClick={del}>Xoá</button></div> : null}
             {selDoor ? <div className="card" style={{ display: 'grid', gap: 6 }}>
               <b>Cửa</b>
-              <label>Kiểu <select value={selDoor.kind} onChange={e => setDoor(selDoor.id, { kind: e.target.value as DoorKind })}>{DOOR_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}</select></label>
+              <label>Loại <select value={selDoor.lib ?? ''} style={{ maxWidth: 160 }} onChange={e => { const sp = doorSpec(e.target.value, customDoors); if (sp) setDoor(selDoor.id, { lib: sp.id, kind: sp.kind, w: sp.w, h: sp.h, sill: sp.sill, finish: undefined, frameFinish: undefined }) }}><option value="">(tuỳ chỉnh)</option>{['Cửa đi', 'Cửa kính', 'Cửa sổ', 'Khác'].map(g => <optgroup key={g} label={g}>{[...customDoors, ...DOOR_LIB].filter(d => (customDoors.includes(d) ? g === 'Cửa đi' : d.group === g)).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</optgroup>)}</select></label>
+              <label>Vật liệu cánh <select value={selDoor.finish ?? doorSpec(selDoor.lib, customDoors)?.leafFinish ?? ''} style={{ maxWidth: 150 }} onChange={e => setDoor(selDoor.id, { finish: e.target.value })}>{[...custom, ...FINISHES].filter(f => f.group === 'Cửa / khung' || f.group === 'Của tôi' || f.group === 'Tường').map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+              <label>Vật liệu khung <select value={selDoor.frameFinish ?? doorSpec(selDoor.lib, customDoors)?.frameFinish ?? ''} style={{ maxWidth: 150 }} onChange={e => setDoor(selDoor.id, { frameFinish: e.target.value })}>{[...custom, ...FINISHES].filter(f => f.group === 'Cửa / khung' || f.group === 'Của tôi').map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
               <label>Rộng (m) <input style={{ width: 70 }} key={'w' + selDoor.id + selDoor.w} defaultValue={selDoor.w} onBlur={e => setDoor(selDoor.id, { w: Math.max(0.3, num(e.target.value, selDoor.w)) })} /></label>
               <label>Cao (m) <input style={{ width: 70 }} key={'h' + selDoor.id + selDoor.h} defaultValue={selDoor.h} onBlur={e => setDoor(selDoor.id, { h: Math.max(0.3, num(e.target.value, selDoor.h)) })} /></label>
               <label>Bệ cao (m) <input style={{ width: 70 }} key={'s' + selDoor.id + selDoor.sill} defaultValue={selDoor.sill} onBlur={e => setDoor(selDoor.id, { sill: Math.max(0, num(e.target.value, selDoor.sill)) })} /></label>
               <button className="btn sm" onClick={() => setDoor(selDoor.id, { flip: !selDoor.flip })}>Đảo phía mở</button>
               <button className="btn sm" onClick={dup}>Nhân đôi</button>
-              <button className="btn sm" onClick={del}>Xoá</button></div> : null}
+              <button className="btn sm" onClick={() => { const nm = window.prompt?.('Tên mẫu cửa của bạn') ?? ''; const base = doorSpec(selDoor.lib, customDoors); const id = 'my-' + uid(''); const sp: DoorSpec = { id, group: 'Cửa đi', name: nm || 'Mẫu của tôi', kind: selDoor.kind, w: selDoor.w, h: selDoor.h, sill: selDoor.sill, leaf: base?.leaf ?? 'flush', frame: base?.frame ?? 0.06, leafFinish: selDoor.finish ?? base?.leafFinish ?? 'd-white', frameFinish: selDoor.frameFinish ?? base?.frameFinish ?? 'd-white', handle: base?.handle, panes: base?.panes }; setCustomDoors(c => [sp, ...c]) }}>Lưu thành mẫu của tôi</button>
+              <button className="btn sm" onClick={del}>Xoá</button>
+              <div className="small muted">Mặt cắt ngang (nhìn từ trên)</div><DoorPlanSection d={selDoor} spec={doorSpec(selDoor.lib, customDoors)} />
+              <div className="small muted">Mặt cắt đứng (đầu cửa, bệ)</div><DoorElevSection d={selDoor} spec={doorSpec(selDoor.lib, customDoors)} H={M.hWall} /></div> : null}
             {!selWall && !selDoor && !selRoom && !selDim && <div className="muted small card">Chọn một đoạn tường, cột, cửa hoặc phòng để sửa.<br />Tường nhập từ DXF kéo được cả khối hoặc từng đỉnh. Tường thêm tay có hai đầu kéo được, sửa được độ dày và độ dài.<br /><br />{M.walls.length} khối tường/cột · {M.doors.length} cửa</div>}
             {(M.rooms ?? []).length > 0 && <div className="card small" style={{ display: 'grid', gap: 3 }}><b>Danh sách phòng</b>{(M.rooms ?? []).map(r => <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', cursor: 'pointer', fontWeight: selRoom?.id === r.id ? 700 : 400 }} onClick={() => setSel({ t: 'room', id: r.id })}><span>{r.name}</span><span>{(r.area ?? polyArea(r.poly)).toFixed(1)} m²</span></div>)}<div style={{ borderTop: '1px solid #ddd', paddingTop: 3, display: 'flex', justifyContent: 'space-between' }}><b>Tổng</b><b>{(M.rooms ?? []).reduce((n, r) => n + (r.area ?? polyArea(r.poly)), 0).toFixed(1)} m²</b></div></div>}
           </div>

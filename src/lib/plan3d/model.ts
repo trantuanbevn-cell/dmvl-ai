@@ -4,19 +4,11 @@ import type { VecPage } from '../vector'
 import { PT_MM } from '../dims'
 
 export type Pt = [number, number]
-export type WallKind = { key: string; label: string; color: string; glass?: boolean }
-/** Loại kết cấu (sẽ nối với vật liệu trong danh mục ở bước sau) */
-export const WALL_KINDS: WallKind[] = [
-  { key: 'brick', label: 'Tường gạch xây', color: '#e4d9c3' },
-  { key: 'concrete', label: 'Bê tông cốt thép', color: '#9a9a9a' },
-  { key: 'gypsum', label: 'Vách thạch cao', color: '#efece4' },
-  { key: 'glass', label: 'Vách kính', color: '#9cc9d6', glass: true },
-  { key: 'wood', label: 'Vách gỗ', color: '#b58b5a' },
-  { key: 'stone', label: 'Ốp đá', color: '#7d7468' },
-]
-export const kindOf = (k: string) => WALL_KINDS.find(x => x.key === k) ?? WALL_KINDS[0]
+import { WALL_TYPES, wallTypeOf } from './library'
+export const WALL_KINDS = WALL_TYPES
+export const kindOf = wallTypeOf
 
-export type Wall = { id: string; role: 'wall' | 'col'; kind: string; h?: number; name?: string; shape: { type: 'poly'; rings: Pt[][] } | { type: 'seg'; a: Pt; b: Pt; t: number; bulge?: number } }
+export type Wall = { id: string; role: 'wall' | 'col'; kind: string; finish?: string; h?: number; name?: string; shape: { type: 'poly'; rings: Pt[][] } | { type: 'seg'; a: Pt; b: Pt; t: number; bulge?: number } }
 export type DoorKind = 'door' | 'double' | 'window' | 'slide' | 'opening'
 export const DOOR_KINDS: { key: DoorKind; label: string; w: number; h: number; sill: number }[] = [
   { key: 'door', label: 'Cửa đi một cánh', w: 0.9, h: 2.1, sill: 0 },
@@ -26,9 +18,9 @@ export const DOOR_KINDS: { key: DoorKind; label: string; w: number; h: number; s
   { key: 'opening', label: 'Ô trống (không cánh)', w: 1.2, h: 2.4, sill: 0 },
 ]
 /** x,y = tâm cửa trên tường; ang = hướng dọc tường (rad); flip = đảo phía mở */
-export type Door = { id: string; kind: DoorKind; x: number; y: number; ang: number; w: number; h: number; sill: number; flip?: boolean; name?: string }
+export type Door = { id: string; kind: DoorKind; lib?: string; finish?: string; frameFinish?: string; x: number; y: number; ang: number; w: number; h: number; sill: number; flip?: boolean; name?: string }
 export type Dim = { id: string; a: Pt; b: Pt; off: number }
-export type Room = { id: string; name: string; en?: string; poly: Pt[]; area?: number }
+export type Room = { id: string; name: string; en?: string; poly: Pt[]; area?: number; floor?: string; ceil?: string; ceilH?: number }
 export type Model = { v: 1; walls: Wall[]; doors: Door[]; dims?: Dim[]; rooms?: Room[]; hWall: number; hCol: number; mPt: number; w: number; h: number }
 
 let seq = 0
