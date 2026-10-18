@@ -16,7 +16,7 @@ export const WALL_KINDS: WallKind[] = [
 ]
 export const kindOf = (k: string) => WALL_KINDS.find(x => x.key === k) ?? WALL_KINDS[0]
 
-export type Wall = { id: string; role: 'wall' | 'col'; kind: string; h?: number; name?: string; shape: { type: 'poly'; rings: Pt[][] } | { type: 'seg'; a: Pt; b: Pt; t: number } }
+export type Wall = { id: string; role: 'wall' | 'col'; kind: string; h?: number; name?: string; shape: { type: 'poly'; rings: Pt[][] } | { type: 'seg'; a: Pt; b: Pt; t: number; bulge?: number } }
 export type DoorKind = 'door' | 'double' | 'window' | 'slide' | 'opening'
 export const DOOR_KINDS: { key: DoorKind; label: string; w: number; h: number; sill: number }[] = [
   { key: 'door', label: 'Cửa đi một cánh', w: 0.9, h: 2.1, sill: 0 },
@@ -27,7 +27,9 @@ export const DOOR_KINDS: { key: DoorKind; label: string; w: number; h: number; s
 ]
 /** x,y = tâm cửa trên tường; ang = hướng dọc tường (rad); flip = đảo phía mở */
 export type Door = { id: string; kind: DoorKind; x: number; y: number; ang: number; w: number; h: number; sill: number; flip?: boolean; name?: string }
-export type Model = { v: 1; walls: Wall[]; doors: Door[]; hWall: number; hCol: number; mPt: number; w: number; h: number }
+export type Dim = { id: string; a: Pt; b: Pt; off: number }
+export type Room = { id: string; name: string; en?: string; poly: Pt[]; area?: number }
+export type Model = { v: 1; walls: Wall[]; doors: Door[]; dims?: Dim[]; rooms?: Room[]; hWall: number; hCol: number; mPt: number; w: number; h: number }
 
 let seq = 0
 export const uid = (p: string) => p + Date.now().toString(36) + (seq++).toString(36)
@@ -58,16 +60,40 @@ export function modelFromVec(v: VecPage, den: number): Model {
       walls.push({ id: uid('w'), role, kind: role === 'col' ? 'concrete' : 'brick', shape: { type: 'poly', rings: [l, ...holes] } })
     })
   }
-  return { v: 1, walls, doors: [], hWall: 3.3, hCol: 3.3, mPt: m, w: v.w * m, h: v.h * m }
+  return { v: 1, walls, doors: [], dims: [], rooms: [], hWall: 3.3, hCol: 3.3, mPt: m, w: v.w * m, h: v.h * m }
 }
 
 export const wallH = (w: Wall, M: Model) => w.h ?? (w.role === 'col' ? M.hCol : M.hWall)
 /** Hình chiếu bằng của tường (polygon-clipping: [vòng ngoài, ...lỗ]) */
+/** Đường tim của tường thêm tay: thẳng, hoặc cung (bulge = độ võng giữa dây cung, m; dương = võng về bên trái chiều a→b) */
+export function centerline(w: Wall): Pt[] {
+  if (w.shape.type !== 'seg') return []
+  const { a, b, bulge } = w.shape
+  if (!bulge || Math.abs(bulge) < 0.01) return [a, b]
+  const c = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, sg = bulge, R = (c * c / 4 + sg * sg) / (2 * Math.abs(sg)), ux = (b[0] - a[0]) / c, uy = (b[1] - a[1]) / c
+  const nx = -uy, ny = ux, mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, k = Math.sign(sg)
+  const cx = mx + nx * k * (Math.abs(sg) - R), cy = my + ny * k * (Math.abs(sg) - R)
+  const a0 = Math.atan2(a[1] - cy, a[0] - cx), a1 = Math.atan2(b[1] - cy, b[0] - cx), mid = Math.atan2(my + ny * sg - cy, mx + nx * sg - cx)
+  let da = a1 - a0; const wrap = (x: number) => Math.atan2(Math.sin(x), Math.cos(x)); da = wrap(da)
+  const toMid = wrap(mid - a0); if (Math.abs(toMid) > Math.abs(da) + 1e-6 || Math.sign(toMid) !== Math.sign(da)) da = da > 0 ? da - Math.PI * 2 : da + Math.PI * 2
+  const n = Math.max(8, Math.min(48, Math.ceil(Math.abs(da) / (Math.PI / 24)))), out: Pt[] = []
+  for (let i = 0; i <= n; i++) { const t = a0 + da * i / n; out.push([cx + R * Math.cos(t), cy + R * Math.sin(t)]) }
+  return out
+}
+/** Hình chiếu bằng của tường (polygon-clipping: [vòng ngoài, ...lỗ]) */
 export function footprint(w: Wall): Pt[][] {
   if (w.shape.type === 'poly') return w.shape.rings
-  const { a, b, t } = w.shape, dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, nx = -uy * t / 2, ny = ux * t / 2, e = t / 2
-  const a2: Pt = [a[0] - ux * e, a[1] - uy * e], b2: Pt = [b[0] + ux * e, b[1] + uy * e]
-  return [[[a2[0] + nx, a2[1] + ny], [b2[0] + nx, b2[1] + ny], [b2[0] - nx, b2[1] - ny], [a2[0] - nx, a2[1] - ny]]]
+  const t = w.shape.t, e = t / 2, line = centerline(w).slice()
+  const dir = (p: Pt, q: Pt) => { const L = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1; return [(q[0] - p[0]) / L, (q[1] - p[1]) / L] }
+  let d0 = dir(line[0], line[1]), d1 = dir(line[line.length - 2], line[line.length - 1])
+  line[0] = [line[0][0] - d0[0] * e, line[0][1] - d0[1] * e]; line[line.length - 1] = [line[line.length - 1][0] + d1[0] * e, line[line.length - 1][1] + d1[1] * e]
+  const L: Pt[] = [], R: Pt[] = []
+  for (let i = 0; i < line.length; i++) {
+    const p = line[i], d = i === 0 ? dir(line[0], line[1]) : i === line.length - 1 ? dir(line[i - 1], line[i]) : dir(line[i - 1], line[i + 1])
+    L.push([p[0] - d[1] * e, p[1] + d[0] * e]); R.push([p[0] + d[1] * e, p[1] - d[0] * e])
+  }
+  void d0; void d1
+  return [[...L, ...R.reverse()]]
 }
 /** Hình chữ nhật ô cửa (dài w dọc tường, sâu "deep" xuyên tường) */
 export function doorRect(d: Door, deep = 1.0): Pt[] {
@@ -101,12 +127,55 @@ export function snapToWall(M: Model, p: Pt, tol: number): { x: number; y: number
   let best: { x: number; y: number; ang: number; thick: number } | null = null, bd = tol
   for (const w of M.walls) {
     if (w.role === 'col') continue
-    const rings: Pt[][] = w.shape.type === 'poly' ? w.shape.rings : [[w.shape.a, w.shape.b]]
-    for (const r of rings) for (let i = 0; i < (w.shape.type === 'seg' ? 1 : r.length); i++) {
+    const rings: Pt[][] = w.shape.type === 'poly' ? w.shape.rings : [centerline(w)]
+    for (const r of rings) for (let i = 0; i < (w.shape.type === 'seg' ? r.length - 1 : r.length); i++) {
       const a = r[i], b = r[(i + 1) % r.length], dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy; if (L2 < 1e-9) continue
       const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2)), x = a[0] + t * dx, y = a[1] + t * dy, d = Math.hypot(p[0] - x, p[1] - y)
       if (d < bd && Math.hypot(dx, dy) > 0.25) { bd = d; best = { x, y, ang: Math.atan2(dy, dx), thick: 0 } }
     }
   }
   return best
+}
+
+export const polyArea = (l: Pt[]) => { let a = 0; for (let i = 0; i < l.length; i++) { const p = l[i], q = l[(i + 1) % l.length]; a += p[0] * q[1] - q[0] * p[1] } return Math.abs(a) / 2 }
+export const centroid = (l: Pt[]): Pt => { let x = 0, y = 0, a = 0; for (let i = 0; i < l.length; i++) { const p = l[i], q = l[(i + 1) % l.length], c = p[0] * q[1] - q[0] * p[1]; a += c; x += (p[0] + q[0]) * c; y += (p[1] + q[1]) * c } if (Math.abs(a) < 1e-9) return l[0]; return [x / (3 * a), y / (3 * a)] }
+
+/** Tìm không gian kín quanh điểm bấm: tô đặc tường + cửa lên ảnh 5 cm/pixel, loang từ điểm bấm, lấy đường bao. Trả null nếu hở. */
+export function floodRoom(M: Model, p: Pt, closeDoors = true): { poly: Pt[]; leaked: boolean; area?: number } | null {
+  const S = 20, pad = 1, x0 = -pad, y0 = -pad, W = Math.ceil((M.w + 2 * pad) * S), H = Math.ceil((M.h + 2 * pad) * S)
+  if (W * H > 60e6) return null
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d', { willReadFrequently: true })!
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.fillStyle = '#000'; g.setTransform(S, 0, 0, S, -x0 * S, -y0 * S)
+  for (const w of M.walls) { const path = new Path2D(footprint(w).map(r => 'M' + r.map(q => q[0] + ' ' + q[1]).join('L') + 'Z').join('')); g.fill(path, 'evenodd') }
+  if (closeDoors) for (const d of M.doors) { const r = doorRect({ ...d }, 0.12); g.beginPath(); r.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); g.fill() }
+  const img = g.getImageData(0, 0, W, H).data, mask = new Uint8Array(W * H), sx = Math.round((p[0] - x0) * S), sy = Math.round((p[1] - y0) * S)
+  if (sx < 0 || sy < 0 || sx >= W || sy >= H || img[(sy * W + sx) * 4] < 128) return null
+  const st = [sy * W + sx]; mask[st[0]] = 1; let leaked = false
+  while (st.length) { const i = st.pop()!, x = i % W, y = (i / W) | 0
+    if (x === 0 || y === 0 || x === W - 1 || y === H - 1) { leaked = true; continue }
+    for (const j of [i - 1, i + 1, i - W, i + W]) if (!mask[j] && img[j * 4] >= 128) { mask[j] = 1; st.push(j) } }
+  if (leaked) return { poly: [], leaked: true }
+  // đường bao ngoài: đi dọc cạnh pixel (vùng luôn nằm bên phải hướng đi)
+  let sx0 = -1, sy0 = -1, count = 0
+  for (let i = 0; i < mask.length; i++) if (mask[i]) { count++; if (sx0 < 0) { sx0 = i % W; sy0 = (i / W) | 0 } }
+  const on = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H && mask[y * W + x] === 1
+  const DX = [1, 0, -1, 0], DY = [0, 1, 0, -1]
+  let vx = sx0, vy = sy0, d = 0, ring: Pt[] = [], guard = 0
+  do {
+    vx += DX[d]; vy += DY[d]
+    const ar = d === 0 ? on(vx, vy) : d === 1 ? on(vx - 1, vy) : d === 2 ? on(vx - 1, vy - 1) : on(vx, vy - 1)
+    const al = d === 0 ? on(vx, vy - 1) : d === 1 ? on(vx, vy) : d === 2 ? on(vx - 1, vy) : on(vx - 1, vy - 1)
+    const nd = al ? (d + 3) % 4 : ar ? d : (d + 1) % 4
+    if (nd !== d) ring.push([vx, vy]); d = nd
+  } while ((vx !== sx0 || vy !== sy0 || d !== 0) && ++guard < W * H * 4)
+  ring = simplify(ring, 1.2).map(q => [q[0] / S + x0, q[1] / S + y0] as Pt)
+  return { poly: ring, leaked: false, area: count / (S * S) }
+}
+function simplify(pts: Pt[], eps: number): Pt[] { // Ramer–Douglas–Peucker
+  if (pts.length < 4) return pts
+  const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1
+  const rec = (i: number, j: number) => { let md = 0, mi = -1; const a = pts[i], b = pts[j], dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1
+    for (let k = i + 1; k < j; k++) { const d = Math.abs((pts[k][0] - a[0]) * dy - (pts[k][1] - a[1]) * dx) / L; if (d > md) { md = d; mi = k } }
+    if (md > eps && mi > 0) { keep[mi] = 1; rec(i, mi); rec(mi, j) } }
+  rec(0, pts.length - 1); return pts.filter((_, i) => keep[i])
 }
