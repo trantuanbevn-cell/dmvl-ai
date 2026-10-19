@@ -136,7 +136,7 @@ export default function UploadTab({ d }: { d: ProjectData }) {
                   <option value="__new">＋ Phòng mới…</option>
                 </select>
                 {pg.kind === 'plan' ? <FloorInput id={'pg' + pg.id} value={pg.floor} used={floorsUsed} onCommit={v => setPage(pg.id, { floor: v })} placeholder="Tầng của mặt bằng này…" />
-                  : pg.room_id && roomOf(pg.room_id) ? <FloorInput id={'pr' + pg.id} value={roomOf(pg.room_id)!.floor} used={floorsUsed} onCommit={v => setRoom(pg.room_id!, { floor: v })} placeholder="Tầng của phòng…" /> : null}
+                  : pg.room_id && roomOf(pg.room_id) ? <FloorInput id={'pr' + pg.id} value={pg.floor ?? roomOf(pg.room_id)!.floor} used={floorsUsed} onCommit={v => setPage(pg.id, { floor: v })} placeholder="Tầng của ảnh này…" /> : null}
                 {newFor === pg.id && <div className="row gap sm-gap"><input autoFocus placeholder="Gõ tên phòng mới" value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createRoomFor(pg.id)} /><button className="btn sm primary" onClick={() => createRoomFor(pg.id)}>Tạo</button><button className="btn ghost sm" onClick={() => setNewFor(null)}>✕</button></div>}
               </div>)
             })}

@@ -51,7 +51,7 @@ export default function RenderViewer({ d, pageId, onClose, onGo }: { d: ProjectD
   const cam = page.camera as Cam | null
   const guess = (): string => {
     if (cam?.plan_page_id && plans.some(p => p.id === cam.plan_page_id)) return cam.plan_page_id
-    return (plans.find(p => room?.floor && p.floor === room.floor) ?? plans.find(p => p.room_id === room?.id) ?? plans[0])?.id ?? ''
+    return (plans.find(p => (page.floor ?? room?.floor) && p.floor === (page.floor ?? room?.floor)) ?? plans.find(p => p.room_id === room?.id) ?? plans[0])?.id ?? ''
   }
   const [planId, setPlanId] = useState(guess)
   useEffect(() => { setPlanId(guess()) }, [pageId])   // eslint-disable-line react-hooks/exhaustive-deps
@@ -127,7 +127,7 @@ export default function RenderViewer({ d, pageId, onClose, onGo }: { d: ProjectD
         <div className="row gap sm-gap">
           <button className="btn ghost sm" disabled={idx <= 0} onClick={() => onGo(sibs[idx - 1].id)}>←</button>
           <b>{room ? `${room.code} ${room.name_vn}` : 'Chưa thuộc phòng'}</b>
-          <span className="small muted">Tr.{page.page_no}{sibs.length > 1 ? ` · ảnh ${idx + 1}/${sibs.length}` : ''}{room?.floor ? ` · ${floorLabel(room.floor)}` : ''}</span>
+          <span className="small muted">Tr.{page.page_no}{sibs.length > 1 ? ` · ảnh ${idx + 1}/${sibs.length}` : ''}{(page.floor ?? room?.floor) ? ` · ${floorLabel((page.floor ?? room?.floor)!)}` : ''}</span>
           <button className="btn ghost sm" disabled={idx < 0 || idx >= sibs.length - 1} onClick={() => onGo(sibs[idx + 1].id)}>→</button>
         </div>
         <span className="small muted">Cuộn chuột = phóng to · kéo = di chuyển · ←/→ chuyển ảnh · Esc đóng</span>
