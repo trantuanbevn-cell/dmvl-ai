@@ -7,6 +7,7 @@ import type { Entry } from '../lib/types'
 import OccCrop from './OccCrop'
 import MaterialSuggest from './MaterialSuggest'
 import { MatDetail, loadAll, type Mat } from '../pages/Library'
+import { MatThumb } from '../lib/smallImg'
 import { bboxFeat, bboxQueryCanvas, loadFeatMats, ensureFeats, rank, rankByPat, taggedCount, shortlist, type Cand, type FMat } from '../lib/suggest'
 import { aiPickByPattern, tagQuery, type AiPick } from '../lib/aiMatch'
 import { PAT_LABEL, type Pat } from '../lib/patMatch'
@@ -73,7 +74,7 @@ export default function SuggestDialog({ d, entry: entry0, occId, onClose }: { d:
   const card = (m: FMat, badge: string, note?: string) => {
     const on = picks.some(p => p.m.id === m.id)
     return <div key={m.id} className="card" style={{ cursor: 'pointer', padding: 6, outline: on ? '2px solid var(--brown)' : undefined }} onClick={() => setOpen(m)}>
-      <div style={{ aspectRatio: '2/1', borderRadius: 6, background: '#eee', overflow: 'hidden' }}><img src={m.tex_url ?? ''} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /></div>
+      <div style={{ aspectRatio: '2/1', borderRadius: 6, background: '#eee', overflow: 'hidden' }}>{m.tex_url && <MatThumb url={m.tex_url} lazy />}</div>
       <div style={{ fontWeight: 600, marginTop: 4, fontSize: 13 }}>{m.product_code} <span className="pill">{badge}</span></div>
       <div className="small">{m.name}</div>
       <div className="small muted">{m.brand}{m.line ? ' · ' + m.line : ''}</div>

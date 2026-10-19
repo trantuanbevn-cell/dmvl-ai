@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import LibraryImport from '../components/LibraryImport'
 import { backfillFeats } from '../lib/suggest'
+import { backfillSmall, MatThumb } from '../lib/smallImg'
 import { tagLibrary } from '../lib/aiMatch'
 
 export type Mat = { id: string; brand: string; product_code: string; name: string | null; line: string | null; kind: string; url: string | null; image_url: string | null; tex_url: string | null; attrs: Record<string, string | null>; variants?: Var[] }
@@ -68,6 +69,8 @@ export default function Library() {
   const [tp, setTp] = useState('')
   const runTag = async (limit: number) => { (window as any).__tstop = false; setTp('AI đang đọc vân…'); try { const n = await tagLibrary((a, b, m) => setTp(m ?? `AI đã đọc vân ${a}/${b}`), () => (window as any).__tstop === true, limit); setTp(`Xong (${n} mã) – bấm lại để chạy tiếp`) } catch (e: any) { setTp('Lỗi: ' + (e.message ?? e)) } }
   const runFeat = async () => { setFstop(false); setFp('Đang phân tích…'); try { const n = await backfillFeats((a, b) => setFp(`Đã phân tích ${a}/${b}`), () => (window as any).__fstop === true); setFp(`Xong (${n} mã)`) } catch (e: any) { setFp('Lỗi: ' + (e.message ?? e)) } }
+  const [sp, setSp] = useState('')
+  const runSmall = async () => { (window as any).__sstop = false; setSp('Đang tạo ảnh nhỏ…'); try { const r = await backfillSmall((a, b, m) => setSp(m ?? `Ảnh nhỏ ${a}/${b}`), () => (window as any).__sstop === true); setSp(`Xong: tạo ${r.made}${r.failed ? `, lỗi ${r.failed}` : ''} – bấm lại để chạy tiếp`) } catch (e: any) { setSp('Lỗi: ' + (e.message ?? e)) } }
   useEffect(() => { loadAll(reload > 0).then(setAll).catch(e => setErr(String(e.message ?? e))).finally(() => setLoading(false)) }, [reload])
   useEffect(() => { setShown(STEP) }, [sel, line, color, q])
   useEffect(() => { setLine('') }, [sel])
@@ -93,7 +96,7 @@ export default function Library() {
 
   return (
     <div className="page">
-      <div className="row between"><h1>Thư viện vật liệu</h1>{isAdmin && <span className="row gap"><span className="small muted">{tp || fp}</span><button className="btn" title="AI đọc vân 24 mẫu/lần gọi; chạy thử 200 mẫu trước" onClick={() => runTag(200)}>🤖 AI đọc vân (thử 200)</button><button className="btn" onClick={() => runTag(Infinity)}>🤖 AI đọc vân (cả thư viện)</button><button className="btn ghost" onClick={() => { (window as any).__tstop = true }}>⏹</button><button className="btn" onClick={() => { (window as any).__fstop = false; runFeat() }}>🔍 Phân tích lại ảnh thư viện</button><button className="btn" onClick={() => setImp(true)}>⬆ Nhập thư viện từ file</button></span>}</div>
+      <div className="row between"><h1>Thư viện vật liệu</h1>{isAdmin && <span className="row gap"><span className="small muted">{sp || tp || fp}</span><button className="btn" title="Tạo bản ảnh nhỏ (~15KB) cho mỗi mã để thư viện tải nhẹ, tiết kiệm băng thông Supabase. Chạy 1 lần, dừng/chạy lại được" onClick={runSmall}>🖼 Tạo ảnh nhỏ</button><button className="btn ghost" onClick={() => { (window as any).__sstop = true }}>⏹</button><button className="btn" title="AI đọc vân 24 mẫu/lần gọi; chạy thử 200 mẫu trước" onClick={() => runTag(200)}>🤖 AI đọc vân (thử 200)</button><button className="btn" onClick={() => runTag(Infinity)}>🤖 AI đọc vân (cả thư viện)</button><button className="btn ghost" onClick={() => { (window as any).__tstop = true }}>⏹</button><button className="btn" onClick={() => { (window as any).__fstop = false; runFeat() }}>🔍 Phân tích lại ảnh thư viện</button><button className="btn" onClick={() => setImp(true)}>⬆ Nhập thư viện từ file</button></span>}</div>
       <p className="muted small">Dữ liệu đọc từ website công khai của hãng (mã, map vật liệu, thông số, kích thước/độ dày, link gốc để đối chiếu).</p>
       {err && <div className="note warn">⚠ {err}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: 14, alignItems: 'start' }}>
@@ -138,7 +141,7 @@ export default function Library() {
             {list.slice(0, shown).map(m => (
               <div key={m.id} className="card" style={{ cursor: 'pointer', padding: 6 }} onClick={() => setOpen(m)}>
                 <div style={{ aspectRatio: '2/1', borderRadius: 6, background: !m.tex_url && m.attrs.color ? m.attrs.color : '#eee', overflow: 'hidden' }}>
-                  {m.tex_url && <img src={m.tex_url} alt="" decoding="async" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden' }} />}
+                  {m.tex_url && <MatThumb url={m.tex_url} lazy />}
                 </div>
                 <div style={{ fontWeight: 600, marginTop: 5, fontSize: 13 }}>{m.product_code}</div>
                 <div className="small">{m.name}</div>

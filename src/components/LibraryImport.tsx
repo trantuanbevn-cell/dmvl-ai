@@ -1,6 +1,7 @@
 // Nhập thư viện vật liệu từ file .zip (manifest.json + img/*.jpg) – chỉ admin. Dữ liệu đi thẳng từ máy bạn lên Supabase.
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { uploadSmall, IMMUTABLE_CACHE } from '../lib/smallImg'
 
 type Item = { kind?: string; brand?: string; code: string; name: string; line: string; pattern: string; file: string; key: string; extra?: Record<string, string>; name2?: string; attrs?: Record<string, string>; variants?: { sub: string; size: string; th: string; edge?: string | null; page?: number }[] }
 const FAM: Record<string, string> = { 'Formica Laminate': 'Laminate', 'Formica Incanto': 'Incanto', 'Formica DecoMetal': 'DecoMetal' }
@@ -44,8 +45,9 @@ export default function LibraryImport({ onClose, onDone }: { onClose: () => void
           const ent = zip.file(`img/${x.key}.jpg`); if (!ent) return
           const blob = await ent.async('blob')
           const bd = x.brand || brand, sl = bd.toLowerCase().replace(/[^a-z0-9]+/g, '-'), path = `${sl}/map_${x.key}.jpg`
-          const { error } = await supabase.storage.from('materials').upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+          const { error } = await supabase.storage.from('materials').upload(path, blob, { contentType: 'image/jpeg', upsert: false, cacheControl: IMMUTABLE_CACHE })
           if (error && !/already exists|Duplicate/i.test(error.message)) throw new Error('Tải ảnh lỗi: ' + error.message)
+          try { await uploadSmall(path, blob) } catch { /* ảnh nhỏ tạo sau bằng nút "Tạo ảnh nhỏ" */ }
           rows.push({ brand: bd, source_id: 'map/' + x.key, product_code: x.code, name: x.name || null, line: x.pattern, kind: x.kind || 'wood', url: null, image_url: null,
             tex_url: supabase.storage.from('materials').getPublicUrl(path).data.publicUrl,
             attrs: { family: FAM[x.line] ?? x.line, pattern: x.pattern, source_file: x.file, ...Object.fromEntries(Object.entries(x.extra ?? {}).filter(([, v]) => v)) }, variants: [], updated_at: new Date().toISOString() })

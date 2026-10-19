@@ -1,6 +1,7 @@
 // AI so VÂN: phần mềm lọc rộng ~200 mẫu thư viện, ghép thành bảng mẫu đánh số; AI chỉ nhìn và chọn mẫu cùng vân với vùng khoanh.
 import { supabase, FUNCTIONS_URL } from './supabase'
 import { loadImage } from './crop'
+import { smallUrl, markSmallMissing, isSmallMissing } from './smallImg'
 import type { FMat } from './suggest'
 
 export type AiPick = { m: FMat; confidence: number; reason: string }
@@ -9,6 +10,8 @@ import { supabase as _sb } from './supabase'
 import { validPat, type Pat } from './patMatch'
 
 async function tile(m: FMat): Promise<CanvasImageSource | null> {
+  const s = smallUrl(m.tex_url)
+  if (s && !isSmallMissing(s)) { try { return await loadImage(s) } catch { markSmallMissing(s) } }
   try { return await loadImage(m.tex_url!) } catch { return null }
 }
 /** Ghép các mẫu thành bảng (5×8 ô, mỗi ô 2:1, có số ở góc) */
