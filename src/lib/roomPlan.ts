@@ -15,7 +15,7 @@ export function usePlanRooms(d: ProjectData): Map<string, PlanRooms> {
 }
 
 const norm = (s?: string | null) => (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-export type RoomPlan = { url: string; W: number; H: number; polys: [number, number][][]; floor: string }
+export type RoomPlan = { url: string; W: number; H: number; polys: [number, number][][]; floor: string; whole?: boolean }
 
 export function roomPlanOf(d: ProjectData, room: Room & { floor?: string | null }, models?: Map<string, PlanRooms>): RoomPlan | null {
   if (!d.floors.length) return null
@@ -36,5 +36,9 @@ export function roomPlanOf(d: ProjectData, room: Room & { floor?: string | null 
     if (!hit.length) continue
     return { url, W: f.width ?? 1000, H: f.height ?? 700, polys: hit.flatMap(r => roomPolys(r)) as [number, number][][], floor: f.floor_label }
   }
+  // chưa khớp tên phòng → hiện cả mặt bằng tầng (chưa tô phòng) để vẫn thấy vị trí chung
+  const any = d.floors.filter(f => f.preview_path && d.urls[f.preview_path])
+  const f = any.find(f => fl && norm(f.floor_label) === fl) ?? (any.length === 1 || !fl ? any[0] : undefined)
+  if (f) return { url: d.urls[f.preview_path!], W: f.width ?? 1000, H: f.height ?? 700, polys: [], floor: f.floor_label, whole: true }
   return null
 }
