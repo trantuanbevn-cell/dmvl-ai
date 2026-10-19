@@ -61,6 +61,15 @@ export function buildFurn(f: Furn, color?: string): THREE.Group {
       if (f.kind === 'kitchen' || f.kind === 'counter') box(w, 0.04, d * 1.02, 0, h, 0, M('#e9e6df', 0.3))                       // mặt đá
       if (f.kind === 'shelf') for (let i = 1; i < 5; i++) box(w * 1.0, 0.012, d * 1.02, 0, (h * i) / 5, 0, dark)
       break }
+    case 'shower': { box(w, 0.06, d, 0, 0, 0, white); const gl = M('#bfe3ee', 0.1); (gl as THREE.MeshStandardMaterial).transparent = true; (gl as THREE.MeshStandardMaterial).opacity = 0.35
+      box(w, h - 0.06, 0.012, 0, 0.06, front + 0.006, gl); box(0.012, h - 0.06, d, -w / 2 + 0.006, 0.06, 0, gl); cyl(0.06, 0.06, 0.02, 0, h - 0.02, d / 2 - 0.15, steel, 16); break }
+    case 'mirror': { box(w, h, d, 0, 0, 0, M('#cfe3ea', 0.05, 0.8)); break }
+    case 'wcab': case 'wcabLow': case 'wcabTop': case 'wcounter': case 'dresser': case 'island': case 'sinkK': {
+      box(w, h, d, 0, 0, 0, mat); const n = Math.max(1, Math.round(w / 0.6))
+      for (let i = 1; i < n; i++) box(0.008, h * 0.96, 0.01, -w / 2 + (w * i) / n, h * 0.02, front - 0.004, dark)
+      if (f.kind === 'wcounter' || f.kind === 'island' || f.kind === 'sinkK' || f.kind === 'dresser') box(w, 0.04, d * 1.02, 0, h, 0, M('#e9e6df', 0.3))
+      if (f.kind === 'sinkK') box(w * 0.45, 0.012, d * 0.55, 0, h + 0.04, 0, steel)
+      break }
     case 'plant': { cyl(w * 0.35, d * 0.35, 0.35, 0, 0, 0, dark); cyl(w * 0.55, d * 0.55, h - 0.35, 0, 0.35, 0, M('#6b8f5e', 0.9), 10); break }
     case 'stage': case 'group': box(w, h, d, 0, 0, 0, mat); break
     default: {
@@ -75,6 +84,6 @@ export function buildFurn(f: Furn, color?: string): THREE.Group {
       } else box(w, h, d, 0, 0, 0, mat)
     }
   }
-  g.position.set(f.x, 0, f.y); g.rotation.y = -f.ang; if (f.flip) g.scale.z = -1
+  g.position.set(f.x, f.z ?? t.z ?? 0, f.y); g.rotation.y = -f.ang; if (f.flip) g.scale.z = -1
   return g
 }

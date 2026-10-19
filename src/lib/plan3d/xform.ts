@@ -1,7 +1,7 @@
 /** Biến đổi (dời / xoay / co giãn / sao chép) cho đối tượng đang chọn + dựng hình cung, tròn, chữ nhật */
 import { kindOf, polyArea, uid, type Model, type Pt, type Wall } from './model'
 
-export type SelRef = { t: 'wall' | 'door' | 'room' | 'dim' | 'furn'; id: string }
+export type SelRef = { t: 'wall' | 'door' | 'room' | 'dim' | 'furn' | 'axis'; id: string }
 export type Xf = { p: (q: Pt) => Pt; dAng: number; k: number }
 export type Shape = 'line' | 'arc' | 'circle' | 'rect'
 
@@ -16,6 +16,7 @@ export function selCenter(M: Model, s: SelRef): Pt | null {
   if (s.t === 'door') { const d = M.doors.find(x => x.id === s.id); return d ? [d.x, d.y] : null }
   if (s.t === 'furn') { const f = (M.furn ?? []).find(x => x.id === s.id); return f ? [f.x, f.y] : null }
   if (s.t === 'room') { const r = (M.rooms ?? []).find(x => x.id === s.id); return r ? bboxC(r.poly) : null }
+  if (s.t === 'axis') { const a = (M.axes ?? []).find(x => x.id === s.id); return a ? (a.dir === 'v' ? [a.pos, 0] : [0, a.pos]) : null }
   const d = (M.dims ?? []).find(x => x.id === s.id); return d ? [(d.a[0] + d.b[0]) / 2, (d.a[1] + d.b[1]) / 2] : null
 }
 
@@ -41,6 +42,11 @@ export function applyXf(M: Model, s: SelRef, xf: Xf, copy: boolean): { M: Model;
     const r = (M.rooms ?? []).find(x => x.id === s.id); if (!r) return { M, sel: s }
     const n = { ...r, id: nid('r'), name: copy ? r.name + ' (bản sao)' : r.name, poly: r.poly.map(xf.p), area: xf.k === 1 ? r.area : undefined }
     return { M: { ...M, rooms: copy ? [...(M.rooms ?? []), n] : (M.rooms ?? []).map(x => (x.id === s.id ? n : x)) }, sel: { t: 'room', id: n.id } }
+  }
+  if (s.t === 'axis') {
+    const a = (M.axes ?? []).find(x => x.id === s.id); if (!a) return { M, sel: s }
+    const n = { ...a, id: nid('x'), auto: false, name: copy ? a.name + "'" : a.name, pos: a.dir === 'v' ? xf.p([a.pos, 0])[0] : xf.p([0, a.pos])[1] }
+    return { M: { ...M, axes: copy ? [...(M.axes ?? []), n] : (M.axes ?? []).map(x => (x.id === s.id ? n : x)) }, sel: { t: 'axis', id: n.id } }
   }
   const d = (M.dims ?? []).find(x => x.id === s.id); if (!d) return { M, sel: s }
   const n = { ...d, id: nid('m'), a: xf.p(d.a), b: xf.p(d.b), off: d.off * xf.k }
@@ -76,3 +82,45 @@ export function shapePoly(shape: Shape, P: Pt[]): Pt[] | null {
   return null
 }
 export const polyAreaOf = polyArea
+
+// ───────── Chống xung đột ─────────
+import polygonClipping from 'polygon-clipping'
+import { footprint, type Axis, type Furn, type Room } from './model'
+
+const ringA = (r: Pt[]) => { let a = 0; for (let i = 0; i < r.length; i++) { const p = r[i], q = r[(i + 1) % r.length]; a += p[0] * q[1] - q[0] * p[1] } return Math.abs(a) / 2 }
+const bboxOf = (rs: Pt[][]) => { let a = 1e18, b = 1e18, c = -1e18, d = -1e18; for (const r of rs) for (const q of r) { if (q[0] < a) a = q[0]; if (q[0] > c) c = q[0]; if (q[1] < b) b = q[1]; if (q[1] > d) d = q[1] } return [a, b, c, d] }
+/** Diện tích phần chung của hai vùng (m²) */
+export function interArea(A: Pt[][], B: Pt[][]): number {
+  const a = bboxOf(A), b = bboxOf(B); if (a[2] < b[0] || b[2] < a[0] || a[3] < b[1] || b[3] < a[1]) return 0
+  try { const r = polygonClipping.intersection(A as never, B as never); let s = 0; for (const poly of r) { s += ringA(poly[0]); for (let i = 1; i < poly.length; i++) s -= ringA(poly[i]) } return s } catch { return 0 }
+}
+/** Sàn mới có đè lên sàn khác không (chỉ chạm biên thì được) → tên phòng bị đè hoặc null */
+export function roomOverlap(M: Model, poly: Pt[], excludeId?: string): Room | null {
+  for (const r of M.rooms ?? []) { if (r.id === excludeId || r.poly.length < 3) continue; if (interArea([poly], [r.poly]) > 0.02) return r }
+  return null
+}
+const fpCache = new WeakMap<Wall, { rings: Pt[][]; bb: number[] }>()
+const wallFp = (w: Wall) => { let c = fpCache.get(w); if (!c) { const rings = footprint(w); c = { rings, bb: bboxOf(rings) }; fpCache.set(w, c) } return c }
+export const furnRect = (f: Furn): Pt[] => { const c = Math.cos(f.ang), s = Math.sin(f.ang); return ([[-1, -1], [1, -1], [1, 1], [-1, 1]] as [number, number][]).map(([a, b]) => [f.x + c * a * f.w / 2 - s * b * f.d / 2, f.y + s * a * f.w / 2 + c * b * f.d / 2] as Pt) }
+const NO_COLLIDE = new Set(['lift', 'stair', 'spiral', 'stage', 'group', 'rug'])
+/** Nội thất có đâm vào tường/cột không (chạm mép thì được) */
+export function furnHitsWall(M: Model, f: Furn): Wall | null {
+  if (NO_COLLIDE.has(f.kind)) return null
+  const R = furnRect(f), bb = bboxOf([R])
+  for (const w of M.walls) { const c = wallFp(w); if (c.bb[2] < bb[0] || bb[2] < c.bb[0] || c.bb[3] < bb[1] || bb[3] < c.bb[1]) continue; if (interArea([R], c.rings) > 0.004) return w }
+  return null
+}
+
+// ───────── Hệ trục cột ─────────
+const letter = (i: number) => (i < 26 ? String.fromCharCode(65 + i) : String.fromCharCode(65 + Math.floor(i / 26) - 1) + String.fromCharCode(65 + (i % 26)))
+/** Nhận hệ trục từ tâm các cột: những cột thẳng hàng (sai lệch ≤ 120 mm) tạo thành một trục */
+export function detectAxes(M: Model): Axis[] {
+  const cs: Pt[] = []
+  for (const w of M.walls) { if (w.role !== 'col') continue; if (w.shape.type === 'poly') { const bb = bboxOf(w.shape.rings); cs.push([(bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2]) } else cs.push([(w.shape.a[0] + w.shape.b[0]) / 2, (w.shape.a[1] + w.shape.b[1]) / 2]) }
+  const cluster = (vals: number[]) => { const s = [...vals].sort((a, b) => a - b), out: { pos: number; n: number }[] = []; let cur: number[] = []
+    for (const v of s) { if (cur.length && v - cur[cur.length - 1] > 0.12) { out.push({ pos: cur.reduce((a, b) => a + b, 0) / cur.length, n: cur.length }); cur = [] } cur.push(v) }
+    if (cur.length) out.push({ pos: cur.reduce((a, b) => a + b, 0) / cur.length, n: cur.length }); return out.filter(c => c.n >= 2) }
+  const xs = cluster(cs.map(c => c[0])), ys = cluster(cs.map(c => c[1]))
+  if (xs.length > 40 || ys.length > 40) return []
+  return [...xs.map((c, i): Axis => ({ id: uid('x'), dir: 'v', pos: Math.round(c.pos * 1000) / 1000, name: String(i + 1), auto: true })), ...ys.map((c, i): Axis => ({ id: uid('x'), dir: 'h', pos: Math.round(c.pos * 1000) / 1000, name: letter(i), auto: true }))]
+}

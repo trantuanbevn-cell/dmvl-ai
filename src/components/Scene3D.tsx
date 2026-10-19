@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { wallParts, kindOf, type Model, type Pt } from '../lib/plan3d/model'
+import { wallParts, kindOf, inside, type Model, type Pt } from '../lib/plan3d/model'
 import { buildFurn } from '../lib/plan3d/furn3d'
 import { furnTypeOf } from '../lib/plan3d/furn'
 import { buildDoor, doorSpec, finishOf, materialFor, type DoorSpec, type Finish } from '../lib/plan3d/library'
@@ -53,11 +53,11 @@ export default function Scene3D({ model, view, custom = [], customDoors = [], ce
           const lt = new THREE.Mesh(new THREE.BoxGeometry(d.w, M.hWall - d.sill - d.h, (d.t ?? 0.2)), mat('brick')); lt.position.set(d.x, d.sill + d.h + (M.hWall - d.sill - d.h) / 2, d.y); lt.rotation.y = -d.ang; grp.add(lt)
         }
       }
-      if (sf) for (const f of M.furn ?? []) grp.add(buildFurn(f))
+      if (sf) for (const f of M.furn ?? []) { const g = buildFurn(f), rm = (M.rooms ?? []).find(r => r.z && inside([f.x, f.y], r.poly)); if (rm) g.position.y += rm.z ?? 0; grp.add(g) }
       for (const r of M.rooms ?? []) { // sàn & trần theo vật liệu của phòng
         const v = r.poly.map(p => new THREE.Vector2(p[0], -p[1])); if (v.length < 3) continue
         const fl = finishOf(r.floor, cf)
-        if (fl) { const g = new THREE.ShapeGeometry(new THREE.Shape(v)); g.rotateX(-Math.PI / 2); const o = new THREE.Mesh(g, materialFor(fl)); o.position.y = 0.01; grp.add(o) }
+        if (fl) { const g = new THREE.ShapeGeometry(new THREE.Shape(v)); g.rotateX(-Math.PI / 2); const o = new THREE.Mesh(g, materialFor(fl)); o.position.y = (r.z ?? 0) + 0.01; grp.add(o) }
         if (ceil) { const cfin = finishOf(r.ceil ?? 'c-paint', cf), g = new THREE.ShapeGeometry(new THREE.Shape(r.poly.map(p => new THREE.Vector2(p[0], p[1])))); g.rotateX(Math.PI / 2); const o = new THREE.Mesh(g, materialFor(cfin)); o.position.y = r.ceilH ?? M.hWall; grp.add(o) }
       }
       if (x1 > x0) { bb = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }

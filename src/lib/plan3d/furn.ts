@@ -1,7 +1,7 @@
 // Đồ nội thất rời trong mô hình 3D: mỗi món là một khối đặt trên mặt bằng, cao đúng theo chiều cao tiêu chuẩn của loại đồ (không bằng chiều cao tường).
 export type FurnShape = 'box' | 'round'
 export type FurnType = {
-  key: string; label: string; group: 'Ngồi' | 'Bàn' | 'Tủ – kệ – quầy' | 'Ngủ' | 'Vệ sinh' | 'Khác'
+  key: string; label: string; group: 'Ngồi' | 'Bàn' | 'Tủ – kệ – quầy' | 'Liền tường' | 'Ngủ' | 'Vệ sinh' | 'Khác'
   /** cao tiêu chuẩn (m): phần thân/mặt bàn/mặt ngồi */
   h: number
   /** nếu có: tổng chiều cao đến lưng tựa / đầu giường / thùng nước (m) – dựng thêm một dải lưng ở một cạnh dài */
@@ -9,7 +9,10 @@ export type FurnType = {
   /** dày dải lưng tựa (m) */
   backT?: number
   shape: FurnShape; w: number; d: number; color: string
+  /** cao độ đáy mặc định (m) – tủ trên, gương… */
+  z?: number
 }
+export const FURN_GROUPS: FurnType['group'][] = ['Ngồi', 'Bàn', 'Tủ – kệ – quầy', 'Liền tường', 'Ngủ', 'Vệ sinh', 'Khác']
 const T = (key: string, label: string, group: FurnType['group'], w: number, d: number, h: number, color: string, extra: Partial<FurnType> = {}): FurnType => ({ key, label, group, w, d, h, color, shape: 'box', ...extra })
 export const FURN_TYPES: FurnType[] = [
   T('chair', 'Ghế ăn / ghế họp (mặt ngồi 450, lưng 900)', 'Ngồi', 0.5, 0.5, 0.45, '#9b7b57', { back: 0.9, backT: 0.06 }),
@@ -34,6 +37,21 @@ export const FURN_TYPES: FurnType[] = [
   T('bath', 'Bồn tắm (550)', 'Vệ sinh', 1.7, 0.75, 0.55, '#f1f1ee'),
   T('vanity', 'Bàn lavabo / bàn đá chậu rửa (850)', 'Vệ sinh', 1.2, 0.55, 0.85, '#d9d6cf'),
   T('urinal', 'Tiểu nam treo tường (cao 800, thân 1000)', 'Vệ sinh', 0.35, 0.35, 0.8, '#f1f1ee', { back: 1.0, backT: 0.1 }),
+  // ── tủ liền tường / ốp tường (mô phỏng cơ bản, sửa kích thước bằng mũi tên hoặc bảng số) ──
+  T('wcab', 'Tủ liền tường cao trần (2700)', 'Liền tường', 1.2, 0.6, 2.7, '#8a7358'),
+  T('wcabLow', 'Tủ liền tường thấp / tủ giày (900)', 'Liền tường', 1.2, 0.4, 0.9, '#8f7253'),
+  T('wcabTop', 'Tủ treo tường / tủ bếp trên (700, đáy 1400)', 'Liền tường', 1.2, 0.35, 0.7, '#a6a39b', { z: 1.4 }),
+  T('tvWall', 'Hộc tivi ốp tường (1800, dày 100)', 'Liền tường', 2.4, 0.1, 1.8, '#6e5b49'),
+  T('wpanel', 'Vách ốp / hộc trang trí (2700, dày 60)', 'Liền tường', 2.0, 0.06, 2.7, '#b59a76'),
+  T('mirror', 'Gương treo tường (900, đáy 950)', 'Liền tường', 0.8, 0.03, 0.9, '#bcd3da', { z: 0.95 }),
+  T('bench', 'Ghế băng / bệ ngồi (450)', 'Liền tường', 1.6, 0.45, 0.45, '#9b7b57'),
+  T('wcounter', 'Quầy / bàn đá liền tường (850)', 'Liền tường', 2.0, 0.6, 0.85, '#d9d6cf'),
+  T('shower', 'Phòng tắm đứng (khay + vách kính 2000)', 'Vệ sinh', 0.9, 0.9, 2.0, '#cfd8dc'),
+  T('bidet', 'Vòi xịt / bidet (cao 400)', 'Vệ sinh', 0.4, 0.55, 0.4, '#f1f1ee'),
+  T('sinkK', 'Chậu rửa bếp liền tủ (900)', 'Vệ sinh', 0.9, 0.6, 0.9, '#c9c9c6'),
+  T('dresser', 'Tủ commode / tủ đầu giường (800)', 'Tủ – kệ – quầy', 0.9, 0.45, 0.8, '#8f7253'),
+  T('island', 'Đảo bếp (900)', 'Tủ – kệ – quầy', 2.0, 0.9, 0.9, '#7d6a58'),
+  T('rug', 'Thảm trải sàn (20)', 'Khác', 2.4, 1.6, 0.02, '#c9b99a'),
   T('lift', 'Thang máy (thân hộp + cửa thép)', 'Khác', 2.0, 2.4, 3.3, '#b9bdc2'),
   T('stair', 'Thang bộ (bậc cao 170, rộng theo bản vẽ)', 'Khác', 4.0, 1.2, 3.3, '#c8c2b6'),
   T('spiral', 'Thang xoắn tròn (bậc cao 170, lõi trụ)', 'Khác', 1.6, 1.6, 3.3, '#8d9196', { shape: 'round' }),
