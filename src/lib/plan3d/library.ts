@@ -122,6 +122,7 @@ export const WALL_TYPES: WallType[] = [
   { key: 'aac100', label: 'Tường gạch nhẹ AAC 100', color: '#ddd9d0', t: 0.13, layers: [L('Vữa mỏng', 0.015, 'plaster'), L('Gạch AAC 100', 0.1, 'insul'), L('Vữa mỏng', 0.015, 'plaster')] },
   { key: 'concrete', label: 'Bê tông cốt thép 200', color: '#9a9a9a', t: 0.2, layers: [L('BTCT', 0.2, 'concrete')] },
   { key: 'concrete300', label: 'Bê tông cốt thép 300', color: '#939393', t: 0.3, layers: [L('BTCT', 0.3, 'concrete')] },
+  { key: 'partition', label: 'Vách ngăn vệ sinh (compact HPL 18)', color: '#c9ced4', t: 0.04, layers: [L('Compact HPL 18', 0.04, 'gypsum')], finish: undefined },
   { key: 'gypsum', label: 'Vách thạch cao 1 lớp (khung 75)', color: '#efece4', t: 0.1, layers: [L('Thạch cao 12.5', 0.0125, 'gypsum'), L('Khung xương + bông', 0.075, 'insul'), L('Thạch cao 12.5', 0.0125, 'gypsum')] },
   { key: 'gypsum2', label: 'Vách thạch cao 2 lớp chống ẩm (khung 75)', color: '#e6e8e3', t: 0.125, layers: [L('Thạch cao 2x12.5', 0.025, 'gypsum'), L('Khung xương + bông', 0.075, 'insul'), L('Thạch cao 2x12.5', 0.025, 'gypsum')] },
   { key: 'gypsumfire', label: 'Vách chống cháy EI90 (2 lớp, khung 100)', color: '#dcdedb', t: 0.15, layers: [L('Thạch cao chống cháy 2x15', 0.03, 'gypsum'), L('Khung xương + bông', 0.09, 'insul'), L('Thạch cao chống cháy 2x15', 0.03, 'gypsum')] },

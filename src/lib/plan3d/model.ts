@@ -2,7 +2,7 @@
 import polygonClipping from 'polygon-clipping'
 import type { VecPage } from '../vector'
 import { classifyFurn, furnTypeOf } from './furn'
-import { detectVertical } from './vertical'
+import { detectVertical, detectThinPartitions } from './vertical'
 import { PT_MM } from '../dims'
 import { FURN_LAYER } from '../dxf'
 
@@ -60,7 +60,13 @@ export function modelFromVec(v: VecPage, den: number): Model {
       const role = r.rl === 'col' ? 'col' : 'wall'
       if (role === 'wall') { // hatch nội thất / thiết bị (ghế, sofa, bàn, bồn cầu…) KHÔNG phải tường: chuyển thành đồ rời, không đùn cao bằng tường
         const o = obb(l), thin = Math.min(o.w, o.d) < 0.32
+        if (l.length <= 4 && Math.abs(area(l)) / Math.max(1e-6, o.w * o.d) < 0.7) return   // tam giác chéo: ký hiệu, bỏ
         if (FURN_LAYER.test(ly) || (!wallish && !thin && Math.max(o.w, o.d) <= 3.5)) { hatchFurn.push({ ...o, layer: ly }); return }
+      }
+      if (role === 'wall') { // mảng tô đặc chéo / tam giác (ký hiệu thang, hatch trang trí) không phải tường: tường luôn mảnh (kể cả chữ L/U, vòng kín có lỗ)
+        const o = obb(l), perim = (q: Pt[]) => q.reduce((n, a, k) => n + Math.hypot(q[(k + 1) % q.length][0] - a[0], q[(k + 1) % q.length][1] - a[1]), 0)
+        const A = Math.abs(area(l)), Ah = holes.reduce((n, h) => n + Math.abs(area(h)), 0), Ae = A - Ah, P = perim(l) + holes.reduce((n, h) => n + perim(h), 0)
+        if ((2 * Ae) / Math.max(P, 1e-6) > 0.5 && A / Math.max(1e-6, o.w * o.d) < 0.7 && Ae > 1) return
       }
       walls.push({ id: uid('w'), role, kind: role === 'col' ? 'concrete' : 'brick', shape: { type: 'poly', rings: [l, ...holes] } })
     })
@@ -68,6 +74,12 @@ export function modelFromVec(v: VecPage, den: number): Model {
   const glass = detectGlass(v, m); walls.push(...glass)
   const doors = detectDoors(v.arcs ?? [], m, walls)
   for (let i = 0; i < doors.length; i++) doors[i] = centerDoor(walls, doors[i])
+  const vert = detectVertical(v, m)
+  // vách ngăn mỏng (WC…) vẽ bằng hai nét song song, không có hatch → thêm thành tường mỏng, cao 1.9 m
+  { const rings = walls.filter(k => k.role !== 'col').map(k => ({ rs: footprint(k), bb: bbox(footprint(k)) }))
+    const covered = (x: number, y: number) => rings.some(k => x >= k.bb.x0 - 0.02 && x <= k.bb.x1 + 0.02 && y >= k.bb.y0 - 0.02 && y <= k.bb.y1 + 0.02 && k.rs.reduce((n, r) => n + (inside([x, y], r) ? 1 : 0), 0) % 2 === 1)
+    const inVert = (x: number, y: number) => vert.some(t => Math.abs(x - t.x) < t.w / 2 + 0.4 && Math.abs(y - t.y) < t.d / 2 + 0.4)
+    for (const p of detectThinPartitions(v, m, (x, y) => covered(x, y) || inVert(x, y))) walls.push({ id: uid('w'), role: 'wall', kind: 'partition', h: 1.9, auto: true, shape: { type: 'seg', a: p.a, b: p.b, t: Math.max(0.03, p.t) } }) }
   // cửa nằm trong vách kính → dùng cửa kính (khung nhôm / không khung) thay cho cửa gỗ
   for (const dr of doors) { const gl = glass.some(g => { const cl = centerline(g); for (let i = 0; i + 1 < cl.length; i++) { const a = cl[i], b = cl[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((dr.x - a[0]) * dx + (dr.y - a[1]) * dy) / L2)); if (Math.hypot(dr.x - (a[0] + t * dx), dr.y - (a[1] + t * dy)) < 0.25) return true } return false })
     if (gl) { dr.lib = dr.kind === 'double' ? (dr.w < 1.5 ? 'dg-glass12' : 'dg-glass18') : 'dg-glass09'; dr.h = 2.2 } }
@@ -77,7 +89,8 @@ export function modelFromVec(v: VecPage, den: number): Model {
     return { id: uid('f'), kind, name, x: f.cx * m, y: f.cy * m, w, d, ang: f.rot, h: furnTypeOf(kind).h, auto: true }
   })
   // thang máy / thang bộ / thang xoắn nhận từ nét vẽ (thay cho khối hatch nội thất nhận nhầm tại chỗ đó)
-  for (const t of detectVertical(v, m)) { for (let i = furn.length - 1; i >= 0; i--) { const f = furn[i]; if (Math.abs(f.x - t.x) < t.w / 2 && Math.abs(f.y - t.y) < t.d / 2 && Math.max(f.w, f.d) < Math.max(t.w, t.d) * 1.1) furn.splice(i, 1) } if (!furn.some(f => (f.kind === t.kind) && Math.hypot(f.x - t.x, f.y - t.y) < 0.8)) furn.push(t) }
+  for (let i = furn.length - 1; i >= 0; i--) { const f = furn[i]; if (vert.some(t => Math.abs(f.x - t.x) < t.w / 2 + 0.3 && Math.abs(f.y - t.y) < t.d / 2 + 0.3 && ['group', 'generic', 'table', 'cabinet', 'side', 'stage'].includes(f.kind))) furn.splice(i, 1) }
+  for (const t of vert) { for (let i = furn.length - 1; i >= 0; i--) { const f = furn[i]; if (Math.abs(f.x - t.x) < t.w / 2 && Math.abs(f.y - t.y) < t.d / 2 && Math.max(f.w, f.d) < Math.max(t.w, t.d) * 1.1) furn.splice(i, 1) } if (!furn.some(f => (f.kind === t.kind) && Math.hypot(f.x - t.x, f.y - t.y) < 0.8)) furn.push(t) }
   // đồ rời từ hatch: bỏ nếu đã có đồ rời cùng chỗ (từ khối/nét rời)
   const inRect = (f: Furn, x: number, y: number) => { const c = Math.cos(f.ang), s = Math.sin(f.ang), dx = x - f.x, dy = y - f.y; return Math.abs(dx * c + dy * s) <= f.w / 2 + 0.05 && Math.abs(-dx * s + dy * c) <= f.d / 2 + 0.05 }
   for (const o of hatchFurn) { if (furn.some(f => inRect(f, o.cx, o.cy))) continue
