@@ -36,7 +36,9 @@ export function FloorCard({ d, fp, run, busy, compact }: { d: ProjectData; fp: F
   return (
     <div className="floor-card">
       <div className="row between"><h4 style={{ margin: 0 }}>{fp.floor_label} <span className="muted small">· tỉ lệ 1:{fp.scale_den}{g?.scale_src === 'dim' ? ' (đọc từ dim)' : ''} · {g ? `${g.rooms.length} phòng, ${Math.round(total)} m²` : 'chưa đọc'}</span></h4>
-        <button className="btn ghost sm danger" disabled={busy} onClick={() => confirm(`Xoá mặt bằng ${fp.floor_label}?`) && run(async () => { await deleteFloorPlan(fp) })}>Xoá</button></div>
+        <span className="row gap">{canEdit && <button className="btn ghost sm" disabled={busy} onClick={() => { const n = window.prompt('Đổi tên tầng', fp.floor_label)?.trim(); if (n && n !== fp.floor_label) run(async () => { const { error } = await supabase.from('floor_plans').update({ floor_label: n }).eq('id', fp.id); if (error) throw new Error(error.message) }) }}>✎ Đổi tên</button>}
+        {canEdit && !g && <button className="btn sm primary" disabled={busy} title="Đọc lại file đã tải lên" onClick={() => run(async () => { await computeFloor(fp, {}, log) })}>↻ Đọc lại</button>}
+        <button className="btn ghost sm danger" disabled={busy} onClick={() => confirm(`Xoá mặt bằng ${fp.floor_label}?`) && run(async () => { await deleteFloorPlan(fp) })}>Xoá tầng</button></span></div>
       {g?.leaked && <div className="note">⚠ Tìm được rất ít phòng kín – tường có thể chưa liền nét. Thử chọn thêm nhóm nét tường bên dưới hoặc tăng bề rộng cửa.</div>}
       {compact && g && <div className="small muted">Đã đọc <b>{g.raw_rooms?.length ?? g.rooms.length}</b> vùng kín · nhận diện <b>{g.doors ?? 0}</b> cửa đi. Sang bước ② để tô màu – gộp – tách – đặt tên phòng.</div>}
       {canEdit && g && <div className="small" style={{ margin: '8px 0' }}>
@@ -105,13 +107,13 @@ export default function FloorPlans({ d, concept }: { d: ProjectData; concept?: b
   }
   return (
     <div className="card">
-      <h3>{concept ? 'Mặt bằng gốc theo tầng (PDF vector từ AutoCAD)' : 'Mặt bằng gốc theo tầng (PDF vector từ AutoCAD)'} {!concept && <span className="muted small">– tuỳ chọn, giúp đọc chính xác hơn</span>}</h3>
+      <h3>Mặt bằng gốc theo tầng (DXF hoặc PDF vector từ AutoCAD) {!concept && <span className="muted small">– tuỳ chọn, giúp đọc chính xác hơn</span>}</h3>
       <details className="small muted"><summary>Cách dùng</summary><p>Trong AutoCAD, xuất mặt bằng từng tầng ra PDF <b>dạng vector</b> (không chụp ảnh), tốt nhất bật “layers”. Điền tên tầng (vd “Tầng 5”) và tỉ lệ bản vẽ, rồi tải lên. Phần mềm đọc nét tường theo độ dày nét/layer, tách các phòng kín và đo <b>diện tích thật</b>; sau đó đối chiếu với mặt bằng trong file concept để biết mỗi ảnh phối cảnh nằm ở phòng nào của bản vẽ gốc. Không dùng AI.</p></details>
       <div className="row gap">
         <input placeholder="Tên tầng, vd: Tầng 5" value={label} onChange={e => setLabel(e.target.value)} />
         <label className="small">Tỉ lệ 1:<input style={{ width: 70 }} type="number" value={den} onChange={e => setDen(+e.target.value)} /></label>
         <label className="small">Trang<input style={{ width: 55 }} type="number" min={1} value={pageNo} onChange={e => setPageNo(+e.target.value)} /></label>
-        <label className="btn primary">+ Tải PDF / DXF mặt bằng tầng<input type="file" accept="application/pdf,.dxf" hidden disabled={busy} onChange={e => { onFile(e.target.files?.[0]); e.target.value = '' }} /></label>
+        <label className="btn primary" title="Mỗi lần tải là thêm một tầng mới. Muốn bỏ tầng thì bấm Xoá tầng ở thẻ của tầng đó.">+ Thêm tầng (tải DXF / PDF)<input type="file" accept="application/pdf,.dxf" hidden disabled={busy} onChange={e => { onFile(e.target.files?.[0]); e.target.value = '' }} /></label>
         {busy && <span className="spinner" />}
       </div>
       <LogBox lines={lines} />

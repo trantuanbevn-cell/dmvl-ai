@@ -1,6 +1,8 @@
 // Soạn mặt bằng & dựng 3D: nhập DXF → sửa tường · cột · cửa trên mặt bằng → xem 3D. (Thử nghiệm, chỉ admin.)
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { readDxfPage } from '../lib/dxf'
+import { supabase, BUCKET } from '../lib/supabase'
+import type { FloorPlan } from '../lib/types'
 import type { VecPage } from '../lib/vector'
 import { LinesCanvas } from './PlanView'
 import Scene3D from './Scene3D'
@@ -66,7 +68,8 @@ function DimGlyph({ d, sel, fs, mm = false, onDown }: { d: Dim; sel: boolean; fs
     <text x={m[0]} y={m[1]} fontSize={fs} fill={c} textAnchor="middle" transform={`rotate(${flip ? ang + 180 : ang} ${m[0]} ${m[1]}) translate(0 ${-fs * 0.3})`} stroke="#fff" strokeWidth={fs * 0.2} paintOrder="stroke" style={{ userSelect: 'none' }}>{d.txt ?? fmtLen(L, mm)}</text></g>
 }
 
-export default function Plan3D() {
+/** proj: khi nhúng trong một dự án → chọn tầng, nhập DXF của tầng đó, và tự lưu mô hình lên dự án (file riêng trong kho, không đụng dữ liệu danh mục) */
+export default function Plan3D({ proj }: { proj?: { id: string; floors: FloorPlan[] } } = {}) {
   const [M, setM] = useState<Model | null>(() => { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) as Model : null } catch { return null } })
   const [base, setBase] = useState<VecPage | null>(null)
   const [busy, setBusy] = useState(''), [err, setErr] = useState('')
@@ -94,14 +97,32 @@ export default function Plan3D() {
   // giữ đúng tỉ lệ khung khi cửa sổ đổi cỡ
   useEffect(() => { if (size.w && size.h) setVb(v => ({ ...v, h: v.w * size.h / size.w })) }, [size])
 
-  const load = async (f: File) => {
+  const [floorId, setFloorId] = useState<string>(''), cloud = useRef(''), [saved, setSaved] = useState('')
+  const jsonPath = (fid: string) => `${proj?.id}/plan3d/${fid}.json`
+  const floorsDxf = (proj?.floors ?? []).filter(f => /\.dxf$/i.test(f.pdf_path))
+  /** Mở tầng: ưu tiên bản 3D đã lưu của tầng, không có thì dựng từ file DXF của tầng */
+  const openFloor = async (fid: string, forceDxf = false) => {
+    const fp = proj?.floors.find(f => f.id === fid); if (!proj || !fp) return
+    setErr(''); setBusy('Đang mở tầng…'); setFloorId(fid); cloud.current = ''
+    try {
+      if (!forceDxf) { const { data } = await supabase.storage.from(BUCKET).download(jsonPath(fid)); if (data) { const m = JSON.parse(await data.text()) as Model; if (m.v === 1) { hist.current = []; setNh(0); setBase(null); fitted.current = false; setM(m); setSel(null); cloud.current = fid; setBusy(''); setSaved('Đã mở bản đã lưu của ' + fp.floor_label); return } } }
+      if (!/\.dxf$/i.test(fp.pdf_path)) throw new Error('Tầng này tải lên là PDF – cần file DXF để dựng 3D. Tải DXF ở phần Mặt bằng gốc.')
+      const { data, error } = await supabase.storage.from(BUCKET).download(fp.pdf_path); if (error || !data) throw new Error(error?.message ?? 'Không tải được file DXF')
+      await loadBuf(await data.arrayBuffer()); cloud.current = fid
+    } catch (e) { setErr((e as Error).message) } finally { setBusy('') }
+  }
+  // tự lưu mô hình của tầng đang mở lên dự án (file riêng)
+  useEffect(() => { if (!proj || !M || !cloud.current || cloud.current !== floorId) return
+    const fid = floorId, t = setTimeout(async () => { const { error } = await supabase.storage.from(BUCKET).upload(jsonPath(fid), new Blob([JSON.stringify(M)], { type: 'application/json' }), { upsert: true, contentType: 'application/json' }); setSaved(error ? 'Lưu lên dự án lỗi: ' + error.message : 'Đã lưu vào dự án ' + new Date().toLocaleTimeString()) }, 2500); return () => clearTimeout(t) }, [M, floorId]) // eslint-disable-line
+  const load = async (f: File) => { cloud.current = ''; await loadBuf(await f.arrayBuffer()) }
+  const loadBuf = async (ab: ArrayBuffer) => {
     setErr(''); setBusy('Đang đọc DXF…')
     try {
-      const v = await readDxfPage(await f.arrayBuffer(), s => setBusy(s), { draw: true })
+      const v = await readDxfPage(ab, s => setBusy(s), { draw: true })
       const m = modelFromVec(v, v.dxf.den); hist.current = []; setNh(0); setBase(v); fitted.current = false; setM(m); setSel(null)
     } catch (e) { setErr((e as Error).message) } finally { setBusy('') }
   }
-  const loadJson = async (f: File) => { try { const m = JSON.parse(await f.text()) as Model; if (m.v !== 1) throw new Error('File không đúng định dạng'); hist.current = []; setNh(0); fitted.current = false; setM(m) } catch (e) { setErr((e as Error).message) } }
+  const loadJson = async (f: File) => { cloud.current = ''; try { const m = JSON.parse(await f.text()) as Model; if (m.v !== 1) throw new Error('File không đúng định dạng'); hist.current = []; setNh(0); fitted.current = false; setM(m) } catch (e) { setErr((e as Error).message) } }
   const saveJson = () => { if (!M) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(M)], { type: 'application/json' })); a.download = 'mat-bang-3d.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000) }
 
   const toModel = (e: { clientX: number; clientY: number }): Pt => { const r = box.current!.getBoundingClientRect(); return [vb.x + (e.clientX - r.left) / r.width * vb.w, vb.y + (e.clientY - r.top) / r.height * vb.h] }
@@ -259,10 +280,14 @@ export default function Plan3D() {
   return <div className="card" style={{ display: 'grid', gap: 10 }}>
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
       <b>Soạn mặt bằng &amp; dựng 3D</b><span className="muted small">– thử nghiệm: nhập DXF, sửa tường · cột · cửa, xem 3D</span>
+      {proj && <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><b className="small">Tầng:</b>
+        <select value={floorId} onChange={e => e.target.value && openFloor(e.target.value)} style={{ maxWidth: 170 }}><option value="">(chọn tầng…)</option>{proj.floors.map(f => <option key={f.id} value={f.id}>{f.floor_label}{/\.dxf$/i.test(f.pdf_path) ? '' : ' (PDF)'}</option>)}</select>
+        {floorId && <button className="btn sm" title="Bỏ bản đã lưu, dựng lại từ DXF của tầng" onClick={() => confirm('Dựng lại từ DXF sẽ thay bản 3D đã lưu của tầng này. Tiếp tục?') && openFloor(floorId, true)}>↻ Dựng lại từ DXF</button>}
+        {!floorsDxf.length && <span className="muted small">(chưa có tầng nào tải DXF)</span>}</span>}
       <label className="btn sm">Nhập DXF<input type="file" accept=".dxf" hidden onChange={e => { const f = e.target.files?.[0]; if (f) load(f); e.target.value = '' }} /></label>
       <label className="btn sm">Mở file đã lưu<input type="file" accept=".json" hidden onChange={e => { const f = e.target.files?.[0]; if (f) loadJson(f); e.target.value = '' }} /></label>
       {M && <button className="btn sm" onClick={saveJson}>Lưu file (.json)</button>}
-      {busy && <span className="muted small">{busy}</span>}{err && <span style={{ color: '#b00020' }} className="small">{err}</span>}
+      {busy && <span className="muted small">{busy}</span>}{proj && saved && !busy && <span className="muted small">☁ {saved}</span>}{err && <span style={{ color: '#b00020' }} className="small">{err}</span>}
     </div>
     {!M ? <div className="muted">Nhập file DXF mặt bằng. Phần mềm dựng sẵn hệ tường và cột; bạn sửa tiếp trên mặt bằng rồi xem 3D. Bản sửa tự lưu trong trình duyệt này.</div> : <>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>

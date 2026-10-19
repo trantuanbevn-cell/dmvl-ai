@@ -4,6 +4,7 @@
 export const FEATURES: { key: string; label: string; editorDefault?: boolean }[] = [
   { key: 'concept', label: 'Dàn trang concept' },
   { key: 'plan3d', label: 'Soạn mặt bằng & dựng 3D (sửa tường, cột, cửa trên mặt bằng DXF)' },
+  { key: 'planlab', label: 'Mặt bằng 2D–3D trong Lập danh mục (tải DXF theo tầng, tô màu phòng, dựng 3D)' },
   { key: 'camplan', label: 'Phóng to phối cảnh + mặt bằng, đặt camera trên mặt bằng (nối ảnh với vị trí)', editorDefault: true },
   { key: 'library', label: 'Thư viện vật liệu' },
   { key: 'matrix', label: 'Tổng hợp phòng (ma trận vật liệu theo phòng, thêm phòng, sao chép vật liệu)' },

@@ -77,6 +77,6 @@ export function ConceptPage() {
         <div style={{ maxWidth: 380, textAlign: 'right' }}><button className="btn sm" disabled={!!bk} onClick={backup}>💾 Lưu bản sao về máy</button>{bk && <div className="small muted">{bk}</div>}
           <div className="muted small">Mỗi lần xong một phương án nên lưu bản sao; muốn quay lại thì “Nạp bản sao từ máy” ở danh sách concept. Sắp có: “Đưa sang lập danh mục”.</div></div></div>
       <div className="mp-tabs big">{([['plan', 'Mặt bằng tổng'], ['deck', 'Dàn trang concept'], ['read', 'Đọc mặt bằng (thử nghiệm)'], ...(can('plan3d') ? [['e3d', 'Soạn & dựng 3D (thử nghiệm)']] : [])] as unknown as readonly (readonly ['plan' | 'deck' | 'read' | 'e3d', string])[]).map(([k, l]) => <button key={k} className={'mp-tab' + (tab === k ? ' on' : '')} onClick={() => { setTab(k); try { sessionStorage.setItem('cp-tab', k) } catch { /* bỏ qua */ } }}>{l}</button>)}</div>
-      {tab === 'plan' ? <MasterPlan d={d} size={deck.size} /> : tab === 'read' ? <PlanReader /> : tab === 'e3d' && can('plan3d') ? <Plan3D /> : <DeckEditor d={d} deck={deck} update={update} />}
+      {tab === 'plan' ? <MasterPlan d={d} size={deck.size} /> : tab === 'read' ? <PlanReader /> : tab === 'e3d' && can('plan3d') ? <Plan3D proj={{ id: d.project.id, floors: d.floors }} /> : <DeckEditor d={d} deck={deck} update={update} />}
     </div>)
 }

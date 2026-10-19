@@ -19,6 +19,7 @@ import MaterialView from './tabs/MaterialView'
 import CheckView from './tabs/CheckView'
 import ExportTab from './tabs/ExportTab'
 import MatrixTab from './tabs/MatrixTab'
+import PlanLab, { planLabAllowed } from '../components/PlanLab'
 
 export default function ProjectPage() {
   const { id = '', tab = 'overview' } = useParams()
@@ -42,6 +43,7 @@ export default function ProjectPage() {
     ['upload', '📄', 'Hồ sơ & phòng', `${data.rooms.length} phòng`],
     ['analyze', '✨', 'Phân tích', `${analyzed}/${data.rooms.length}`],
     ...(can('matrix') ? [['matrix', '🗂', 'Tổng hợp phòng', `${data.rooms.length} phòng`] as [string, string, string, string?]] : []),
+    ...(can('planlab') && planLabAllowed(data.project.name) ? [['planlab', '📐', 'Mặt bằng 2D–3D', `${data.floors.length} tầng`] as [string, string, string, string?]] : []),
     ['rooms', '🛋', 'Theo phòng', ps.pending + ps.review ? `${ps.pending + ps.review} chờ` : undefined],
     ['materials', '🧱', 'Theo vật liệu', `${ps.total} mã`],
     ['check', '✅', 'QC cuối'],
@@ -67,6 +69,7 @@ export default function ProjectPage() {
       {tab === 'upload' && <UploadTab d={data} />}
       {tab === 'analyze' && <AnalyzeTab d={data} />}
       {tab === 'matrix' && can('matrix') && <MatrixTab d={data} />}
+      {tab === 'planlab' && can('planlab') && planLabAllowed(data.project.name) && <PlanLab d={data} />}
       {tab === 'rooms' && <RoomView d={data} />}
       {tab === 'materials' && <MaterialView d={data} />}
       {tab === 'check' && <CheckView d={data} />}

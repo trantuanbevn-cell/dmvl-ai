@@ -186,6 +186,6 @@ export async function restoreFloorVersion(fp: FloorPlan): Promise<void> {
 }
 
 export async function deleteFloorPlan(fp: FloorPlan) {
-  await supabase.storage.from(BUCKET).remove([fp.pdf_path, ...(fp.preview_path ? [fp.preview_path] : [])])
+  await supabase.storage.from(BUCKET).remove([fp.pdf_path, `${fp.project_id}/plan3d/${fp.id}.json`, ...(fp.preview_path ? [fp.preview_path] : [])])
   await must(supabase.from('floor_plans').delete().eq('id', fp.id))
 }
