@@ -340,12 +340,12 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                     <td className="c-mat"><MatImage d={d} e={e} />
                       <LinkCell d={d} e={e} /></td>
                     <td>{pair('note', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} area ph="Ghi chú" /></div>)}<OpRuleBadge d={d} entryId={e.id} /></td>
-                    <td className="c-act"><StatusDot s={e.status} />
-                      {canEdit && <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}>✓</button>}
-                      {canEdit && can('suggest') && <button className="btn sm no-export" title="Vật Liệu Đề Xuất – tìm mẫu thư viện khớp với phối cảnh (chỉ hiện trong phần mềm, không xuất file)" onClick={ev => { ev.stopPropagation(); setSugE(e) }}>✨</button>}
-                      <button className="btn ghost sm" title="Chi tiết / chọn mã hãng từ thư viện" onClick={ev => { ev.stopPropagation(); onDetail(e.id) }}>⋯</button>
-                      {canEdit && <button className="btn ghost sm" title="Nhân đôi vật liệu này (vd màu thứ 2) – chép nội dung, chỉ sửa vài chỗ" onClick={ev => { ev.stopPropagation(); onAdd({ copy: e.id, section_key: e.section_key, group: e.group_code, category: cat, name: e.name_vn, part_vn: e.part_vn, parent_id: e.parent_id, hint: `Thêm vật liệu cùng loại với ${e.code} – ${e.name_vn}. Sửa tên/màu cho khác đi.` }) }}>＋</button>}
-                      {canEdit && <button className="btn ghost sm" title="Xoá hạng mục này" onClick={ev => { ev.stopPropagation(); del(e) }}>🗑</button>}</td>
+                    <td className="c-act"><div className="act-col"><StatusDot s={e.status} />
+                      {canEdit && <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}><b>✓</b> Duyệt</button>}
+                      {canEdit && can('suggest') && <button className="btn sm no-export" title="Vật Liệu Đề Xuất – tìm mẫu thư viện khớp với phối cảnh (chỉ hiện trong phần mềm, không xuất file)" onClick={ev => { ev.stopPropagation(); setSugE(e) }}><b>✨</b> Đề xuất</button>}
+                      <button className="btn ghost sm" title="Chi tiết / chọn mã hãng từ thư viện" onClick={ev => { ev.stopPropagation(); onDetail(e.id) }}><b>⋯</b> Chi tiết</button>
+                      {canEdit && <button className="btn ghost sm" title="Nhân đôi vật liệu này (vd màu thứ 2) – chép nội dung, chỉ sửa vài chỗ" onClick={ev => { ev.stopPropagation(); onAdd({ copy: e.id, section_key: e.section_key, group: e.group_code, category: cat, name: e.name_vn, part_vn: e.part_vn, parent_id: e.parent_id, hint: `Thêm vật liệu cùng loại với ${e.code} – ${e.name_vn}. Sửa tên/màu cho khác đi.` }) }}><b>＋</b> Nhân đôi</button>}
+                      {canEdit && <button className="btn ghost sm" title="Xoá hạng mục này" onClick={ev => { ev.stopPropagation(); del(e) }}><b>🗑</b> Xoá</button>}</div></td>
                   </tr>)
               })}</tbody>
             </table>
