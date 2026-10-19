@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { uploadPdf, classifyPages, classifyLocalPages } from '../../lib/pipeline'
 import FloorInput from '../../components/FloorInput'
-import RoomTypeSelect from '../../components/RoomTypeSelect'
 import RenderViewer from '../../components/RenderViewer'
 import { floorRank, floorLabel } from '../../lib/roomMatrix'
 import type { ProjectData } from '../../lib/useProject'
@@ -89,17 +88,16 @@ export default function UploadTab({ d }: { d: ProjectData }) {
             ⚠ Phát hiện phòng có thể đang gom nhiều phòng trong cùng một slide: {splits.map(x => <span key={x.room.id} style={{ marginRight: 10 }}><b>{x.room.code} {x.room.name_vn}</b> → {x.parts.map(p => p.name_vn).join(' | ')} <button className="btn sm" onClick={() => setSplitId(x.room.id)}>✂ Tách</button></span>)}
           </div>}
           <table className="tbl">
-            <thead><tr><th /><th>Mã</th><th>Tên phòng (VN)</th><th>Tên (EN)</th><th>Tầng</th><th>Loại phòng</th><th>Số liệu concept</th><th>Số trang</th><th /></tr></thead>
+            <thead><tr><th /><th>Mã</th><th>Tên phòng (VN)</th><th>Tên (EN)</th><th>Tầng</th><th>Số liệu concept</th><th>Số trang</th><th /></tr></thead>
             <tbody>{roomsByFloor.map((r, ri) => (
               <Fragment key={r.id}>
-              {(ri === 0 || (roomsByFloor[ri - 1].floor ?? '') !== (r.floor ?? '')) && <tr><td colSpan={9} style={{ background: 'var(--brown)', color: '#fff', padding: '6px 10px' }}><b>{floorLabel(r.floor)}</b> <span className="small" style={{ opacity: .8 }}>· {roomsByFloor.filter(x => (x.floor ?? '') === (r.floor ?? '')).length} phòng</span></td></tr>}
+              {(ri === 0 || (roomsByFloor[ri - 1].floor ?? '') !== (r.floor ?? '')) && <tr><td colSpan={8} style={{ background: 'var(--brown)', color: '#fff', padding: '6px 10px' }}><b>{floorLabel(r.floor)}</b> <span className="small" style={{ opacity: .8 }}>· {roomsByFloor.filter(x => (x.floor ?? '') === (r.floor ?? '')).length} phòng</span></td></tr>}
               <tr>
                 <td style={{ width: 120 }}>{(() => { const st = heroStyle(d, roomStats(d).get(r.id)?.hero, r.id, 104 / 64); return st ? <span className="mini-hero lg" style={st} /> : null })()}</td>
                 <td><input className="code-in" defaultValue={r.code} onBlur={e => e.target.value !== r.code && setRoom(r.id, { code: e.target.value })} /></td>
                 <td><input defaultValue={r.name_vn} onBlur={e => e.target.value !== r.name_vn && setRoom(r.id, { name_vn: e.target.value })} /></td>
                 <td><input defaultValue={r.name_en ?? ''} onBlur={e => setRoom(r.id, { name_en: e.target.value })} /></td>
                 <td style={{ width: 110 }}><FloorInput id={'r' + r.id} value={r.floor} used={floorsUsed} onCommit={v => setRoom(r.id, { floor: v })} placeholder="Tầng…" /></td>
-                <td><RoomTypeSelect value={r.room_type} used={d.rooms.map(x => x.room_type)} onChange={v => setRoom(r.id, { room_type: v })} /></td>
                 <td className="small">{(r.concept_counts ?? []).map(c => `${c.label}: ${c.qty}`).join(' · ')}{d.warnings.filter(w => w.room_id === r.id).map(w => <div key={w.id} className="warn-text">⚠ {w.text}</div>)}</td>
                 <td>{roomPages(d.pages, r.id).length}</td>
                 <td><button className="btn ghost sm" title="Tách phòng này thành nhiều phòng" onClick={() => setSplitId(r.id)}>✂ Tách</button> <button className="btn ghost sm danger" onClick={() => delRoom(r.id)}>Xoá</button></td>
