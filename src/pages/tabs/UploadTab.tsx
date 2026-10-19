@@ -10,9 +10,8 @@ import type { ProjectData } from '../../lib/useProject'
 import { roomStats, heroStyle } from '../../lib/progress'
 import LogBox, { useLog } from '../../components/LogBox'
 import FloorPlans from '../../components/FloorPlans'
-import MasterPlan from '../../components/MasterPlan'
+import FloorStudio from '../../components/FloorStudio'
 import { planLabAllowed } from '../../components/PlanLab'
-import { newDeck } from '../../lib/deck'
 import { roomPages, orphanPages } from '../../lib/roomPages'
 import { syncSharedPages } from '../../lib/roomSplit'
 import { toast } from '../../lib/toast'
@@ -82,7 +81,7 @@ export default function UploadTab({ d }: { d: ProjectData }) {
         <LogBox lines={lines} />
       </div>
 
-      {can('planlab') && planLabAllowed(d.project?.name) ? <MasterPlan d={d} size={newDeck('westin').size} /> : <FloorPlans d={d} />}
+      {can('planlab') && planLabAllowed(d.project?.name) ? <FloorStudio d={d} /> : <FloorPlans d={d} />}
 
       {d.rooms.length > 0 && (
         <div className="card">

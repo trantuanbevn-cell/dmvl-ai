@@ -10,7 +10,7 @@ import LogBox, { useLog } from './LogBox'
 
 const COLS = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#008080', '#9a6324', '#800000', '#808000', '#000075']
 
-export function FloorCard({ d, fp, run, busy, compact }: { d: ProjectData; fp: FloorPlan; run: (fn: () => Promise<void>) => void; busy: boolean; compact?: boolean }) {
+export function FloorCard({ d, fp, run, busy, compact, noImg }: { d: ProjectData; fp: FloorPlan; run: (fn: () => Promise<void>) => void; busy: boolean; compact?: boolean; noImg?: boolean }) {
   const g = fp.geometry
   const [keys, setKeys] = useState<string[]>(g?.wall_keys ?? [])
   const [door, setDoor] = useState(g?.door_w ?? 1.0)
@@ -49,7 +49,7 @@ export function FloorCard({ d, fp, run, busy, compact }: { d: ProjectData; fp: F
         </div>
         <div className="muted">Cập nhật chỉ thay phần mặt bằng của tầng này: tên phòng/phép gộp được chuyển sang tự động nếu hình dáng toàn nhà khớp; dữ liệu vật liệu của dự án không bị đụng tới.</div>
       </div>}
-      {compact && url && <div className="img-wrap" style={{ maxWidth: 560, margin: '6px 0' }}><img src={url} alt="" draggable={false} />
+      {compact && !noImg && url && <div className="img-wrap" style={{ maxWidth: 560, margin: '6px 0' }}><img src={url} alt="" draggable={false} />
         {g && <svg viewBox="0 0 1 1" preserveAspectRatio="none">{g.rooms.map((r, i) => roomPolys(r).map((pl, k) => <polygon key={r.id + '-' + k} points={pl.map(p => p.join(',')).join(' ')} fill={COLS[i % 10] + '55'} stroke={COLS[i % 10]} strokeWidth={0.002} />))}</svg>}</div>}
       {!compact && <div className="floor-grid">
         <div className="img-wrap">
@@ -93,7 +93,7 @@ export function FloorCard({ d, fp, run, busy, compact }: { d: ProjectData; fp: F
   )
 }
 
-export default function FloorPlans({ d, concept, onAdded }: { d: ProjectData; concept?: boolean; onAdded?: (id: string) => void }) {
+export default function FloorPlans({ d, concept, onAdded, studio, onPick }: { d: ProjectData; concept?: boolean; onAdded?: (id: string) => void; studio?: boolean; onPick?: (id: string) => void }) {
   const p = d.project!
   const [label, setLabel] = useState('')
   const [den, setDen] = useState(100)
@@ -119,7 +119,7 @@ export default function FloorPlans({ d, concept, onAdded }: { d: ProjectData; co
         {busy && <span className="spinner" />}
       </div>
       <LogBox lines={lines} />
-      {d.floors.map(fp => <FloorCard key={fp.id} d={d} fp={fp} run={run} busy={busy} compact={concept} />)}
+      {d.floors.map(fp => <div key={fp.id} onClick={() => onPick?.(fp.id)}><FloorCard d={d} fp={fp} run={run} busy={busy} compact={concept || studio} noImg={studio} /></div>)}
     </div>
   )
 }

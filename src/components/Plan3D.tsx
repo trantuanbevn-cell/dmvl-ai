@@ -71,8 +71,8 @@ function DimGlyph({ d, sel, fs, mm = false, onDown }: { d: Dim; sel: boolean; fs
 }
 
 /** proj: khi nhúng trong một dự án → chọn tầng, nhập DXF của tầng đó, và tự lưu mô hình lên dự án (file riêng trong kho, không đụng dữ liệu danh mục) */
-export default function Plan3D({ proj }: { proj?: { id: string; floors: FloorPlan[]; d?: ProjectData } } = {}) {
-  const [M, setM] = useState<Model | null>(() => { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) as Model : null } catch { return null } })
+export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floors: FloorPlan[]; d?: ProjectData }; autoFloor?: string } = {}) {
+  const [M, setM] = useState<Model | null>(() => { if (proj) return null; try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) as Model : null } catch { return null } })
   const [base, setBase] = useState<VecPage | null>(null)
   const [busy, setBusy] = useState(''), [err, setErr] = useState('')
   const [tool, setTool] = useState<Tool>('select'), [sel, setSel] = useState<Sel>(null)
@@ -90,7 +90,7 @@ export default function Plan3D({ proj }: { proj?: { id: string; floors: FloorPla
 
   const commit = useCallback((n: Model, push = true) => { setM(cur => { if (push && cur) { hist.current.push(cur); if (hist.current.length > 60) hist.current.shift(); setNh(hist.current.length) } return n }) }, [])
   const undo = useCallback(() => { const p = hist.current.pop(); setNh(hist.current.length); if (p) { setM(p); setSel(null) } }, [])
-  useEffect(() => { if (!M) return; const t = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(M)) } catch { /* quá dung lượng */ } }, 600); return () => clearTimeout(t) }, [M])
+  useEffect(() => { if (!M || proj) return; const t = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(M)) } catch { /* quá dung lượng */ } }, 600); return () => clearTimeout(t) }, [M])
 
   const fit = useCallback((m: Model, sz: { w: number; h: number }) => { const a = sz.h / Math.max(1, sz.w), w = m.w * 1.02, h = Math.max(m.h * 1.02, w * a); setVb({ x: 0, y: 0, w: h / a, h }) }, [])
   useEffect(() => { const e = box.current; if (!e) return; const ro = new ResizeObserver(() => setSize({ w: e.clientWidth, h: e.clientHeight })); ro.observe(e); setSize({ w: e.clientWidth, h: e.clientHeight }); return () => ro.disconnect() }, [mode, M !== null])
@@ -120,6 +120,8 @@ export default function Plan3D({ proj }: { proj?: { id: string; floors: FloorPla
   // tự lưu mô hình của tầng đang mở lên dự án (file riêng)
   useEffect(() => { if (!proj || !M || !cloud.current || cloud.current !== floorId) return
     const fid = floorId, t = setTimeout(async () => { const { error } = await supabase.storage.from(BUCKET).upload(jsonPath(fid), new Blob([JSON.stringify(M)], { type: 'application/json' }), { upsert: true, contentType: 'application/json' }); setSaved(error ? 'Lưu lên dự án lỗi: ' + error.message : 'Đã lưu vào dự án ' + new Date().toLocaleTimeString()) }, 2500); return () => clearTimeout(t) }, [M, floorId]) // eslint-disable-line
+  // tự mở tầng vừa tải lên (hoặc tầng DXF đầu tiên) – không cần bấm gì thêm
+  useEffect(() => { if (!proj) return; const want = autoFloor && proj.floors.some(f => f.id === autoFloor) ? autoFloor : !floorId ? floorsDxf[0]?.id : ''; if (want && want !== floorId) openFloor(want) }, [autoFloor, proj?.floors.length]) // eslint-disable-line
   const load = async (f: File) => { cloud.current = ''; await loadBuf(await f.arrayBuffer()) }
   const loadBuf = async (ab: ArrayBuffer) => {
     setErr(''); setBusy('Đang đọc DXF…')
