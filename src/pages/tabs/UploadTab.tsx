@@ -1,9 +1,12 @@
 import { useAuth } from '../../lib/auth'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { uploadPdf, classifyPages, classifyLocalPages } from '../../lib/pipeline'
-import { ROOM_TYPES } from '../../lib/codes'
+import FloorInput from '../../components/FloorInput'
+import RoomTypeSelect from '../../components/RoomTypeSelect'
+import RenderViewer from '../../components/RenderViewer'
+import { floorRank, floorLabel } from '../../lib/roomMatrix'
 import type { ProjectData } from '../../lib/useProject'
 import { roomStats, heroStyle } from '../../lib/progress'
 import LogBox, { useLog } from '../../components/LogBox'
@@ -17,7 +20,8 @@ import { suggestSplits } from '../../lib/roomSplit'
 const KINDS: Record<string, string> = { cover: 'Bìa', moodboard: 'Moodboard', plan: 'Mặt bằng', render: 'Phối cảnh', other: 'Khác', unknown: 'Chưa phân loại' }
 
 export default function UploadTab({ d }: { d: ProjectData }) {
-  const { canEdit, isAdmin } = useAuth()
+  const { canEdit, isAdmin, can } = useAuth(), canView = can('camplan')
+  const [viewId, setViewId] = useState<string | null>(null)
   const p = d.project!
   const [lines, setLines] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
@@ -50,8 +54,11 @@ export default function UploadTab({ d }: { d: ProjectData }) {
     if (d.pages.length && !confirm('Tải file mới sẽ xoá toàn bộ trang, phòng và kết quả phân tích hiện có. Tiếp tục?')) return
     run(async () => { await uploadPdf(p, f, log); await d.reload(); log('Phân loại trang & gom phòng theo tiêu đề trang (không dùng AI)...'); await classifyLocalPages(p, log) })
   }
-  const setPage = async (id: string, patch: Record<string, unknown>) => { await supabase.from('pages').update(patch).eq('id', id); d.reload() }
-  const setRoom = async (id: string, patch: Record<string, unknown>) => { await supabase.from('rooms').update(patch).eq('id', id); d.reload() }
+  const setPage = async (id: string, patch: Record<string, unknown>) => { const { error } = await supabase.from('pages').update(patch).eq('id', id); if (error) alert(/floor/.test(error.message) ? 'Chưa có cột “tầng” trong dữ liệu. Chạy file supabase/migrations/0035_floors_free.sql trong SQL Editor của Supabase rồi thử lại.' : error.message); d.reload() }
+  const setRoom = async (id: string, patch: Record<string, unknown>) => { const { error } = await supabase.from('rooms').update(patch).eq('id', id); if (error) alert(/floor/.test(error.message) ? 'Chưa có cột “tầng” trong dữ liệu. Chạy file supabase/migrations/0035_floors_free.sql trong SQL Editor của Supabase rồi thử lại.' : error.message); d.reload() }
+  const floorsUsed = [...d.rooms.map(r => r.floor), ...d.pages.map(x => x.floor)]
+  const roomsByFloor = [...d.rooms].sort((a, b) => floorRank(a.floor) - floorRank(b.floor) || (a.sort ?? 0) - (b.sort ?? 0))
+  const roomOf = (id: string | null) => id ? d.rooms.find(r => r.id === id) : undefined
   const addRoom = async () => {
     const n = d.rooms.length + 1
     await supabase.from('rooms').insert({ project_id: p.id, code: `R${String(n).padStart(2, '0')}`, name_vn: 'Phòng mới', sort: n }); d.reload()
@@ -82,18 +89,21 @@ export default function UploadTab({ d }: { d: ProjectData }) {
             ⚠ Phát hiện phòng có thể đang gom nhiều phòng trong cùng một slide: {splits.map(x => <span key={x.room.id} style={{ marginRight: 10 }}><b>{x.room.code} {x.room.name_vn}</b> → {x.parts.map(p => p.name_vn).join(' | ')} <button className="btn sm" onClick={() => setSplitId(x.room.id)}>✂ Tách</button></span>)}
           </div>}
           <table className="tbl">
-            <thead><tr><th /><th>Mã</th><th>Tên phòng (VN)</th><th>Tên (EN)</th><th>Loại phòng</th><th>Số liệu concept</th><th>Số trang</th><th /></tr></thead>
-            <tbody>{d.rooms.map(r => (
-              <tr key={r.id}>
+            <thead><tr><th /><th>Mã</th><th>Tên phòng (VN)</th><th>Tên (EN)</th><th>Tầng</th><th>Loại phòng</th><th>Số liệu concept</th><th>Số trang</th><th /></tr></thead>
+            <tbody>{roomsByFloor.map((r, ri) => (
+              <Fragment key={r.id}>
+              {(ri === 0 || (roomsByFloor[ri - 1].floor ?? '') !== (r.floor ?? '')) && <tr><td colSpan={9} style={{ background: 'var(--brown)', color: '#fff', padding: '6px 10px' }}><b>{floorLabel(r.floor)}</b> <span className="small" style={{ opacity: .8 }}>· {roomsByFloor.filter(x => (x.floor ?? '') === (r.floor ?? '')).length} phòng</span></td></tr>}
+              <tr>
                 <td style={{ width: 120 }}>{(() => { const st = heroStyle(d, roomStats(d).get(r.id)?.hero, r.id, 104 / 64); return st ? <span className="mini-hero lg" style={st} /> : null })()}</td>
                 <td><input className="code-in" defaultValue={r.code} onBlur={e => e.target.value !== r.code && setRoom(r.id, { code: e.target.value })} /></td>
                 <td><input defaultValue={r.name_vn} onBlur={e => e.target.value !== r.name_vn && setRoom(r.id, { name_vn: e.target.value })} /></td>
                 <td><input defaultValue={r.name_en ?? ''} onBlur={e => setRoom(r.id, { name_en: e.target.value })} /></td>
-                <td><select value={r.room_type} onChange={e => setRoom(r.id, { room_type: e.target.value })}>{ROOM_TYPES.map(t => <option key={t.key} value={t.key}>{t.vn}</option>)}</select></td>
+                <td style={{ width: 110 }}><FloorInput id={'r' + r.id} value={r.floor} used={floorsUsed} onCommit={v => setRoom(r.id, { floor: v })} placeholder="Tầng…" /></td>
+                <td><RoomTypeSelect value={r.room_type} used={d.rooms.map(x => x.room_type)} onChange={v => setRoom(r.id, { room_type: v })} /></td>
                 <td className="small">{(r.concept_counts ?? []).map(c => `${c.label}: ${c.qty}`).join(' · ')}{d.warnings.filter(w => w.room_id === r.id).map(w => <div key={w.id} className="warn-text">⚠ {w.text}</div>)}</td>
                 <td>{roomPages(d.pages, r.id).length}</td>
                 <td><button className="btn ghost sm" title="Tách phòng này thành nhiều phòng" onClick={() => setSplitId(r.id)}>✂ Tách</button> <button className="btn ghost sm danger" onClick={() => delRoom(r.id)}>Xoá</button></td>
-              </tr>))}
+              </tr></Fragment>))}
             </tbody>
           </table>
         </div>
@@ -115,7 +125,7 @@ export default function UploadTab({ d }: { d: ProjectData }) {
               <div key={pg.id} className={'page-tile kind-' + pg.kind} style={bad ? { borderColor: '#c0392b', borderWidth: 3, background: '#fdeceb' } : undefined}>
                 {pg.room_id && <span className="rc-code tile-code">{d.rooms.find(r => r.id === pg.room_id)?.code}</span>}
                 {bad && <label className="small" style={{ position: 'absolute', top: 4, left: 6, zIndex: 2, background: '#fff', padding: '0 4px', borderRadius: 4 }}><input type="checkbox" checked={sel.has(pg.id)} onChange={() => toggle(pg.id)} /> chọn</label>}
-                <img src={d.urls[pg.thumb_path ?? pg.image_path]} alt="" loading="lazy" />
+                <img src={d.urls[pg.thumb_path ?? pg.image_path]} alt="" loading="lazy" style={canView ? { cursor: 'zoom-in' } : undefined} title={canView ? 'Kích đúp để phóng to, xem mặt bằng và đặt camera' : undefined} onDoubleClick={() => canView && setViewId(pg.id)} />
                 <div className="row gap sm-gap">
                   <b>Tr.{pg.page_no}</b>
                   <select value={pg.kind} onChange={e => setPage(pg.id, { kind: e.target.value })}>{Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
@@ -125,12 +135,15 @@ export default function UploadTab({ d }: { d: ProjectData }) {
                   {d.rooms.map(r => <option key={r.id} value={r.id}>{r.code} {r.name_vn}</option>)}
                   <option value="__new">＋ Phòng mới…</option>
                 </select>
+                {pg.kind === 'plan' ? <FloorInput id={'pg' + pg.id} value={pg.floor} used={floorsUsed} onCommit={v => setPage(pg.id, { floor: v })} placeholder="Tầng của mặt bằng này…" />
+                  : roomOf(pg.room_id)?.floor ? <div className="small muted">{floorLabel(roomOf(pg.room_id)!.floor)}</div> : null}
                 {newFor === pg.id && <div className="row gap sm-gap"><input autoFocus placeholder="Gõ tên phòng mới" value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createRoomFor(pg.id)} /><button className="btn sm primary" onClick={() => createRoomFor(pg.id)}>Tạo</button><button className="btn ghost sm" onClick={() => setNewFor(null)}>✕</button></div>}
               </div>)
             })}
           </div>
         </div>
       )}
+      {viewId && d.pages.find(x => x.id === viewId) && <RenderViewer d={d} pageId={viewId} onClose={() => setViewId(null)} onGo={setViewId} />}
       {splitId && d.rooms.find(r => r.id === splitId) && <RoomSplit d={d} room={d.rooms.find(r => r.id === splitId)!} onClose={() => setSplitId(null)} />}
     </fieldset>
   )

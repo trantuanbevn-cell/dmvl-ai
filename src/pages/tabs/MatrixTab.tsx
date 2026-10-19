@@ -9,6 +9,8 @@ import { missingPairs, locateMissingShots } from '../../lib/locateShots'
 import RoomSections from '../../components/RoomSections'
 import OccCrop from '../../components/OccCrop'
 import { toast } from '../../lib/toast'
+import FloorInput from '../../components/FloorInput'
+import RoomTypeSelect from '../../components/RoomTypeSelect'
 import { buildMatrix, copyCells, addToCell, removeFromCell, moveToRoom, moveToCategory, shotsIn, createRoom, updateRoom, moveRoomRow, deleteRoom, renumberRooms, cellTree, FLOORS, floorLabel, type Row } from '../../lib/roomMatrix'
 
 type Filter = 'all' | 'missing' | 'norender' | 'none'
@@ -250,8 +252,8 @@ function RoomDialog({ d, room, run, onClose }: { d: ProjectData; room: Room; run
     <div className="stack">
       <label className="small">Tên tiếng Việt<input value={vn} onChange={e => setVn(e.target.value)} /></label>
       <label className="small">Tên tiếng Anh<input value={en} onChange={e => setEn(e.target.value)} /></label>
-      <label className="small">Loại phòng (quyết định hạng mục nào bị coi là thiếu)<select value={type} onChange={e => setType(e.target.value)}>{ROOM_TYPES.map(t => <option key={t.key} value={t.key}>{t.vn}</option>)}</select></label>
-<label className="small">Tầng<select value={floor} onChange={e => setFloor(e.target.value)}><option value="">— chưa gán tầng —</option>{FLOORS.map(f => <option key={f.key} value={f.key}>{f.vn}</option>)}</select></label>
+      <label className="small">Loại phòng (quyết định hạng mục nào bị coi là thiếu)<RoomTypeSelect value={type} used={d.rooms.map(r => r.room_type)} onChange={setType} /></label>
+<label className="small">Tầng<FloorInput id="mxd" value={floor} used={d.rooms.map(r => r.floor)} onCommit={v => setFloor(v ?? '')} placeholder="Gõ hoặc chọn tầng…" /></label>
       <label className="small">Hiện trạng<select value={flag} onChange={e => setFlag(e.target.value)}><option value="">Tự động (có phối cảnh / chưa có phối cảnh)</option><option value="none">Không có / không thực hiện phòng này</option></select></label>
       <div className="row gap"><button className="btn primary" disabled={!vn.trim()} onClick={() => run(() => updateRoom(room.id, { name_vn: vn.trim(), name_en: en.trim() || null, room_type: type, matrix_flag: flag || null, floor: floor || null }), 'Đã lưu').then(onClose)}>Lưu</button><button className="btn" onClick={onClose}>Huỷ</button></div>
     </div>
@@ -264,8 +266,8 @@ function AddRoomDialog({ d, rows, run, onClose }: { d: ProjectData; rows: Row[];
     <div className="stack">
       <label className="small">Tên tiếng Việt<input autoFocus value={vn} onChange={e => setVn(e.target.value)} placeholder="vd: Phòng họp 2" /></label>
       <label className="small">Tên tiếng Anh<input value={en} onChange={e => setEn(e.target.value)} placeholder="vd: Meeting Room 2" /></label>
-      <label className="small">Loại phòng<select value={type} onChange={e => setType(e.target.value)}>{ROOM_TYPES.map(t => <option key={t.key} value={t.key}>{t.vn}</option>)}</select></label>
-<label className="small">Tầng<select value={floor} onChange={e => setFloor(e.target.value)}><option value="">— chưa gán tầng —</option>{FLOORS.map(f => <option key={f.key} value={f.key}>{f.vn}</option>)}</select></label>
+      <label className="small">Loại phòng<RoomTypeSelect value={type} used={d.rooms.map(r => r.room_type)} onChange={setType} /></label>
+<label className="small">Tầng<FloorInput id="mxd" value={floor} used={d.rooms.map(r => r.floor)} onCommit={v => setFloor(v ?? '')} placeholder="Gõ hoặc chọn tầng…" /></label>
       <label className="small">Sao chép toàn bộ vật liệu từ phòng (tuỳ chọn – sau đó chỉnh từng ô)<select value={from} onChange={e => setFrom(e.target.value)}><option value="">— không sao chép —</option>{rows.filter(r => r.total > 0).map(r => <option key={r.room.id} value={r.room.id}>{r.room.code} {r.room.name_vn} ({r.total} mã)</option>)}</select></label>
       <div className="row gap"><button className="btn primary" disabled={!vn.trim()} onClick={() => run(() => createRoom(d, { name_vn: vn.trim(), name_en: en.trim(), room_type: type, floor }, from || undefined), 'Đã thêm phòng').then(onClose)}>Thêm phòng</button><button className="btn" onClick={onClose}>Huỷ</button></div>
     </div>

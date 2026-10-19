@@ -19,8 +19,23 @@ export const FLOORS: { key: string; vn: string }[] = [
   { key: 'B2', vn: 'Tầng hầm B2' }, { key: 'B1', vn: 'Tầng hầm B1' }, { key: 'T1', vn: 'Tầng 1' }, { key: 'TL', vn: 'Tầng lửng' }, { key: 'T2', vn: 'Tầng 2' }, { key: 'T3', vn: 'Tầng 3' },
   { key: 'T4-7', vn: 'Tầng 4–7' }, { key: 'T8', vn: 'Tầng 8' }, { key: 'T9-17', vn: 'Tầng 9–17' }, { key: 'ALL', vn: 'Dùng chung / điển hình nhiều tầng' },
 ]
-export const floorRank = (f?: string | null) => { const i = FLOORS.findIndex(x => x.key === f); return i < 0 ? FLOORS.length : i }
-export const floorLabel = (f?: string | null) => FLOORS.find(x => x.key === f)?.vn ?? 'Chưa gán tầng'
+/** Thứ tự tầng: tên trong danh sách mẫu theo thứ tự mẫu; tên tự gõ ("Tầng 5", "B1", "5") xếp theo số (hầm trước, thấp → cao); không đọc được số thì xuống cuối */
+export const floorRank = (f?: string | null) => {
+  if (!f) return 10000
+  const i = FLOORS.findIndex(x => x.key === f); if (i >= 0) return i
+  const s = f.trim().toLowerCase(), b = s.match(/^(?:b|hầm|ham|tầng hầm|tang ham)\s*(\d+)/), n = s.match(/(\d+)/)
+  if (b) return 100 - Number(b[1])
+  if (/lửng|lung/.test(s)) return 100.5
+  if (n) return 100 + Number(n[1])
+  return 5000
+}
+export const floorLabel = (f?: string | null) => !f ? 'Chưa gán tầng' : (FLOORS.find(x => x.key === f)?.vn ?? f)
+/** Các tên tầng đang dùng trong dự án + tên mẫu, để gợi ý khi gõ */
+export const floorOptions = (used: (string | null | undefined)[]) => {
+  const seen = new Set<string>(), out: { key: string; label: string }[] = []
+  for (const k of [...used.filter(Boolean) as string[]].sort((a, b) => floorRank(a) - floorRank(b))) if (!seen.has(k)) { seen.add(k); out.push({ key: k, label: floorLabel(k) }) }
+  return out
+}
 
 export type RoomState = 'render' | 'norender' | 'none'
 export type Row = { room: Room; state: RoomState; renders: number; cells: Map<string, Entry[]>; need: string[]; missing: string[]; total: number }

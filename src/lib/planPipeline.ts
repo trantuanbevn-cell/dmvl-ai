@@ -163,6 +163,7 @@ export async function analyzePlans(project: Project, rooms: Room[], pages: Page[
   let ok = 0
   for (const pg of renders) {
     const room = rooms.find(r => r.id === pg.room_id)!
+    if ((pg.camera as any)?.manual) { log(`Trang ${pg.page_no}: giữ camera đặt tay`); ok++; continue }
     try {
       const img = await loadImage(pg.image_path)
       const prs = rects.get(pg.page_no) ?? []

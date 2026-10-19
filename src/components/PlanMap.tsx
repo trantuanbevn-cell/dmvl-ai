@@ -7,7 +7,7 @@ export default function PlanMap({ url, plan, cam, cams, planPage, room }: { url?
   const W = planPage.width ?? 1, H = planPage.height ?? 1
   const vb = `0 0 ${W} ${H}`
   const mine = plan && plan.page_id === planPage.id ? plan : null
-  const list = (cams && cams.length ? cams : cam ? [cam] : []).filter(c => c.plan_page_id === planPage.id)
+  const list = ((cam as any)?.manual ? [cam!] : cams && cams.length ? cams : cam ? [cam] : []).filter(c => c.plan_page_id === planPage.id)
   const cones = list.map(c => {
     const a0 = Math.atan2(c.dir.dy, c.dir.dx), R = c.range * W, cx = c.cam.x * W, cy = c.cam.y * H
     const pts = [[cx, cy]]

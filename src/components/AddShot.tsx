@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabase'
 import { uploadImage } from '../lib/imageUpload'
 import type { ProjectData } from '../lib/useProject'
 import type { Entry, Room } from '../lib/types'
-import { FLOORS, floorLabel, floorRank } from '../lib/roomMatrix'
+import { floorLabel, floorRank } from '../lib/roomMatrix'
+import FloorInput from './FloorInput'
 import { heroStyle } from '../lib/progress'
 
 /** Thêm hình ảnh phối cảnh cho một vật liệu: khoanh vùng trên trang concept, hoặc tải ảnh từ máy */
@@ -74,9 +75,7 @@ export default function AddShot({ d, entry, roomId, onClose }: { d: ProjectData;
                 <div style={{ aspectRatio: '16/9', borderRadius: 6, background: '#eee', backgroundSize: 'cover', backgroundPosition: 'center', ...(st ?? {}) }} />
                 <div className="small" style={{ fontWeight: 600, marginTop: 3 }}>{r.code} {r.name_vn}</div>
                 <div className="small muted">{pg ? `${renderOf(r).length} trang` : 'chưa có trang'}{shotRooms.has(r.id) ? ' · ✓ đã khoanh' : ''}</div>
-                <select className="small" value={r.floor ?? ''} title="Gán tầng cho phòng này (dùng chung cho Tổng hợp phòng)" onClick={ev => ev.stopPropagation()} onChange={async ev => { const v = ev.target.value || null; const { error } = await supabase.from('rooms').update({ floor: v }).eq('id', r.id); if (error) alert(error.message); else d.reload() }} style={{ width: '100%', marginTop: 2 }}>
-                  <option value="">Chưa gán tầng</option>{FLOORS.map(f => <option key={f.key} value={f.key}>{f.vn}</option>)}
-                </select>
+                <div style={{ marginTop: 2 }} title="Gán tầng cho phòng này (gõ tự do, dùng chung cho Tổng hợp phòng)"><FloorInput id={'as' + r.id} value={r.floor} used={d.rooms.map(x => x.floor)} onCommit={async v => { const { error } = await supabase.from('rooms').update({ floor: v }).eq('id', r.id); if (error) alert(error.message); else d.reload() }} placeholder="Chưa gán tầng" /></div>
               </div>
             })}
             {!shownRooms.length && <span className="muted small">Không có phòng nào khớp.</span>}
