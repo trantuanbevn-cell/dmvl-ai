@@ -50,6 +50,11 @@ export function buildFurn(f: Furn, color?: string): THREE.Group {
       const n = Math.max(3, Math.round(h / 0.17)), tread = w / n, rise = h / n
       for (let i = 0; i < n; i++) box(tread, rise * (i + 1), d, -w / 2 + tread * (i + 0.5), 0, 0, i % 2 ? mat : dark)
       break }
+    case 'spiral': { // thang xoắn: lõi trụ thép + các bậc hình quạt xoay dần, cao 170/bậc
+      const R = Math.max(w, d) / 2, n = Math.max(8, Math.round(h / 0.17))
+      cyl(0.08, 0.08, h, 0, 0, 0, steel, 12)
+      for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 * Math.min(1.25, n / 14), step = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.04, 8, 1, false, 0, Math.PI / 5), i % 2 ? mat : dark); step.position.set(0, 0.17 * (i + 1) - 0.04 / 2, 0); step.rotation.y = a; g.add(step) }
+      const rail = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.9, 24, 1, true), new THREE.MeshStandardMaterial({ color: '#b9bdc2', transparent: true, opacity: 0.15, side: THREE.DoubleSide })); rail.position.y = 0.45 + h / 2; g.add(rail); break }
     case 'counter': case 'kitchen': case 'cabinet': case 'tv': case 'wardrobe': case 'shelf': case 'fridge': {
       box(w, h, d, 0, 0, 0, mat)
       if (f.kind === 'wardrobe' || f.kind === 'fridge') box(w * 0.015, h * 0.5, 0.02, w * 0.04, h * 0.2, front - 0.01, black) // tay nắm

@@ -2,6 +2,7 @@
 import polygonClipping from 'polygon-clipping'
 import type { VecPage } from '../vector'
 import { classifyFurn, furnTypeOf } from './furn'
+import { detectVertical } from './vertical'
 import { PT_MM } from '../dims'
 import { FURN_LAYER } from '../dxf'
 
@@ -66,12 +67,17 @@ export function modelFromVec(v: VecPage, den: number): Model {
   }
   const glass = detectGlass(v, m); walls.push(...glass)
   const doors = detectDoors(v.arcs ?? [], m, walls)
-  for (const dr of doors) dr.t = wallThickAt(walls, dr.x, dr.y, dr.ang, dr.w)
+  for (let i = 0; i < doors.length; i++) doors[i] = centerDoor(walls, doors[i])
+  // cửa nằm trong vách kính → dùng cửa kính (khung nhôm / không khung) thay cho cửa gỗ
+  for (const dr of doors) { const gl = glass.some(g => { const cl = centerline(g); for (let i = 0; i + 1 < cl.length; i++) { const a = cl[i], b = cl[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((dr.x - a[0]) * dx + (dr.y - a[1]) * dy) / L2)); if (Math.hypot(dr.x - (a[0] + t * dx), dr.y - (a[1] + t * dy)) < 0.25) return true } return false })
+    if (gl) { dr.lib = dr.kind === 'double' ? (dr.w < 1.5 ? 'dg-glass12' : 'dg-glass18') : 'dg-glass09'; dr.h = 2.2 } }
   const furn: Furn[] = (v.furn ?? []).map(f => {
     const w = f.w * m, d = f.d * m, nm = f.name.replace(/^.*\$/, '').trim(), name = !nm || /^\*/.test(nm) ? undefined : nm.slice(0, 48)
     const kind = classifyFurn(name ?? '', f.layer, w, d)
     return { id: uid('f'), kind, name, x: f.cx * m, y: f.cy * m, w, d, ang: f.rot, h: furnTypeOf(kind).h, auto: true }
   })
+  // thang máy / thang bộ / thang xoắn nhận từ nét vẽ (thay cho khối hatch nội thất nhận nhầm tại chỗ đó)
+  for (const t of detectVertical(v, m)) { for (let i = furn.length - 1; i >= 0; i--) { const f = furn[i]; if (Math.abs(f.x - t.x) < t.w / 2 && Math.abs(f.y - t.y) < t.d / 2 && Math.max(f.w, f.d) < Math.max(t.w, t.d) * 1.1) furn.splice(i, 1) } if (!furn.some(f => (f.kind === t.kind) && Math.hypot(f.x - t.x, f.y - t.y) < 0.8)) furn.push(t) }
   // đồ rời từ hatch: bỏ nếu đã có đồ rời cùng chỗ (từ khối/nét rời)
   const inRect = (f: Furn, x: number, y: number) => { const c = Math.cos(f.ang), s = Math.sin(f.ang), dx = x - f.x, dy = y - f.y; return Math.abs(dx * c + dy * s) <= f.w / 2 + 0.05 && Math.abs(-dx * s + dy * c) <= f.d / 2 + 0.05 }
   for (const o of hatchFurn) { if (furn.some(f => inRect(f, o.cx, o.cy))) continue
@@ -93,20 +99,27 @@ export function obb(l: Pt[]): Obb {
     const ar = (x1 - x0) * (y1 - y0); if (ar < ba) { ba = ar; const mu = (x0 + x1) / 2, mv = (y0 + y1) / 2; best = { cx: mu * c - mv * s, cy: mu * s + mv * c, w: x1 - x0, d: y1 - y0, rot: a } } }
   return best!
 }
-/** Bề dày tường tại cửa: đo bề dày khối tường ngay sát hai mép lỗ cửa (đo vuông góc với tường) */
-export function wallThickAt(walls: Wall[], x: number, y: number, ang: number, w: number): number {
+/** Đo tường tại vị trí cửa (vuông góc với tường): bề dày th và độ lệch off của TIM tường so với điểm (x,y) theo pháp tuyến (-sin,cos) */
+export function wallAt(walls: Wall[], x: number, y: number, ang: number, w: number): { th: number; off: number } | null {
   const rings = walls.filter(k => k.role !== 'col').map(k => ({ rs: footprint(k), bb: bbox(footprint(k)) }))
   const hit = (px: number, py: number) => rings.some(k => px >= k.bb.x0 && px <= k.bb.x1 && py >= k.bb.y0 && py <= k.bb.y1 && (k.rs.reduce((n, r) => n + (inside([px, py], r) ? 1 : 0), 0) % 2 === 1))
-  const ux = Math.cos(ang), uy = Math.sin(ang), nx = -uy, ny = ux, out: number[] = []
+  const ux = Math.cos(ang), uy = Math.sin(ang), nx = -uy, ny = ux, out: { th: number; off: number }[] = []
   for (const sgn of [-1, 1]) for (const gap of [0.05, 0.1, 0.18]) { const cx = x + ux * sgn * (w / 2 + gap), cy = y + uy * sgn * (w / 2 + gap); let a = 0, b = 0
     // đứng từ tâm cột bề dày: tìm đoạn liên tục chứa điểm sát mép lỗ cửa (có thể lệch tim, nên dò rộng ±0.5)
-    let start = hit(cx, cy) ? 0 : (() => { for (let t = 0.01; t <= 0.4; t += 0.01) { if (hit(cx + nx * t, cy + ny * t)) return t; if (hit(cx - nx * t, cy - ny * t)) return -t } return NaN })()
+    const start = hit(cx, cy) ? 0 : (() => { for (let t = 0.01; t <= 0.5; t += 0.01) { if (hit(cx + nx * t, cy + ny * t)) return t; if (hit(cx - nx * t, cy - ny * t)) return -t } return NaN })()
     if (Number.isNaN(start)) continue
     for (let t = 0; t <= 0.8; t += 0.01) { if (!hit(cx + nx * (start + t), cy + ny * (start + t))) break; a = t }
     for (let t = 0; t <= 0.8; t += 0.01) { if (!hit(cx + nx * (start - t), cy + ny * (start - t))) break; b = t }
-    const th = a + b; if (th >= 0.06 && th <= 0.7) out.push(th) }
-  if (!out.length) return 0.2
-  out.sort((p, q) => p - q); return Math.round(out[Math.floor(out.length / 2)] * 100) / 100
+    const th = a + b; if (th >= 0.06 && th <= 0.7) out.push({ th, off: start + (a - b) / 2 }) }
+  if (!out.length) return null
+  out.sort((p, q) => p.th - q.th); const m = out[Math.floor(out.length / 2)]; return { th: Math.round(m.th * 100) / 100, off: m.off }
+}
+/** Bề dày tường tại cửa: đo bề dày khối tường ngay sát hai mép lỗ cửa (đo vuông góc với tường) */
+export function wallThickAt(walls: Wall[], x: number, y: number, ang: number, w: number): number { return wallAt(walls, x, y, ang, w)?.th ?? 0.2 }
+/** Đưa cửa vào đúng TIM tường và khớp bề dày khung = bề dày tường */
+export function centerDoor<T extends { x: number; y: number; ang: number; w: number }>(walls: Wall[], d: T): T & { t: number } {
+  const r = wallAt(walls, d.x, d.y, d.ang, d.w); if (!r) return { ...d, t: 0.2 }
+  return { ...d, x: d.x - Math.sin(d.ang) * r.off, y: d.y + Math.cos(d.ang) * r.off, t: r.th }
 }
 
 // ---------- Nhận diện cửa từ cung quét cánh ----------
@@ -263,18 +276,25 @@ export function wallParts(w: Wall, M: Model): Part[] {
 }
 
 /** Gợi ý vị trí đặt cửa: điểm gần nhất trên cạnh tường (kèm hướng cạnh) */
-export function snapToWall(M: Model, p: Pt, tol: number): { x: number; y: number; ang: number; thick: number } | null {
-  let best: { x: number; y: number; ang: number; thick: number } | null = null, bd = tol
-  for (const w of M.walls) {
-    if (w.role === 'col') continue
-    const rings: Pt[][] = w.shape.type === 'poly' ? w.shape.rings : [centerline(w)]
-    for (const r of rings) for (let i = 0; i < (w.shape.type === 'seg' ? r.length - 1 : r.length); i++) {
+export function snapToWall(M: Model, p: Pt, tol: number, w = 0.9): { x: number; y: number; ang: number; thick: number } | null {
+  let best: { x: number; y: number; ang: number; thick: number } | null = null, bd = tol, ends: Pt[] = [], edge: [Pt, Pt] | null = null
+  for (const wl of M.walls) {
+    if (wl.role === 'col') continue
+    const rings: Pt[][] = wl.shape.type === 'poly' ? wl.shape.rings : [centerline(wl)]
+    for (const r of rings) for (let i = 0; i < (wl.shape.type === 'seg' ? r.length - 1 : r.length); i++) {
       const a = r[i], b = r[(i + 1) % r.length], dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy; if (L2 < 1e-9) continue
       const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2)), x = a[0] + t * dx, y = a[1] + t * dy, d = Math.hypot(p[0] - x, p[1] - y)
-      if (d < bd && Math.hypot(dx, dy) > 0.25) { bd = d; best = { x, y, ang: Math.atan2(dy, dx), thick: 0 } }
+      if (d < bd && Math.hypot(dx, dy) > 0.25) { bd = d; best = { x, y, ang: Math.atan2(dy, dx), thick: 0 }; edge = [a, b] }
     }
   }
-  return best
+  if (!best) return null
+  // bắt dọc tường: mép khuông chạm đầu đoạn / tim cửa trùng giữa đoạn
+  const e = edge as [Pt, Pt] | null
+  if (e) { const [a, b] = e, L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, s = (best.x - a[0]) * ux + (best.y - a[1]) * uy, k = 0.12
+    const cand = [w / 2, L - w / 2, L / 2]; let bs = s, bb = k; for (const c of cand) if (Math.abs(s - c) < bb) { bb = Math.abs(s - c); bs = c }
+    if (L >= w) { best = { ...best, x: a[0] + ux * bs, y: a[1] + uy * bs } }; void ends }
+  const c = centerDoor(M.walls, { x: best.x, y: best.y, ang: best.ang, w })
+  return { x: c.x, y: c.y, ang: best.ang, thick: c.t }
 }
 
 export const polyArea = (l: Pt[]) => { let a = 0; for (let i = 0; i < l.length; i++) { const p = l[i], q = l[(i + 1) % l.length]; a += p[0] * q[1] - q[0] * p[1] } return Math.abs(a) / 2 }

@@ -36,6 +36,7 @@ export const FURN_TYPES: FurnType[] = [
   T('urinal', 'Tiểu nam treo tường (cao 800, thân 1000)', 'Vệ sinh', 0.35, 0.35, 0.8, '#f1f1ee', { back: 1.0, backT: 0.1 }),
   T('lift', 'Thang máy (thân hộp + cửa thép)', 'Khác', 2.0, 2.4, 3.3, '#b9bdc2'),
   T('stair', 'Thang bộ (bậc cao 170, rộng theo bản vẽ)', 'Khác', 4.0, 1.2, 3.3, '#c8c2b6'),
+  T('spiral', 'Thang xoắn tròn (bậc cao 170, lõi trụ)', 'Khác', 1.6, 1.6, 3.3, '#8d9196', { shape: 'round' }),
   T('plant', 'Cây / chậu cây (1200)', 'Khác', 0.5, 0.5, 1.2, '#6b8f5e', { shape: 'round' }),
   T('stage', 'Bục / sân khấu / thảm nền (300)', 'Khác', 3.0, 2.0, 0.3, '#9a9a96'),
   T('group', 'Cụm nội thất gộp (thấp, chưa tách) 450', 'Khác', 3.0, 3.0, 0.45, '#b8a58c'),
@@ -48,6 +49,7 @@ const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/
 export function classifyFurn(name: string, layer: string, w: number, d: number): string {
   const n = norm(name), a = Math.max(w, d), b = Math.min(w, d), rnd = Math.abs(w - d) / a < 0.12, ly = norm(layer)
   const has = (re: RegExp) => re.test(n)
+  if (/spiral|xoan|thang xoan/.test(ly) || has(/spiral|xoan/)) return 'spiral'
   if (/stair|cau thang|thang bo/.test(ly) || has(/stair|cau thang|thang bo/)) return 'stair'
   if (/\blift\b|elev|thang may/.test(ly) || has(/\blift\b|elevator|thang may/)) return 'lift'
   if (/urinal|tieu nam/.test(ly) || has(/urinal|tieu nam|tieu treo/)) return 'urinal'

@@ -11,7 +11,7 @@ import Scene3D from './Scene3D'
 import LibraryBrowser from './LibraryBrowser'
 import { DoorElevSection, DoorPlanSection, WallLayerSection } from './Sections'
 import { COL_LIB, DOOR_LIB, FINISHES, WALL_TYPES, doorSpec, finishOf, type DoorSpec, type Finish } from '../lib/plan3d/library'
-import { WALL_KINDS, autoRooms, centerline, centroid, doorRect, floodRoom, footprint, inside, kindOf, modelFromVec, polyArea, snapToWall, uid, wallThickAt, type Dim, type Door, type Furn, type Model, type Pt, type Room, type Wall } from '../lib/plan3d/model'
+import { WALL_KINDS, autoRooms, centerline, centroid, doorRect, floodRoom, centerDoor, footprint, inside, kindOf, modelFromVec, polyArea, snapToWall, uid, wallThickAt, type Dim, type Door, type Furn, type Model, type Pt, type Room, type Wall } from '../lib/plan3d/model'
 import { FURN_TYPES, furnTypeOf } from '../lib/plan3d/furn'
 
 type Box = { x: number; y: number; w: number; h: number }
@@ -109,12 +109,16 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const doSync = async () => { if (!proj?.d || !sync) return; setBusy('Đang đưa sang danh mục…'); try { const r = await applyPlanSync(proj.d, floorLabel, sync); setSync(null); setSaved(`Đã đưa sang danh mục: thêm ${r.added}, cập nhật ${r.updated} phòng`); await proj.d.reload() } catch (e) { setErr((e as Error).message) } finally { setBusy('') } }
   const jsonPath = (fid: string) => `${proj?.id}/plan3d/${fid}.json`
   const floorsDxf = (proj?.floors ?? []).filter(f => /\.dxf$/i.test(f.pdf_path))
+  /** Nạp lại nét bản vẽ gốc (DXF) làm lớp nền – bản 3D đã lưu chỉ giữ mô hình nên mở lại phải đọc lại nét gốc để 2D không bị mất */
+  const loadUnder = async (path: string, fid: string) => {
+    try { const { data } = await supabase.storage.from(BUCKET).download(path); if (!data) return; const v = await readDxfPage(await data.arrayBuffer(), () => {}, { draw: true }); if (cloud.current === fid) { setBase(v); setUnder(true) } } catch { /* không có nền thì thôi */ }
+  }
   /** Mở tầng: ưu tiên bản 3D đã lưu của tầng, không có thì dựng từ file DXF của tầng */
   const openFloor = async (fid: string, forceDxf = false) => {
     const fp = proj?.floors.find(f => f.id === fid); if (!proj || !fp) return
     setErr(''); setBusy('Đang mở tầng…'); setFloorId(fid); cloud.current = ''
     try {
-      if (!forceDxf) { const { data } = await supabase.storage.from(BUCKET).download(jsonPath(fid)); if (data) { const m = JSON.parse(await data.text()) as Model; if (m.v === 1) { hist.current = []; setNh(0); setBase(null); fitted.current = false; setM(m); setSel(null); cloud.current = fid; setBusy(''); setSaved('Đã mở bản đã lưu của ' + fp.floor_label); return } } }
+      if (!forceDxf) { const { data } = await supabase.storage.from(BUCKET).download(jsonPath(fid)); if (data) { const m = JSON.parse(await data.text()) as Model; if (m.v === 1) { hist.current = []; setNh(0); setBase(null); fitted.current = false; setM(m); setSel(null); cloud.current = fid; if (/\.dxf$/i.test(fp.pdf_path)) void loadUnder(fp.pdf_path, fid); setBusy(''); setSaved('Đã mở bản đã lưu của ' + fp.floor_label); return } } }
       if (!/\.dxf$/i.test(fp.pdf_path)) throw new Error('Tầng này tải lên là PDF – cần file DXF để dựng 3D. Tải DXF ở phần Mặt bằng gốc.')
       const { data, error } = await supabase.storage.from(BUCKET).download(fp.pdf_path); if (error || !data) throw new Error(error?.message ?? 'Không tải được file DXF')
       await loadBuf(await data.arrayBuffer()); cloud.current = fid
@@ -136,11 +140,42 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const loadJson = async (f: File) => { cloud.current = ''; try { const m = JSON.parse(await f.text()) as Model; if (m.v !== 1) throw new Error('File không đúng định dạng'); hist.current = []; setNh(0); fitted.current = false; setM(m) } catch (e) { setErr((e as Error).message) } }
   const saveJson = () => { if (!M) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(M)], { type: 'application/json' })); a.download = 'mat-bang-3d.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000) }
 
+  // ---- Bắt điểm (như CAD): đỉnh / trung điểm / góc đồ / mép tường. Cache theo model để kéo mượt.
+  const snapCache = useRef<{ M: Model; v: Pt[]; e: [Pt, Pt][] } | null>(null)
+  const furnCorners = (f: Furn): Pt[] => { const c = Math.cos(f.ang), s = Math.sin(f.ang); return ([[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]] as [number, number][]).map(([a, b]) => [f.x + c * a * f.w / 2 - s * b * f.d / 2, f.y + s * a * f.w / 2 + c * b * f.d / 2] as Pt) }
+  const snapSet = (excl?: string) => {
+    if (!M) return { v: [] as Pt[], e: [] as [Pt, Pt][] }
+    if (!excl && snapCache.current?.M === M) return snapCache.current
+    const v: Pt[] = [], e: [Pt, Pt][] = []
+    for (const w of M.walls) { if (w.id === excl) continue
+      const rings: Pt[][] = w.shape.type === 'poly' ? w.shape.rings : [centerline(w)], seg = w.shape.type === 'seg'
+      for (const r of rings) for (let i = 0; i < r.length; i++) { v.push(r[i]); if (seg && i === r.length - 1) continue; const q = r[(i + 1) % r.length]; if (w.role !== 'col') v.push([(r[i][0] + q[0]) / 2, (r[i][1] + q[1]) / 2]); e.push([r[i], q]) }
+      if (seg) for (const r of footprint(w)) for (let i = 0; i < r.length; i++) { v.push(r[i]); e.push([r[i], r[(i + 1) % r.length]]) } }
+    for (const r of M.rooms ?? []) { if (r.id === excl) continue; for (const q of r.poly) v.push(q) }
+    for (const f of M.furn ?? []) { if (f.id === excl) continue; const c = furnCorners(f); v.push(...c); for (let i = 0; i < 4; i++) e.push([c[i], c[(i + 1) % 4]]) }
+    for (const dr of M.doors) { if (dr.id === excl) continue; v.push(...doorRect(dr, dr.t ?? 0.2)) }
+    const out = { M, v, e }; if (!excl) snapCache.current = out; return out
+  }
+  /** Độ dời để một nhóm điểm của vật đang kéo bắt vào đối tượng khác: ưu tiên đỉnh, rồi gióng thẳng trục, rồi áp mép (giữ Alt để tắt) */
+  const snapDelta = (pts: Pt[], excl: string): { d: Pt; mark: Pt | null } => {
+    const tol = vb.w / Math.max(300, size.w) * 10, { v, e } = snapSet(excl); let bd = tol, d: Pt | null = null, mark: Pt | null = null
+    for (const p of pts) for (const q of v) { const k = Math.hypot(q[0] - p[0], q[1] - p[1]); if (k < bd) { bd = k; d = [q[0] - p[0], q[1] - p[1]]; mark = q } }
+    if (d) return { d, mark }
+    let dx = 0, dy = 0, bx = tol, by = tol, mk: Pt | null = null
+    for (const p of pts) for (const q of v) { const ax = Math.abs(q[0] - p[0]), ay = Math.abs(q[1] - p[1]); if (ax < bx && ay < tol * 6) { bx = ax; dx = q[0] - p[0]; mk = q } if (ay < by && ax < tol * 6) { by = ay; dy = q[1] - p[1]; mk = q } }
+    if (bx < tol || by < tol) return { d: [bx < tol ? dx : 0, by < tol ? dy : 0], mark: mk }
+    let be = tol * 0.7, ed: Pt | null = null, em: Pt | null = null
+    for (const p of pts) for (const [a, b] of e) { const ex = b[0] - a[0], ey = b[1] - a[1], L2 = ex * ex + ey * ey; if (L2 < 1e-9) continue; const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * ex + (p[1] - a[1]) * ey) / L2)), qx = a[0] + t * ex, qy = a[1] + t * ey, k = Math.hypot(qx - p[0], qy - p[1]); if (k < be) { be = k; ed = [qx - p[0], qy - p[1]]; em = [qx, qy] } }
+    return ed ? { d: ed, mark: em } : { d: [0, 0], mark: null }
+  }
+  const [snapMark, setSnapMark] = useState<Pt | null>(null)
   const toModel = (e: { clientX: number; clientY: number }): Pt => { const r = box.current!.getBoundingClientRect(); return [vb.x + (e.clientX - r.left) / r.width * vb.w, vb.y + (e.clientY - r.top) / r.height * vb.h] }
   const snapPt = (p: Pt, from?: Pt | null): Pt => {
     const tol = vb.w / Math.max(300, size.w) * 8
     if (M) for (const w of M.walls) { if (w.role === 'col') continue; const rings: Pt[][] = w.shape.type === 'poly' ? w.shape.rings : [[w.shape.a, w.shape.b]]; for (const r of rings) for (const q of r) if (Math.hypot(q[0] - p[0], q[1] - p[1]) < tol) return q }
     if (M) for (const r of M.rooms ?? []) for (const q of r.poly) if (Math.hypot(q[0] - p[0], q[1] - p[1]) < tol) return q
+    if (M) { const { v, e } = snapSet(); let bd = tol, bq: Pt | null = null; for (const q of v) { const k = Math.hypot(q[0] - p[0], q[1] - p[1]); if (k < bd) { bd = k; bq = q } } if (bq) return bq
+      bd = tol * 0.6; for (const [a, b] of e) { const ex = b[0] - a[0], ey = b[1] - a[1], L2 = ex * ex + ey * ey; if (L2 < 1e-9) continue; const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * ex + (p[1] - a[1]) * ey) / L2)), q: Pt = [a[0] + t * ex, a[1] + t * ey], k = Math.hypot(q[0] - p[0], q[1] - p[1]); if (k < bd) { bd = k; bq = q } } if (bq) return bq }
     if (from && ortho) { const dx = p[0] - from[0], dy = p[1] - from[1], a = Math.abs(Math.atan2(dy, dx)); if (Math.abs(dy) < Math.abs(dx) * 0.07) return [p[0], from[1]]; if (Math.abs(dx) < Math.abs(dy) * 0.07) return [from[0], p[1]]; void a }
     return p
   }
@@ -200,8 +235,8 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
       commit({ ...M, furn: [...(M.furn ?? []), f] }); setSel({ t: 'furn', id: f.id }); return
     }
     if (tool === 'door') {
-      const sp = doorSpec(libDoor, customDoors) ?? DOOR_LIB[0], sn = snapToWall(M, p, 0.6); if (!sn) { setErr('Bấm sát vào một đoạn tường để đặt cửa.'); return }
-      setErr(''); const d: Door = { id: uid('d'), kind: sp.kind, lib: sp.id, x: sn.x, y: sn.y, ang: sn.ang, w: sp.w, h: sp.h, sill: sp.sill, t: wallThickAt(M.walls, sn.x, sn.y, sn.ang, sp.w) }
+      const sp = doorSpec(libDoor, customDoors) ?? DOOR_LIB[0], sn = snapToWall(M, p, 0.6, sp.w); if (!sn) { setErr('Bấm sát vào một đoạn tường để đặt cửa.'); return }
+      setErr(''); const d: Door = { id: uid('d'), kind: sp.kind, lib: sp.id, x: sn.x, y: sn.y, ang: sn.ang, w: sp.w, h: sp.h, sill: sp.sill, t: sn.thick || 0.2 }
       commit({ ...M, doors: [...M.doors, d] }); setSel({ t: 'door', id: d.id }); return
     }
     setSel(null); drag.current = { k: 'pan', x: e.clientX, y: e.clientY, vb }; (box.current as HTMLElement).setPointerCapture(e.pointerId)
@@ -212,17 +247,17 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     if (d.k === 'pan') { const r = box.current!.getBoundingClientRect(), s = d.vb.w / r.width; setVb({ ...d.vb, x: d.vb.x - (e.clientX - d.x) * s, y: d.vb.y - (e.clientY - d.y) * s }); return }
     if (!d.moved) { hist.current.push(M); setNh(hist.current.length); d.moved = true }
     const upd = (f: (w: Wall) => Wall) => setM(cur => cur && { ...cur, walls: cur.walls.map(w => w.id === d.id ? f(d.orig) : w) })
-    if (d.k === 'moveWall') { const dx = p[0] - d.p0[0], dy = p[1] - d.p0[1]; upd(w => w.shape.type === 'poly' ? { ...w, shape: { type: 'poly', rings: w.shape.rings.map(r => r.map(q => [q[0] + dx, q[1] + dy] as Pt)) } } : { ...w, shape: { ...w.shape, a: [w.shape.a[0] + dx, w.shape.a[1] + dy], b: [w.shape.b[0] + dx, w.shape.b[1] + dy] } }) }
+    if (d.k === 'moveWall') { let dx = p[0] - d.p0[0], dy = p[1] - d.p0[1]; const o = d.orig as Wall, mp = (o.shape.type === 'poly' ? o.shape.rings.flat() : [o.shape.a, o.shape.b]).filter((_, i, a) => a.length <= 40 || i % Math.ceil(a.length / 40) === 0).map(q => [q[0] + dx, q[1] + dy] as Pt), sn = e.altKey ? { d: [0, 0] as Pt, mark: null } : snapDelta(mp, o.id); dx += sn.d[0]; dy += sn.d[1]; setSnapMark(sn.mark); upd(w => w.shape.type === 'poly' ? { ...w, shape: { type: 'poly', rings: w.shape.rings.map(r => r.map(q => [q[0] + dx, q[1] + dy] as Pt)) } } : { ...w, shape: { ...w.shape, a: [w.shape.a[0] + dx, w.shape.a[1] + dy], b: [w.shape.b[0] + dx, w.shape.b[1] + dy] } }) }
     else if (d.k === 'vertex') { const q = snapPt(p); upd(w => w.shape.type === 'poly' ? { ...w, shape: { type: 'poly', rings: w.shape.rings.map((r, i) => i === d.ring ? r.map((v, j) => j === d.vi ? q : v) : r) } } : w) }
     else if (d.k === 'end') { const o = d.orig as Wall; if (o.shape.type !== 'seg') return; const other = d.which === 'a' ? o.shape.b : o.shape.a, q = snapPt(p, other); upd(w => w.shape.type === 'seg' ? { ...w, shape: { ...w.shape, [d.which]: q } } : w) }
     else if (d.k === 'roomV') { const q = snapPt(p); setM(cur => cur && { ...cur, rooms: (cur.rooms ?? []).map(r => r.id === d.id ? { ...r, poly: r.poly.map((v, j) => j === d.vi ? q : v), area: undefined } : r) }) }
     else if (d.k === 'bend') { const o = d.orig as Wall; if (o.shape.type !== 'seg') return; const { a, b } = o.shape, c = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nx = -(b[1] - a[1]) / c, ny = (b[0] - a[0]) / c, bu = (p[0] - (a[0] + b[0]) / 2) * nx + (p[1] - (a[1] + b[1]) / 2) * ny; upd(w => w.shape.type === 'seg' ? { ...w, shape: { ...w.shape, bulge: Math.abs(bu) < 0.03 ? undefined : bu } } : w) }
-    else if (d.k === 'moveFurn') { const dx = p[0] - d.p0[0], dy = p[1] - d.p0[1]; setM(cur => cur && { ...cur, furn: (cur.furn ?? []).map(x => x.id === d.id ? { ...x, x: d.orig.x + dx, y: d.orig.y + dy } : x) }) }
+    else if (d.k === 'moveFurn') { let dx = p[0] - d.p0[0], dy = p[1] - d.p0[1]; const o = d.orig as Furn, sn = e.altKey ? { d: [0, 0] as Pt, mark: null } : snapDelta(furnCorners({ ...o, x: o.x + dx, y: o.y + dy }), o.id); dx += sn.d[0]; dy += sn.d[1]; setSnapMark(sn.mark); setM(cur => cur && { ...cur, furn: (cur.furn ?? []).map(x => x.id === d.id ? { ...x, x: o.x + dx, y: o.y + dy } : x) }) }
     else if (d.k === 'dimA' || d.k === 'dimB') { const o = d.orig as Dim, q = snapPt(p, d.k === 'dimA' ? o.b : o.a); setM(cur => cur && { ...cur, dims: (cur.dims ?? []).map(x => x.id === d.id ? { ...x, [d.k === 'dimA' ? 'a' : 'b']: q } : x) }) }
     else if (d.k === 'dimOff') { const o = d.orig as Dim, L = Math.hypot(o.b[0] - o.a[0], o.b[1] - o.a[1]) || 1, off = ((p[0] - o.a[0]) * -(o.b[1] - o.a[1]) + (p[1] - o.a[1]) * (o.b[0] - o.a[0])) / L; setM(cur => cur && { ...cur, dims: (cur.dims ?? []).map(x => x.id === d.id ? { ...x, off } : x) }) }
-    else if (d.k === 'moveDoor') { const s = snapToWall(M, p, 1.2); if (s) setM(cur => cur && { ...cur, doors: cur.doors.map(x => x.id === d.id ? { ...x, x: s.x, y: s.y, ang: s.ang, t: wallThickAt(cur.walls, s.x, s.y, s.ang, x.w) } : x) }) }
+    else if (d.k === 'moveDoor') { const s = snapToWall(M, p, 1.2, (d.orig as Door).w); if (s) setM(cur => cur && { ...cur, doors: cur.doors.map(x => x.id === d.id ? { ...x, x: s.x, y: s.y, ang: s.ang, t: s.thick || x.t } : x) }) }
   }
-  const onUp = () => { drag.current = null }
+  const onUp = () => { drag.current = null; setSnapMark(null) }
   const closePoly = () => { if (!M || pts.length < 3) return; const n = (M.rooms ?? []).length + 1, room: Room = { id: uid('r'), name: 'Phòng ' + n, poly: pts }; commit({ ...M, rooms: [...(M.rooms ?? []), room] }); setPts([]); setSel({ t: 'room', id: room.id }) }
   const onDouble = (e: React.MouseEvent) => {
     setPending(null)
@@ -275,7 +310,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const runAutoRooms = () => { if (!M) return; setBusy('Đang nhận diện các không gian kín…'); setErr(''); setTimeout(() => { try { const r = autoRooms(M); if (!r) { setErr('Mặt bằng quá lớn để nhận diện tự động.'); setBusy(''); return }
       if (r.rooms.length) commit({ ...M, rooms: [...(M.rooms ?? []), ...r.rooms] }); setBusy(r.rooms.length ? `Đã nhận ${r.rooms.length} không gian (bỏ qua ${r.skipped} vùng nhỏ/đã có). Sửa tên, kéo đỉnh để chỉnh.` : 'Không thấy thêm không gian kín nào – kiểm tra tường hở/thiếu cửa.'); setTimeout(() => setBusy(''), 6000) } catch (e) { setErr((e as Error).message); setBusy('') } }, 30) }
   const dimRoom = (r: Room) => { if (!M) return; const dims: Dim[] = r.poly.map((a, i) => { const b = r.poly[(i + 1) % r.poly.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nx = -(b[1] - a[1]) / L, ny = (b[0] - a[0]) / L, mid: Pt = [(a[0] + b[0]) / 2 + nx * 0.2, (a[1] + b[1]) / 2 + ny * 0.2]; return { id: uid('m'), a, b, off: inside(mid, r.poly) ? -0.5 : 0.5 } }).filter(d => Math.hypot(d.b[0] - d.a[0], d.b[1] - d.a[1]) >= 0.3); commit({ ...M, dims: [...(M.dims ?? []), ...dims] }) }
-  const setDoor = (id: string, patch: Partial<Door>) => M && commit({ ...M, doors: M.doors.map(d => d.id === id ? { ...d, ...patch } : d) })
+  const setDoor = (id: string, patch: Partial<Door>) => M && commit({ ...M, doors: M.doors.map(d => { if (d.id !== id) return d; const n = { ...d, ...patch }; return ('w' in patch || 'lib' in patch) && !('t' in patch) ? centerDoor(M.walls, n) : n }) })
 
   const selWall = sel?.t === 'wall' ? M?.walls.find(w => w.id === sel.id) : undefined
   const selDoor = sel?.t === 'door' ? M?.doors.find(d => d.id === sel.id) : undefined
@@ -347,7 +382,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 250px', gap: 10, alignItems: 'start' }}>
           <div ref={box} style={{ position: 'relative', height: '72vh', border: '1px solid #ddd', background: '#fff', overflow: 'hidden', touchAction: 'none', userSelect: 'none', cursor: tool === 'select' ? 'default' : 'crosshair' }}
             onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onDoubleClick={onDouble} onContextMenu={e => { e.preventDefault(); setPending(null); setPts([]) }}>
-            {under && base?.draw?.length ? <div style={{ position: 'absolute', inset: 0, opacity: 0.45, pointerEvents: 'none' }}><LinesCanvas base={base} vb={vbPt} size={size} /></div> : null}
+            {under && base?.draw?.length ? <div style={{ position: 'absolute', inset: 0, opacity: 0.6, pointerEvents: 'none' }}><LinesCanvas base={base} vb={vbPt} size={size} /></div> : null}
             <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
               {(M.rooms ?? []).map((r, i) => <path key={r.id} d={ringPath(r.poly)} fill={`hsl(${(i * 47) % 360} 70% 70%)`} fillOpacity={selRoom?.id === r.id ? 0.55 : 0.35} stroke={selRoom?.id === r.id ? '#e07000' : 'none'} strokeWidth={2} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />)}
               {showFurn && (M.furn ?? []).map(f => <FurnGlyph key={f.id} f={f} sel={selFurn?.id === f.id} onDown={onFurnDown} />)}
@@ -370,7 +405,8 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
               {tool === 'roomPoly' && pts.length >= 3 && <text x={centroid(pts)[0]} y={centroid(pts)[1]} fontSize={fsz} textAnchor="middle" fill="#e07000" stroke="#fff" strokeWidth={fsz * 0.2} paintOrder="stroke" style={{ pointerEvents: 'none' }}>{polyArea(pts).toFixed(2)} m²</text>}
               {tool === 'wall' && pending && cursor && <text x={snapPt(cursor, pending)[0]} y={snapPt(cursor, pending)[1] - hs * 2} fontSize={fsz} fill="#e07000" stroke="#fff" strokeWidth={fsz * 0.2} paintOrder="stroke" style={{ pointerEvents: 'none' }}>{Math.hypot(snapPt(cursor, pending)[0] - pending[0], snapPt(cursor, pending)[1] - pending[1]).toFixed(2)} m</text>}
               {tool === 'wall' && pending && cursor && <line x1={pending[0]} y1={pending[1]} x2={snapPt(cursor, pending)[0]} y2={snapPt(cursor, pending)[1]} stroke="#e07000" strokeWidth={2} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />}
-              {tool !== 'select' && tool !== 'wall' && tool !== 'furn' && cursor && (() => { const s = snapToWall(M, cursor, 0.6); return s ? <circle cx={s.x} cy={s.y} r={hs * 1.4} fill="#1e5ac8" fillOpacity={0.5} /> : null })()}
+              {tool !== 'select' && tool !== 'wall' && tool !== 'furn' && cursor && (() => { const s = snapToWall(M, cursor, 0.6, tool === 'door' ? (doorSpec(libDoor, customDoors) ?? DOOR_LIB[0]).w : 0.9); return s ? <circle cx={s.x} cy={s.y} r={hs * 1.4} fill="#1e5ac8" fillOpacity={0.5} /> : null })()}
+              {(() => { const mk = snapMark ?? (cursor && tool !== 'select' && tool !== 'door' ? (() => { const q = snapPt(cursor, pending ?? pts[pts.length - 1] ?? null); return Math.hypot(q[0] - cursor[0], q[1] - cursor[1]) > 1e-6 ? q : null })() : null); return mk ? <g style={{ pointerEvents: 'none' }}><rect x={mk[0] - hs * 1.1} y={mk[1] - hs * 1.1} width={hs * 2.2} height={hs * 2.2} fill="none" stroke="#00a86b" strokeWidth={2} vectorEffect="non-scaling-stroke" /><circle cx={mk[0]} cy={mk[1]} r={hs * 0.35} fill="#00a86b" /></g> : null })()}
             </svg>
             <div className="muted small" style={{ position: 'absolute', left: 6, bottom: 4, background: 'rgba(255,255,255,.85)', padding: '0 4px' }}>
               {tool === 'wall' ? 'Bấm điểm đầu, rồi các điểm tiếp theo · Esc hoặc chuột phải để dừng' : tool === 'dim' ? 'Bấm điểm đầu, điểm cuối, rồi bấm để kéo đường kích thước ra' : tool === 'room' ? 'Bấm vào bên trong một không gian kín' : tool === 'roomPoly' ? 'Bấm từng góc; bấm lại điểm đầu hoặc Enter để chốt' : tool === 'furn' ? 'Bấm để đặt món nội thất' : tool !== 'select' ? 'Bấm sát vào tường để đặt cửa' : 'Cuộn = zoom · kéo nền = dời · bấm tường/cửa để chọn · Del = xoá · Ctrl+Z = hoàn tác'}</div>
@@ -421,6 +457,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
               <label>Cao (m) <input style={{ width: 70 }} key={'h' + selDoor.id + selDoor.h} defaultValue={selDoor.h} onBlur={e => setDoor(selDoor.id, { h: Math.max(0.3, num(e.target.value, selDoor.h)) })} /></label>
               <label>Dày tường/khung (m) <input style={{ width: 60 }} key={'t' + selDoor.id + (selDoor.t ?? '')} defaultValue={selDoor.t ?? 0.2} onBlur={e => setDoor(selDoor.id, { t: Math.max(0.04, num(e.target.value, selDoor.t ?? 0.2)) })} /></label>
               <label>Bệ cao (m) <input style={{ width: 70 }} key={'s' + selDoor.id + selDoor.sill} defaultValue={selDoor.sill} onBlur={e => setDoor(selDoor.id, { sill: Math.max(0, num(e.target.value, selDoor.sill)) })} /></label>
+              <button className="btn sm" title="Đưa cửa vào đúng tim tường, khung dày bằng bề dày tường" onClick={() => setDoor(selDoor.id, { ...centerDoor(M.walls, selDoor) })}>Căn tim tường & khớp dày</button>
               <button className="btn sm" onClick={() => setDoor(selDoor.id, { flip: !selDoor.flip })}>Đảo phía mở</button>
               <button className="btn sm" onClick={dup}>Nhân đôi</button>
               <button className="btn sm" onClick={() => { const nm = window.prompt?.('Tên mẫu cửa của bạn') ?? ''; const base = doorSpec(selDoor.lib, customDoors); const id = 'my-' + uid(''); const sp: DoorSpec = { id, group: 'Cửa đi', name: nm || 'Mẫu của tôi', kind: selDoor.kind, w: selDoor.w, h: selDoor.h, sill: selDoor.sill, leaf: base?.leaf ?? 'flush', frame: base?.frame ?? 0.06, leafFinish: selDoor.finish ?? base?.leafFinish ?? 'd-white', frameFinish: selDoor.frameFinish ?? base?.frameFinish ?? 'd-white', handle: base?.handle, panes: base?.panes }; setCustomDoors(c => [sp, ...c]) }}>Lưu thành mẫu của tôi</button>
