@@ -1,4 +1,6 @@
 // Tổng hợp phòng: ma trận Phòng × Hạng mục. Nhìn là biết phòng nào đủ / thiếu gì / chưa có phối cảnh; sửa ngay tại đây – các tab khác tự cập nhật.
+import RoomPlanThumb from '../../components/RoomPlanThumb'
+import { roomPlanOf, usePlanRooms } from '../../lib/roomPlan'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { ProjectData } from '../../lib/useProject'
 import type { Entry, Room } from '../../lib/types'
@@ -34,7 +36,9 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
   const full = live.filter(r => !r.missing.length && r.total > 0).length
   const cnt = { all: rows.length, missing: live.filter(r => r.missing.length).length, norender: rows.filter(r => r.state === 'norender').length, none: rows.filter(r => r.state === 'none').length }
   const shown = rows.filter(r => flt === 'all' ? true : flt === 'missing' ? r.state !== 'none' && r.missing.length > 0 : r.state === flt)
-  const hasPlans = rows.some(r => r.room.plan_img)
+  const planRooms = usePlanRooms(d)
+  const planOfRoom = (r: Room) => (r.plan_img ? null : roomPlanOf(d, r, planRooms))
+  const hasPlans = rows.some(r => r.room.plan_img || planOfRoom(r.room))
   const imgSrc = (r: Room) => `${import.meta.env.BASE_URL}${r.plan_img}`
   const hasFloors = rows.some(r => r.room.floor)
   const cats = CATEGORIES.filter(c => rows.some(r => r.cells.get(c.key)?.length) || rows.some(r => r.need.includes(c.key)))
@@ -99,7 +103,7 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
                 <td className="mx-room" draggable={canEdit && r.total > 0} onDragStart={e => e.dataTransfer.setData('text/plain', JSON.stringify({ room: r.room.id, cat: null }))} onDragOver={e => canEdit && e.preventDefault()} onDrop={e => onDrop(e, r.room.id, null)}>
                   <div className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
                     <div style={{ flex: 1, minWidth: 0 }}><b>{r.room.code}</b> {r.room.name_vn}<div className="en">{r.room.name_en}</div></div>
-                    {hasPlans && (r.room.plan_img
+                    {hasPlans && (planOfRoom(r.room) ? <RoomPlanThumb p={planOfRoom(r.room)!} onClick={() => setZoom(r.room)} /> : r.room.plan_img
                       ? <img className="mx-plan" src={imgSrc(r.room)} alt={'Mặt bằng ' + r.room.name_vn} loading="lazy" title="Bấm để phóng to (có thêm khu vực xung quanh)" onClick={() => setZoom(r.room)} />
                       : <div className="mx-plan none" title="Chưa tìm thấy phòng này trên bộ mặt bằng khách sạn – cần kiểm tra đúng / thừa">chưa có MB</div>)}
                   </div>
@@ -126,7 +130,7 @@ export default function MatrixTab({ d }: { d: ProjectData }) {
         </table>
       </div>
 
-      {zoom && <Modal title={`${zoom.code} ${zoom.name_vn} – mặt bằng`} onClose={() => setZoom(null)} w={900}><img src={imgSrc(zoom).replace(/\.png$/, '-ctx.png')} alt="" style={{ width: '100%', background: '#fff' }} /><p className="small muted">Cắt từ bộ mặt bằng khách sạn (PDF) kèm khu vực xung quanh; khung xanh = vùng ảnh nhỏ, vòng tròn xanh = vị trí phòng. Chỉ để đối chiếu đúng / thừa / thiếu.</p></Modal>}
+      {zoom && <Modal title={`${zoom.code} ${zoom.name_vn} – mặt bằng`} onClose={() => setZoom(null)} w={900}>{planOfRoom(zoom) ? <><RoomPlanThumb p={planOfRoom(zoom)!} ctx w="100%" h={520} /><p className="small muted">Cắt từ mặt bằng tầng đã đọc ({planOfRoom(zoom)!.floor}); vùng đỏ = phòng này.</p></> : <><img src={imgSrc(zoom).replace(/\.png$/, '-ctx.png')} alt="" style={{ width: '100%', background: '#fff' }} /><p className="small muted">Cắt từ bộ mặt bằng khách sạn (PDF) kèm khu vực xung quanh; khung xanh = vùng ảnh nhỏ, vòng tròn xanh = vị trí phòng. Chỉ để đối chiếu đúng / thừa / thiếu.</p></>}</Modal>}
       {chk && rows.find(r => r.room.id === chk.roomId) && d.entries.find(e => e.id === chk.id) && <EntryCheck d={d} sym={sym} rows={rows} row={rows.find(r => r.room.id === chk.roomId)!} cat={chk.cat} entry={d.entries.find(e => e.id === chk.id)!} canEdit={canEdit} run={run} imgSrc={imgSrc} onEditCell={() => { setCell({ roomId: chk.roomId, cat: chk.cat }); setChk(null) }} onClose={() => setChk(null)} />}
       {cell && <CellDialog d={d} sym={sym} row={rows.find(r => r.room.id === cell.roomId)!} cat={cell.cat} canEdit={canEdit} run={run} onCopy={() => setCopy({ to: cell.roomId, cats: [cell.cat], fixedCat: cell.cat })} onClose={() => setCell(null)} />}
       {copy && <CopyDialog d={d} rows={rows} init={copy} run={run} onClose={() => setCopy(null)} />}
@@ -152,6 +156,7 @@ function Modal({ title, onClose, children, w = 560 }: { title: string; onClose: 
 
 function EntryCheck({ d, sym, rows, row, cat, entry, canEdit, run, imgSrc, onEditCell, onClose }: { d: ProjectData; sym: Map<string, string>; rows: Row[]; row: Row; cat: string; entry: Entry; canEdit: boolean; run: (f: () => Promise<unknown>, ok?: string) => Promise<void>; imgSrc: (r: Room) => string; onEditCell: () => void; onClose: () => void }) {
   const [to, setTo] = useState(''), [idx, setIdx] = useState(0)
+  const planRooms = usePlanRooms(d)
   const code = sym.get(entry.id) ?? entry.code
   const mine = d.occ.filter(o => o.room_id === row.room.id && o.entry_id === entry.id && (o.category ?? entry.category ?? '') === cat)
   const shots = mine.filter(o => o.bbox)
@@ -185,7 +190,7 @@ function EntryCheck({ d, sym, rows, row, cat, entry, canEdit, run, imgSrc, onEdi
         <div>
           <b className="small">Mặt bằng {row.room.code} {row.room.name_vn}</b>
           <div style={{ height: 400, border: '1px solid var(--line)', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 4, overflow: 'hidden' }}>
-            {row.room.plan_img ? <img src={imgSrc(row.room).replace(/\.png$/, '-ctx.png')} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} onError={e => { (e.target as HTMLImageElement).src = imgSrc(row.room) }} /> : <span className="muted small">Phòng chưa có mặt bằng</span>}
+            {roomPlanOf(d, row.room, planRooms) ? <RoomPlanThumb p={roomPlanOf(d, row.room, planRooms)!} ctx w="100%" h="100%" /> : row.room.plan_img ? <img src={imgSrc(row.room).replace(/\.png$/, '-ctx.png')} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} onError={e => { (e.target as HTMLImageElement).src = imgSrc(row.room) }} /> : <span className="muted small">Phòng chưa có mặt bằng</span>}
           </div>
         </div>
       </div>
