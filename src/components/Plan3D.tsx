@@ -15,7 +15,7 @@ import { WALL_KINDS, autoRooms, centerline, centroid, doorRect, floodRoom, cente
 import { FURN_TYPES, furnTypeOf } from '../lib/plan3d/furn'
 
 type Box = { x: number; y: number; w: number; h: number }
-type Tool = 'select' | 'wall' | 'dim' | 'room' | 'roomPoly' | 'door' | 'col' | 'furn'
+type Tool = 'select' | 'wall' | 'glasskit' | 'dim' | 'room' | 'roomPoly' | 'door' | 'col' | 'furn'
 type Sel = { t: 'wall' | 'door' | 'room' | 'dim' | 'furn'; id: string } | null
 const KEY = 'plan3d-model-v1'
 const ringPath = (r: Pt[]) => 'M' + r.map(p => p[0].toFixed(3) + ' ' + p[1].toFixed(3)).join('L') + 'Z'
@@ -88,7 +88,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const [custom, setCustom] = useState<Finish[]>(() => ls('plan3d-custom-finishes', [])), [customDoors, setCustomDoors] = useState<DoorSpec[]>(() => ls('plan3d-custom-doors', []))
   useEffect(() => { try { localStorage.setItem('plan3d-custom-finishes', JSON.stringify(custom)) } catch { setErr('Ảnh vật liệu quá nặng, không lưu thêm được trong trình duyệt.') } }, [custom])
   useEffect(() => { try { localStorage.setItem('plan3d-custom-doors', JSON.stringify(customDoors)) } catch { /* bỏ */ } }, [customDoors])
-  const [libDoor, setLibDoor] = useState('dr-flush09'), [libCol, setLibCol] = useState('cl-r40'), [newKind, setNewKind] = useState('brick'), [showLib, setShowLib] = useState(false), [ceiling, setCeiling] = useState(false)
+  const [libDoor, setLibDoor] = useState('dr-flush09'), [libCol, setLibCol] = useState('cl-r40'), [newKind, setNewKind] = useState('brick'), [gKind, setGKind] = useState('glassal'), [gDoor, setGDoor] = useState('dg-glass12'), [gPos, setGPos] = useState<'mid' | 'start' | 'end'>('mid'), [showLib, setShowLib] = useState(false), [ceiling, setCeiling] = useState(false)
   const [pending, setPending] = useState<Pt | null>(null), [cursor, setCursor] = useState<Pt | null>(null), [pts, setPts] = useState<Pt[]>([])
 
   const commit = useCallback((n: Model, push = true) => { setM(cur => { if (push && cur) { hist.current.push(cur); if (hist.current.length > 60) hist.current.shift(); setNh(hist.current.length) } return n }) }, [])
@@ -199,6 +199,20 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     if (!M) return
     if (e.button === 2) { setPending(null); setPts([]); return }
     const p = toModel(e)
+    if (tool === 'glasskit') {
+      const q = snapPt(p, pending)
+      if (!pending) { setPending(q); return }
+      const L = Math.hypot(q[0] - pending[0], q[1] - pending[1])
+      if (L < 0.05) { setPending(null); return }
+      const gk = kindOf(gKind), a = pending
+      const w: Wall = { id: uid('w'), role: 'wall', kind: gKind, panel: gk.panel ?? newPanel, shape: { type: 'seg', a, b: q, t: gk.t } }
+      const doors = [...M.doors], sp = gDoor === 'none' ? null : doorSpec(gDoor, customDoors)
+      if (sp && L >= sp.w + 0.1) {
+        const ux = (q[0] - a[0]) / L, uy = (q[1] - a[1]) / L, s = gPos === 'mid' ? L / 2 : gPos === 'start' ? sp.w / 2 + 0.05 : L - sp.w / 2 - 0.05
+        doors.push({ id: uid('d'), kind: sp.kind, lib: sp.id, x: a[0] + ux * s, y: a[1] + uy * s, ang: Math.atan2(uy, ux), w: sp.w, h: sp.h, sill: sp.sill, t: gk.t })
+      }
+      commit({ ...M, walls: [...M.walls, w], doors }); setPending(q); return
+    }
     if (tool === 'wall') {
       const q = snapPt(p, pending)
       if (!pending) { setPending(q); return }
@@ -347,6 +361,11 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
         {mode === '2d' ? <>
           <button className={'btn sm' + (tool === 'select' ? ' primary' : '')} onClick={() => { setTool('select'); setPending(null); setPts([]) }}>Chọn / kéo</button>
           <button className={'btn sm' + (tool === 'wall' ? ' primary' : '')} onClick={() => { setTool('wall'); setPending(null); setPts([]) }}>＋ Tường</button>
+          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><button className={'btn sm' + (tool === 'glasskit' ? ' primary' : '')} title="Vẽ nhanh vách kính + cửa kính cùng một đường" onClick={() => { setTool('glasskit'); setPending(null); setPts([]) }}>▭ Bộ vách kính</button>
+            {tool === 'glasskit' && <>
+              <select value={gKind} onChange={e => setGKind(e.target.value)} style={{ maxWidth: 190 }}>{WALL_KINDS.filter(k => k.glass).map(k => <option key={k.key} value={k.key}>{k.label}</option>)}</select>
+              <select value={gDoor} onChange={e => setGDoor(e.target.value)} style={{ maxWidth: 190 }}><option value="none">Không cửa</option>{DOOR_LIB.filter(d => d.group === 'Cửa kính').map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
+              <select value={gPos} onChange={e => setGPos(e.target.value as 'mid' | 'start' | 'end')}><option value="mid">Cửa ở giữa</option><option value="start">Cửa ở đầu</option><option value="end">Cửa ở cuối</option></select></>}</span>
           <button className={'btn sm' + (tool === 'dim' ? ' primary' : '')} onClick={() => { setTool('dim'); setPending(null); setPts([]) }}>📏 Ghi kích thước</button>
           <button className={'btn sm' + (tool === 'room' ? ' primary' : '')} onClick={() => { setTool('room'); setPending(null); setPts([]); setErr('') }}>▣ Phòng (bấm vào trong)</button>
           <button className="btn sm" onClick={runAutoRooms}>⚡ Tự nhận diện tất cả phòng</button>
@@ -403,13 +422,13 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
               {tool === 'dim' && pts.length > 0 && cursor && (() => { const a = pts[0], b = pts.length > 1 ? pts[1] : snapPt(cursor, a), L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, off = pts.length > 1 ? ((cursor[0] - a[0]) * -(b[1] - a[1]) + (cursor[1] - a[1]) * (b[0] - a[0])) / L : 0; return <DimGlyph d={{ id: 'tmp', a, b, off }} sel fs={fsz} mm={dimMm} onDown={() => undefined} /> })()}
               {tool === 'roomPoly' && pts.length > 0 && <path d={'M' + pts.map(q => q[0] + ' ' + q[1]).join('L') + (cursor ? 'L' + snapPt(cursor, pts[pts.length - 1]).join(' ') : '')} fill="#e07000" fillOpacity={0.15} stroke="#e07000" strokeWidth={2} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />}
               {tool === 'roomPoly' && pts.length >= 3 && <text x={centroid(pts)[0]} y={centroid(pts)[1]} fontSize={fsz} textAnchor="middle" fill="#e07000" stroke="#fff" strokeWidth={fsz * 0.2} paintOrder="stroke" style={{ pointerEvents: 'none' }}>{polyArea(pts).toFixed(2)} m²</text>}
-              {tool === 'wall' && pending && cursor && <text x={snapPt(cursor, pending)[0]} y={snapPt(cursor, pending)[1] - hs * 2} fontSize={fsz} fill="#e07000" stroke="#fff" strokeWidth={fsz * 0.2} paintOrder="stroke" style={{ pointerEvents: 'none' }}>{Math.hypot(snapPt(cursor, pending)[0] - pending[0], snapPt(cursor, pending)[1] - pending[1]).toFixed(2)} m</text>}
-              {tool === 'wall' && pending && cursor && <line x1={pending[0]} y1={pending[1]} x2={snapPt(cursor, pending)[0]} y2={snapPt(cursor, pending)[1]} stroke="#e07000" strokeWidth={2} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />}
-              {tool !== 'select' && tool !== 'wall' && tool !== 'furn' && cursor && (() => { const s = snapToWall(M, cursor, 0.6, tool === 'door' ? (doorSpec(libDoor, customDoors) ?? DOOR_LIB[0]).w : 0.9); return s ? <circle cx={s.x} cy={s.y} r={hs * 1.4} fill="#1e5ac8" fillOpacity={0.5} /> : null })()}
+              {(tool === 'wall' || tool === 'glasskit') && pending && cursor && <text x={snapPt(cursor, pending)[0]} y={snapPt(cursor, pending)[1] - hs * 2} fontSize={fsz} fill="#e07000" stroke="#fff" strokeWidth={fsz * 0.2} paintOrder="stroke" style={{ pointerEvents: 'none' }}>{Math.hypot(snapPt(cursor, pending)[0] - pending[0], snapPt(cursor, pending)[1] - pending[1]).toFixed(2)} m</text>}
+              {(tool === 'wall' || tool === 'glasskit') && pending && cursor && <line x1={pending[0]} y1={pending[1]} x2={snapPt(cursor, pending)[0]} y2={snapPt(cursor, pending)[1]} stroke="#e07000" strokeWidth={2} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />}
+              {tool !== 'select' && tool !== 'wall' && tool !== 'glasskit' && tool !== 'furn' && cursor && (() => { const s = snapToWall(M, cursor, 0.6, tool === 'door' ? (doorSpec(libDoor, customDoors) ?? DOOR_LIB[0]).w : 0.9); return s ? <circle cx={s.x} cy={s.y} r={hs * 1.4} fill="#1e5ac8" fillOpacity={0.5} /> : null })()}
               {(() => { const mk = snapMark ?? (cursor && tool !== 'select' && tool !== 'door' ? (() => { const q = snapPt(cursor, pending ?? pts[pts.length - 1] ?? null); return Math.hypot(q[0] - cursor[0], q[1] - cursor[1]) > 1e-6 ? q : null })() : null); return mk ? <g style={{ pointerEvents: 'none' }}><rect x={mk[0] - hs * 1.1} y={mk[1] - hs * 1.1} width={hs * 2.2} height={hs * 2.2} fill="none" stroke="#00a86b" strokeWidth={2} vectorEffect="non-scaling-stroke" /><circle cx={mk[0]} cy={mk[1]} r={hs * 0.35} fill="#00a86b" /></g> : null })()}
             </svg>
             <div className="muted small" style={{ position: 'absolute', left: 6, bottom: 4, background: 'rgba(255,255,255,.85)', padding: '0 4px' }}>
-              {tool === 'wall' ? 'Bấm điểm đầu, rồi các điểm tiếp theo · Esc hoặc chuột phải để dừng' : tool === 'dim' ? 'Bấm điểm đầu, điểm cuối, rồi bấm để kéo đường kích thước ra' : tool === 'room' ? 'Bấm vào bên trong một không gian kín' : tool === 'roomPoly' ? 'Bấm từng góc; bấm lại điểm đầu hoặc Enter để chốt' : tool === 'furn' ? 'Bấm để đặt món nội thất' : tool !== 'select' ? 'Bấm sát vào tường để đặt cửa' : 'Cuộn = zoom · kéo nền = dời · bấm tường/cửa để chọn · Del = xoá · Ctrl+Z = hoàn tác'}</div>
+              {tool === 'wall' || tool === 'glasskit' ? 'Bấm điểm đầu, rồi các điểm tiếp theo · Esc hoặc chuột phải để dừng' : tool === 'dim' ? 'Bấm điểm đầu, điểm cuối, rồi bấm để kéo đường kích thước ra' : tool === 'room' ? 'Bấm vào bên trong một không gian kín' : tool === 'roomPoly' ? 'Bấm từng góc; bấm lại điểm đầu hoặc Enter để chốt' : tool === 'furn' ? 'Bấm để đặt món nội thất' : tool !== 'select' ? 'Bấm sát vào tường để đặt cửa' : 'Cuộn = zoom · kéo nền = dời · bấm tường/cửa để chọn · Del = xoá · Ctrl+Z = hoàn tác'}</div>
           </div>
           <div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
             {selWall ? <div className="card" style={{ display: 'grid', gap: 6 }}>
