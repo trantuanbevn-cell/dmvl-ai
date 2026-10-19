@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { loadImage } from '../lib/crop'
 import { uploadImage } from '../lib/imageUpload'
@@ -51,8 +51,38 @@ export default function MatImage({ d, e }: { d: ProjectData; e: Entry }) {
   }
   const removeExtra = (i: number) => write({ mat_extra: extras.filter((_, j) => j !== i - 1) })
   const cur = ed != null ? slots[ed] : undefined
+  // kéo thả / Ctrl+V ảnh trực tiếp (ô trống → ảnh đầu; có rồi → thêm ảnh phụ; đủ 3 → thay ảnh đang trỏ)
+  const [over, setOver] = useState(false), [busy, setBusy] = useState(false), hover = useRef(false)
+  const putFile = async (f: File, at?: number) => {
+    if (!canEdit || !f.type.startsWith('image/')) return
+    const i = at ?? (slots[0].src ? (slots.length < MAT_MAX ? slots.length : 0) : 0)
+    setBusy(true)
+    try {
+      if (i === 0) {
+        const img = await uploadImage(f, `${e.project_id}/mat/${e.id}-${Date.now()}.jpg`)
+        await write({ mat_view: { img, region: null } })
+      } else {
+        const img = await uploadImage(f, `${e.project_id}/mat/${e.id}-${i}-${Date.now()}.jpg`)
+        const list = extras.slice(); list[i - 1] = { img, region: null }; await write({ mat_extra: list })
+      }
+    } catch (er) { alert(String((er as Error).message ?? er)) } finally { setBusy(false) }
+  }
+  const putRef = useRef(putFile); putRef.current = putFile
+  useEffect(() => {
+    const h = (ev: ClipboardEvent) => {
+      if (!hover.current) return
+      const t = ev.target as HTMLElement | null; if (t && /^(INPUT|TEXTAREA)$/.test(t.tagName) || t?.isContentEditable) return
+      const f = Array.from(ev.clipboardData?.files ?? []).find(x => x.type.startsWith('image/')); if (!f) return
+      ev.preventDefault(); putRef.current(f)
+    }
+    document.addEventListener('paste', h); return () => document.removeEventListener('paste', h)
+  }, [])
   return (
-    <div className="mat-wrap">
+    <div className="mat-wrap" onMouseEnter={() => { hover.current = true }} onMouseLeave={() => { hover.current = false }}
+      onDragOver={ev => { if (canEdit && ev.dataTransfer.types.includes('Files')) { ev.preventDefault(); setOver(true) } }} onDragLeave={() => setOver(false)}
+      onDrop={ev => { setOver(false); const f = Array.from(ev.dataTransfer.files).find(x => x.type.startsWith('image/')); if (!f || !canEdit) return; ev.preventDefault(); ev.stopPropagation(); putFile(f) }}
+      style={over ? { outline: '2px dashed var(--brand, #b5651d)', outlineOffset: 2, background: 'rgba(181,101,29,.08)' } : undefined}>
+      {busy && <div className="small muted" style={{ textAlign: 'center' }}>Đang tải ảnh…</div>}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>
         {slots.map((s, i) => (
           <div key={i} style={{ position: 'relative' }}>
@@ -62,7 +92,7 @@ export default function MatImage({ d, e }: { d: ProjectData; e: Entry }) {
             {canEdit && <button className="crop-edit show" title="Cắt / thay ảnh vật liệu" onClick={ev => { ev.stopPropagation(); setEd(i) }}>✎</button>}
           </div>))}
       </div>
-      {canEdit && slots.length < MAT_MAX && <button className="btn ghost sm" style={{ marginTop: 3 }} title="Thêm ảnh vật liệu (tối đa 3)" onClick={ev => { ev.stopPropagation(); setEd(slots.length) }}>＋ ảnh ({slots.length}/{MAT_MAX})</button>}
+      {canEdit && slots.length < MAT_MAX && <button className="btn ghost sm" style={{ marginTop: 3 }} title="Thêm ảnh vật liệu (tối đa 3) – hoặc kéo thả / Ctrl+V ảnh vào ô" onClick={ev => { ev.stopPropagation(); setEd(slots.length) }}>＋ ảnh ({slots.length}/{MAT_MAX})</button>}
       {ed != null && <CropEditor mode="mat" baseUrl={cur?.src} matRegion={cur?.region ?? null} onSave={save} onClose={() => setEd(null)} />}
       {big && <div className="lightbox" onMouseDown={() => setBig(null)}><div className="lb-body"><MatView url={big} region={slots.find(s => s.src === big)?.region} maxW={Math.round(window.innerWidth * 0.9)} maxH={Math.round(window.innerHeight * 0.85)} /></div></div>}
     </div>
