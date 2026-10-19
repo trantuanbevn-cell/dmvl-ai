@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { sectionOf, bandKeys, bandTitle, sectionTitle, bandSections, addBand, removeBand, mergeBand, splitBand, moveBand, moveSection, mergeSections, unmergeSections, mergedMembers, getNameOverrides, setNameOverrides, setSectionLayout, type SectionLayout } from '../lib/sections'
+import { sectionOf, allSections, setCustomSections, bandKeys, bandTitle, sectionTitle, bandSections, addBand, removeBand, mergeBand, splitBand, moveBand, moveSection, mergeSections, unmergeSections, mergedMembers, getNameOverrides, setNameOverrides, setSectionLayout, getSectionLayout, type SectionLayout } from '../lib/sections'
 import type { ProjectData } from '../lib/useProject'
 import { toast } from '../lib/toast'
 
@@ -25,11 +25,39 @@ export default function BandManager({ d, onClose }: { d: ProjectData; onClose: (
   const visible = (b: string) => bandSections(b).filter(s => s.custom || have.has(s.key))
   const run = async (l: SectionLayout, msg: string) => { await saveLayout(d, l); toast(msg, 'ok') }
   const toggle = (b: string, k: string) => setPick(p => ({ ...p, [b]: (p[b] ?? []).includes(k) ? (p[b] ?? []).filter(x => x !== k) : [...(p[b] ?? []), k] }))
+  // Mẫu theo yêu cầu CĐT: tách ngân sách Hoàn thiện / Liền tường / Đồ rời / Đèn / Thiết bị vệ sinh / Trang trí & OS&E. Chỉ đổi sắp xếp, không đụng nội dung vật liệu.
+  const presetCdt = async () => {
+    if (!d.project) return
+    if (!confirm('Gom lại thành 7 nhóm lớn: Hoàn thiện · Nội thất liền tường · Nội thất rời · Thiết bị đèn · Thiết bị vệ sinh · Trang trí & OS&E · Biển báo & đầu chờ MEP.\nChỉ đổi cách sắp xếp, KHÔNG xoá hay sửa nội dung vật liệu; chữ cái A, B, C… tự đánh lại.')) return
+    const OSE = 'c_ose'
+    const cs = d.project.custom_sections ?? []
+    if (!cs.some(c => c.key === OSE)) {
+      const list = [...cs, { key: OSE, vn: 'OS&E', en: 'OS&E', band: 'D', group: 'OSE' }]
+      const { error } = await supabase.from('projects').update({ custom_sections: list }).eq('id', d.project.id)
+      if (error) { alert(error.message); return }
+      setCustomSections(list)
+    }
+    const nb = (vn: string, en: string) => ({ key: 'b_' + Math.random().toString(36).slice(2, 6), vn, en })
+    const bands = [nb('NỘI THẤT LIỀN TƯỜNG', 'BUILT-IN JOINERY'), nb('NỘI THẤT RỜI (FF&E)', 'LOOSE FURNITURE (FF&E)'), nb('THIẾT BỊ ĐÈN', 'LIGHTING'), nb('THIẾT BỊ VỆ SINH', 'SANITARY FIXTURES & FITTINGS'), nb('TRANG TRÍ & OS&E', 'DECOR & OS&E'), nb('BIỂN BÁO & ĐẦU CHỜ MEP', 'SIGNAGE & MEP INTERFACE')]
+    const plan: [string, string[]][] = [
+      ['A', ['tile', 'stone', 'floor', 'carpet', 'paint', 'wallcov', 'panel', 'ceiling', 'skirting', 'wood', 'metal', 'glass', 'mirror', 'door', 'fabric']],
+      [bands[0].key, ['joinery']], [bands[1].key, ['loose', 'curtain', 'equipment']], [bands[2].key, ['lighting']], [bands[3].key, ['sanitary']],
+      [bands[4].key, ['decor', 'art', OSE]], [bands[5].key, ['sign', 'mep']]]
+    const assign: Record<string, string> = {}; for (const [b, ks] of plan) for (const k of ks) assign[k] = b
+    const known = new Set(Object.keys(assign)), extra = allSections().filter(x => !known.has(x.key))   // mục tự tạo khác: giữ ở nhóm Hoàn thiện
+    for (const x of extra) assign[x.key] = 'A'
+    const order = [...plan.flatMap(([, ks]) => ks), ...extra.map(x => x.key)]
+    const ord2 = plan.flatMap(([b]) => order.filter(k => assign[k] === b))
+    const names = { ...getNameOverrides(), 'band:A': { vn: 'HOÀN THIỆN (VLHT)', en: 'FINISHES' } }
+    setNameOverrides(names); await supabase.from('projects').update({ section_names: names }).eq('id', d.project.id)
+    await run({ ...getSectionLayout(), customBands: bands, bandOrder: ['A', ...bands.map(b => b.key)], assign, order: ord2 }, 'Đã gom lại 7 nhóm lớn')
+  }
   return (
     <div className="modal-bg center" onMouseDown={onClose}>
       <div className="modal" style={{ maxWidth: 820, maxHeight: '88vh', overflow: 'auto' }} onMouseDown={e => e.stopPropagation()}>
         <div className="row between"><h3 style={{ margin: 0 }}>⇅ Quản lý nhóm lớn</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
         <p className="small muted">Tạo, tách, gộp, đổi chỗ các nhóm lớn và chuyển mục vật liệu giữa các nhóm. Tick ≥2 mục nhỏ trong cùng nhóm để <b>gộp thành một mục</b> (bấm “Tách lại” để trả về như cũ). Đây chỉ là cách <b>sắp xếp để trình bày và xuất file</b> – nội dung từng vật liệu, mã, ảnh, phòng không thay đổi. Chữ cái A, B, C… tự đánh lại theo thứ tự.</p>
+        <div className="row gap" style={{ marginBottom: 10 }}><button className="btn sm" onClick={presetCdt} title="Một chạm: gom các hạng mục thành các nhóm lớn theo yêu cầu CĐT, không đổi nội dung vật liệu">⚡ Mẫu CĐT: Hoàn thiện · Liền tường · Đồ rời · Đèn · Vệ sinh · Trang trí & OS&E</button></div>
         <div className="row gap" style={{ flexWrap: 'wrap', marginBottom: 10 }}>
           <input data-lang="name" placeholder="Tên nhóm lớn mới (Việt), vd: THIẾT BỊ" value={newVn} onChange={e => setNewVn(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
           <input data-lang="name" placeholder="English (tuỳ chọn)" value={newEn} onChange={e => setNewEn(e.target.value)} style={{ flex: 1, minWidth: 160 }} />
