@@ -17,6 +17,6 @@ export default function PlanLab({ d }: { d: ProjectData }) {
   const go = (s: Sub) => { setSub(s); try { sessionStorage.setItem('pl-sub', s) } catch { /* bỏ */ } }
   return <div style={{ display: 'grid', gap: 10 }}>
     <div className="mp-tabs big">{([['plan', 'Mặt bằng tầng & tô màu phòng'], ['read', 'Đọc mặt bằng (thử nghiệm)'], ['e3d', 'Soạn & dựng 3D (thử nghiệm)']] as [Sub, string][]).map(([k, l]) => <button key={k} className={'mp-tab' + (sub === k ? ' on' : '')} onClick={() => go(k)}>{l}</button>)}</div>
-    {sub === 'plan' ? <MasterPlan d={d} size={newDeck('westin').size} /> : sub === 'read' ? <PlanReader /> : <Plan3D proj={{ id: d.project!.id, floors: d.floors }} />}
+    {sub === 'plan' ? <MasterPlan d={d} size={newDeck('westin').size} /> : sub === 'read' ? <PlanReader /> : <Plan3D proj={{ id: d.project!.id, floors: d.floors, d }} />}
   </div>
 }

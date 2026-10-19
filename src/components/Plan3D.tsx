@@ -3,6 +3,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { readDxfPage } from '../lib/dxf'
 import { supabase, BUCKET } from '../lib/supabase'
 import type { FloorPlan } from '../lib/types'
+import type { ProjectData } from '../lib/useProject'
+import { applyPlanSync, planSyncRows, type SyncRow } from '../lib/planSync'
 import type { VecPage } from '../lib/vector'
 import { LinesCanvas } from './PlanView'
 import Scene3D from './Scene3D'
@@ -69,7 +71,7 @@ function DimGlyph({ d, sel, fs, mm = false, onDown }: { d: Dim; sel: boolean; fs
 }
 
 /** proj: khi nhúng trong một dự án → chọn tầng, nhập DXF của tầng đó, và tự lưu mô hình lên dự án (file riêng trong kho, không đụng dữ liệu danh mục) */
-export default function Plan3D({ proj }: { proj?: { id: string; floors: FloorPlan[] } } = {}) {
+export default function Plan3D({ proj }: { proj?: { id: string; floors: FloorPlan[]; d?: ProjectData } } = {}) {
   const [M, setM] = useState<Model | null>(() => { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) as Model : null } catch { return null } })
   const [base, setBase] = useState<VecPage | null>(null)
   const [busy, setBusy] = useState(''), [err, setErr] = useState('')
@@ -98,6 +100,10 @@ export default function Plan3D({ proj }: { proj?: { id: string; floors: FloorPla
   useEffect(() => { if (size.w && size.h) setVb(v => ({ ...v, h: v.w * size.h / size.w })) }, [size])
 
   const [floorId, setFloorId] = useState<string>(''), cloud = useRef(''), [saved, setSaved] = useState('')
+  const [sync, setSync] = useState<SyncRow[] | null>(null)
+  const floorLabel = proj?.floors.find(f => f.id === floorId)?.floor_label ?? ''
+  const openSync = () => { if (!proj?.d || !M) return; const items = (M.rooms ?? []).filter(r => r.name.trim() && !/^Phòng \d+$/.test(r.name.trim())).map(r => ({ name: r.name.trim(), en: r.en?.trim() || undefined, area: r.area ?? polyArea(r.poly) })); if (!items.length) { setErr('Chưa có phòng nào được đặt tên (tên mặc định "Phòng 1…" bị bỏ qua). Đặt tên phòng trước.'); return } setErr(''); setSync(planSyncRows(proj.d, floorLabel, items)) }
+  const doSync = async () => { if (!proj?.d || !sync) return; setBusy('Đang đưa sang danh mục…'); try { const r = await applyPlanSync(proj.d, floorLabel, sync); setSync(null); setSaved(`Đã đưa sang danh mục: thêm ${r.added}, cập nhật ${r.updated} phòng`); await proj.d.reload() } catch (e) { setErr((e as Error).message) } finally { setBusy('') } }
   const jsonPath = (fid: string) => `${proj?.id}/plan3d/${fid}.json`
   const floorsDxf = (proj?.floors ?? []).filter(f => /\.dxf$/i.test(f.pdf_path))
   /** Mở tầng: ưu tiên bản 3D đã lưu của tầng, không có thì dựng từ file DXF của tầng */
@@ -287,8 +293,14 @@ export default function Plan3D({ proj }: { proj?: { id: string; floors: FloorPla
       <label className="btn sm">Nhập DXF<input type="file" accept=".dxf" hidden onChange={e => { const f = e.target.files?.[0]; if (f) load(f); e.target.value = '' }} /></label>
       <label className="btn sm">Mở file đã lưu<input type="file" accept=".json" hidden onChange={e => { const f = e.target.files?.[0]; if (f) loadJson(f); e.target.value = '' }} /></label>
       {M && <button className="btn sm" onClick={saveJson}>Lưu file (.json)</button>}
+      {proj?.d && M && <button className="btn sm primary" title="Đưa tên phòng + diện tích + tầng đã vẽ sang bảng phòng của Lập danh mục" onClick={openSync}>⇄ Đưa phòng sang Lập danh mục</button>}
       {busy && <span className="muted small">{busy}</span>}{proj && saved && !busy && <span className="muted small">☁ {saved}</span>}{err && <span style={{ color: '#b00020' }} className="small">{err}</span>}
     </div>
+    {sync && <div className="card small" style={{ display: 'grid', gap: 6, border: '2px solid #e07000' }}>
+      <b>Đưa {sync.length} phòng của «{floorLabel || 'tầng chưa chọn'}» sang Lập danh mục</b>
+      <div className="muted">Chỉ bổ sung: phòng trùng tên chỉ được cập nhật diện tích và điền ô còn trống; không đổi tên, không xoá, không đụng vật liệu.{!floorLabel && ' Chưa chọn tầng nên phòng mới sẽ chưa có tầng.'}</div>
+      <table className="tbl"><thead><tr><th>Phòng</th><th>EN</th><th>m²</th><th>Kết quả</th></tr></thead><tbody>{sync.map((r, i) => <tr key={i}><td>{r.name}</td><td>{r.en ?? ''}</td><td>{r.area.toFixed(2)}</td><td>{r.note}</td></tr>)}</tbody></table>
+      <div className="row gap"><button className="btn primary sm" onClick={doSync}>Áp dụng</button><button className="btn sm" onClick={() => setSync(null)}>Huỷ</button></div></div>}
     {!M ? <div className="muted">Nhập file DXF mặt bằng. Phần mềm dựng sẵn hệ tường và cột; bạn sửa tiếp trên mặt bằng rồi xem 3D. Bản sửa tự lưu trong trình duyệt này.</div> : <>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
         <div className="mp-tabs"><button className={'mp-tab' + (mode === '2d' ? ' on' : '')} onClick={() => setMode('2d')}>Mặt bằng 2D</button><button className={'mp-tab' + (mode === '3d' ? ' on' : '')} onClick={() => setMode('3d')}>Xem 3D</button></div>
