@@ -49,6 +49,8 @@ export function FloorCard({ d, fp, run, busy, compact }: { d: ProjectData; fp: F
         </div>
         <div className="muted">Cập nhật chỉ thay phần mặt bằng của tầng này: tên phòng/phép gộp được chuyển sang tự động nếu hình dáng toàn nhà khớp; dữ liệu vật liệu của dự án không bị đụng tới.</div>
       </div>}
+      {compact && url && <div className="img-wrap" style={{ maxWidth: 560, margin: '6px 0' }}><img src={url} alt="" draggable={false} />
+        {g && <svg viewBox="0 0 1 1" preserveAspectRatio="none">{g.rooms.map((r, i) => roomPolys(r).map((pl, k) => <polygon key={r.id + '-' + k} points={pl.map(p => p.join(',')).join(' ')} fill={COLS[i % 10] + '55'} stroke={COLS[i % 10]} strokeWidth={0.002} />))}</svg>}</div>}
       {!compact && <div className="floor-grid">
         <div className="img-wrap">
           {url && <img src={url} alt="" draggable={false} />}
@@ -91,7 +93,7 @@ export function FloorCard({ d, fp, run, busy, compact }: { d: ProjectData; fp: F
   )
 }
 
-export default function FloorPlans({ d, concept }: { d: ProjectData; concept?: boolean }) {
+export default function FloorPlans({ d, concept, onAdded }: { d: ProjectData; concept?: boolean; onAdded?: (id: string) => void }) {
   const p = d.project!
   const [label, setLabel] = useState('')
   const [den, setDen] = useState(100)
@@ -103,7 +105,7 @@ export default function FloorPlans({ d, concept }: { d: ProjectData; concept?: b
   const onFile = (f?: File) => {
     if (!f) return
     const l = label.trim() || f.name.replace(/\.(pdf|dxf)$/i, '')
-    run(async () => { await addFloorPlan(p, f, l, den, pageNo, log); setLabel('') })
+    run(async () => { const id = await addFloorPlan(p, f, l, den, pageNo, log); setLabel(''); onAdded?.(id) })
   }
   return (
     <div className="card">

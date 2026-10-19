@@ -24,7 +24,7 @@ export default function MasterPlan({ d, size }: { d: ProjectData; size: PaperSiz
       <div className="row between wrap"><h3 style={{ margin: 0 }}>Mặt bằng tổng <span className="muted small">– tờ mặt bằng lớn: tô màu từng phòng, gộp/tách, đo diện tích, đặt tên</span></h3>
         {floors.length > 0 && <select value={fp.id} onChange={e => setFid(e.target.value)}>{floors.map(f => <option key={f.id} value={f.id}>{f.floor_label}</option>)}</select>}</div>
       <div className="mp-tabs">{STAGES.map(([k, l]) => <button key={k} className={'mp-tab' + (st === k ? ' on' : '')} disabled={k !== 'pdf' && !floors.length} onClick={() => setStage(k)}>{l}</button>)}</div>
-      {st === 'pdf' && <FloorPlans d={d} concept />}
+      {st === 'pdf' && <FloorPlans d={d} concept onAdded={id => { setFid(id); setStage('paint') }} />}
       {st === 'paint' && fp && <PlanPainter key={fp.id} d={d} fp={fp} sheet={sheet} commit={commit} pp={pp} busy={busy} />}
       {st === 'sheet' && fp && <ConceptSheet key={fp.id} d={d} fp={fp} sheet={sheet} commit={commit} pp={pp} busy={busy} size={size} />}
     </div>)

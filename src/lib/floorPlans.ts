@@ -14,7 +14,7 @@ import type { Project, FloorPlan, FloorGeom, FloorRoom, FloorVersion, ZoneMerge,
 type Log = (m: string) => void
 async function must<T>(p: PromiseLike<{ data: T; error: any }>): Promise<T> { const { data, error } = await p; if (error) throw new Error(error.message ?? String(error)); return data }
 
-export async function addFloorPlan(project: Project, file: File, label: string, scaleDen: number, pageNo: number, log: Log) {
+export async function addFloorPlan(project: Project, file: File, label: string, scaleDen: number, pageNo: number, log: Log): Promise<string> {
   const id = crypto.randomUUID()
   const dxf = /\.dxf$/i.test(file.name)
   const pdfPath = `${project.id}/floors/${id}.${dxf ? 'dxf' : 'pdf'}`
@@ -27,6 +27,7 @@ export async function addFloorPlan(project: Project, file: File, label: string, 
   await must(supabase.storage.from(BUCKET).upload(prevPath, pv.blob, { upsert: true, contentType: 'image/jpeg' }))
   const row = await must(supabase.from('floor_plans').insert({ id, project_id: project.id, floor_label: label, pdf_path: pdfPath, page_no: pageNo, scale_den: scaleDen, width: pv.width, height: pv.height, preview_path: prevPath }).select().single()) as FloorPlan
   await computeFloor(row, {}, log, buf)
+  return id
 }
 
 /** Không gian từ đa giác khép kín có sẵn trong DXF: diện tích chính xác theo toạ độ, tên lấy từ chữ tên phòng nằm trong */
