@@ -112,7 +112,8 @@ export const doorSpec = (id?: string, custom: DoorSpec[] = []) => [...custom, ..
 
 // ---- Tường (cấu tạo lớp) ----
 export type Layer = { name: string; t: number; hatch: 'plaster' | 'brick' | 'concrete' | 'gypsum' | 'glass' | 'wood' | 'air' | 'stone' | 'steel' | 'insul' }
-export type WallType = { key: string; label: string; color: string; t: number; glass?: boolean; layers: Layer[]; finish?: string }
+/** frame: đố/khung vách kính – w = bản rộng đố (m), color; bare = chỉ khe nối (kính không khung) */
+export type WallType = { key: string; label: string; color: string; t: number; glass?: boolean; layers: Layer[]; finish?: string; frame?: { w: number; color: string; rail: number }; panel?: number }
 const L = (name: string, t: number, hatch: Layer['hatch']): Layer => ({ name, t, hatch })
 export const WALL_TYPES: WallType[] = [
   { key: 'brick', label: 'Tường gạch xây 100 (trát 2 mặt)', color: '#e4d9c3', t: 0.14, layers: [L('Vữa trát', 0.015, 'plaster'), L('Gạch ống 80', 0.08, 'brick'), L('Vữa trát', 0.015, 'plaster')] },
@@ -124,8 +125,11 @@ export const WALL_TYPES: WallType[] = [
   { key: 'gypsum', label: 'Vách thạch cao 1 lớp (khung 75)', color: '#efece4', t: 0.1, layers: [L('Thạch cao 12.5', 0.0125, 'gypsum'), L('Khung xương + bông', 0.075, 'insul'), L('Thạch cao 12.5', 0.0125, 'gypsum')] },
   { key: 'gypsum2', label: 'Vách thạch cao 2 lớp chống ẩm (khung 75)', color: '#e6e8e3', t: 0.125, layers: [L('Thạch cao 2x12.5', 0.025, 'gypsum'), L('Khung xương + bông', 0.075, 'insul'), L('Thạch cao 2x12.5', 0.025, 'gypsum')] },
   { key: 'gypsumfire', label: 'Vách chống cháy EI90 (2 lớp, khung 100)', color: '#dcdedb', t: 0.15, layers: [L('Thạch cao chống cháy 2x15', 0.03, 'gypsum'), L('Khung xương + bông', 0.09, 'insul'), L('Thạch cao chống cháy 2x15', 0.03, 'gypsum')] },
-  { key: 'glass', label: 'Vách kính cường lực 12', color: '#9cc9d6', t: 0.012, glass: true, layers: [L('Kính cường lực 12', 0.012, 'glass')], finish: 'w-glass' },
-  { key: 'curtain', label: 'Vách kính khung nhôm (curtain wall)', color: '#9cc9d6', t: 0.1, glass: true, layers: [L('Kính hộp 24', 0.024, 'glass'), L('Khung nhôm', 0.076, 'steel')], finish: 'w-glass' },
+  { key: 'glass', label: 'Vách kính cường lực 12 không khung', color: '#9cc9d6', t: 0.012, glass: true, layers: [L('Kính cường lực 12', 0.012, 'glass')], finish: 'w-glass', frame: { w: 0.008, color: '#d9e6ea', rail: 0.03 }, panel: 1.2 },
+  { key: 'glass10', label: 'Vách kính cường lực 10 + thanh U nhôm', color: '#9cc9d6', t: 0.01, glass: true, layers: [L('Kính cường lực 10', 0.01, 'glass')], finish: 'w-glass', frame: { w: 0.01, color: '#b9bcc0', rail: 0.04 }, panel: 1.0 },
+  { key: 'glassal', label: 'Vách kính khung nhôm (đố 50)', color: '#9cc9d6', t: 0.05, glass: true, layers: [L('Kính 8', 0.008, 'glass'), L('Khung nhôm', 0.042, 'steel')], finish: 'w-glass', frame: { w: 0.05, color: '#4a4d52', rail: 0.06 }, panel: 1.2 },
+  { key: 'crittall', label: 'Vách kính khung thép đen (kiểu Crittall)', color: '#9cc9d6', t: 0.04, glass: true, layers: [L('Kính 6', 0.006, 'glass'), L('Khung thép', 0.034, 'steel')], finish: 'w-glass', frame: { w: 0.035, color: '#1d1d1f', rail: 0.05 }, panel: 0.9 },
+  { key: 'curtain', label: 'Vách kính mặt dựng (curtain wall)', color: '#9cc9d6', t: 0.1, glass: true, layers: [L('Kính hộp 24', 0.024, 'glass'), L('Khung nhôm', 0.076, 'steel')], finish: 'w-glass', frame: { w: 0.06, color: '#3a3d42', rail: 0.08 }, panel: 1.5 },
   { key: 'wood', label: 'Vách ốp gỗ (khung gỗ + MDF)', color: '#b58b5a', t: 0.08, layers: [L('Veneer gỗ', 0.006, 'wood'), L('Ván MDF', 0.018, 'wood'), L('Khung xương', 0.05, 'air'), L('Thạch cao', 0.0125, 'gypsum')], finish: 'w-wood' },
   { key: 'stone', label: 'Ốp đá trên tường gạch', color: '#7d7468', t: 0.24, layers: [L('Đá ốp 20', 0.02, 'stone'), L('Vữa keo', 0.02, 'plaster'), L('Gạch ống 180', 0.18, 'brick'), L('Vữa trát', 0.02, 'plaster')], finish: 'w-stone' },
   { key: 'tiled', label: 'Tường gạch ốp gạch men (khu ướt)', color: '#d8d6cf', t: 0.17, layers: [L('Gạch men 8', 0.008, 'stone'), L('Vữa keo', 0.012, 'plaster'), L('Gạch ống 100', 0.1, 'brick'), L('Vữa trát', 0.02, 'plaster')], finish: 'w-tile' },

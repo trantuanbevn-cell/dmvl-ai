@@ -1,6 +1,7 @@
 // Mô hình mặt bằng SỬA ĐƯỢC (đơn vị mét, trục y hướng xuống như bản vẽ). Nhập từ DXF rồi sửa tường · cột · cửa; dựng 3D từ chính mô hình này.
 import polygonClipping from 'polygon-clipping'
 import type { VecPage } from '../vector'
+import { classifyFurn, furnTypeOf } from './furn'
 import { PT_MM } from '../dims'
 
 export type Pt = [number, number]
@@ -8,7 +9,7 @@ import { WALL_TYPES, wallTypeOf } from './library'
 export const WALL_KINDS = WALL_TYPES
 export const kindOf = wallTypeOf
 
-export type Wall = { id: string; role: 'wall' | 'col'; kind: string; finish?: string; h?: number; name?: string; shape: { type: 'poly'; rings: Pt[][] } | { type: 'seg'; a: Pt; b: Pt; t: number; bulge?: number } }
+export type Wall = { id: string; role: 'wall' | 'col'; kind: string; finish?: string; h?: number; name?: string; /** vách kính: khoảng chia tấm kính (m) */ panel?: number; auto?: boolean; shape: { type: 'poly'; rings: Pt[][] } | { type: 'seg'; a: Pt; b: Pt; t: number; bulge?: number } }
 export type DoorKind = 'door' | 'double' | 'window' | 'slide' | 'opening'
 export const DOOR_KINDS: { key: DoorKind; label: string; w: number; h: number; sill: number }[] = [
   { key: 'door', label: 'Cửa đi một cánh', w: 0.9, h: 2.1, sill: 0 },
@@ -18,10 +19,14 @@ export const DOOR_KINDS: { key: DoorKind; label: string; w: number; h: number; s
   { key: 'opening', label: 'Ô trống (không cánh)', w: 1.2, h: 2.4, sill: 0 },
 ]
 /** x,y = tâm cửa trên tường; ang = hướng dọc tường (rad); flip = đảo phía mở */
-export type Door = { id: string; kind: DoorKind; lib?: string; finish?: string; frameFinish?: string; x: number; y: number; ang: number; w: number; h: number; sill: number; flip?: boolean; name?: string }
-export type Dim = { id: string; a: Pt; b: Pt; off: number }
+export type Door = { id: string; kind: DoorKind; lib?: string; finish?: string; frameFinish?: string; x: number; y: number; ang: number; w: number; h: number; sill: number; flip?: boolean; name?: string; /** nhận tự động từ bản vẽ */ auto?: boolean; /** bề dày tường tại cửa (để dựng lanh-tô trên đầu cửa) */ t?: number }
+export type Dim = { id: string; a: Pt; b: Pt; off: number; /** chữ ghi đè (thay cho số đo) */ txt?: string }
 export type Room = { id: string; name: string; en?: string; poly: Pt[]; area?: number; floor?: string; ceil?: string; ceilH?: number }
-export type Model = { v: 1; walls: Wall[]; doors: Door[]; dims?: Dim[]; rooms?: Room[]; hWall: number; hCol: number; mPt: number; w: number; h: number }
+/** Đồ nội thất rời: x,y = tâm (m); w theo trục dọc (sau khi xoay ang), d theo trục ngang; h = chiều cao thật theo loại; flip = đảo phía lưng tựa */
+export type Furn = { id: string; kind: string; name?: string; x: number; y: number; w: number; d: number; ang: number; h: number; finish?: string; flip?: boolean; auto?: boolean }
+/** chữ trong bản vẽ (tên phòng…) để tự đặt tên phòng */
+export type Label = { t: string; x: number; y: number; h: number; pri?: boolean }
+export type Model = { v: 1; walls: Wall[]; doors: Door[]; furn?: Furn[]; labels?: Label[]; dims?: Dim[]; rooms?: Room[]; hWall: number; hCol: number; mPt: number; w: number; h: number }
 
 let seq = 0
 export const uid = (p: string) => p + Date.now().toString(36) + (seq++).toString(36)
@@ -52,7 +57,109 @@ export function modelFromVec(v: VecPage, den: number): Model {
       walls.push({ id: uid('w'), role, kind: role === 'col' ? 'concrete' : 'brick', shape: { type: 'poly', rings: [l, ...holes] } })
     })
   }
-  return { v: 1, walls, doors: [], dims: [], rooms: [], hWall: 3.3, hCol: 3.3, mPt: m, w: v.w * m, h: v.h * m }
+  const glass = detectGlass(v, m); walls.push(...glass)
+  const doors = detectDoors(v.arcs ?? [], m, walls)
+  const furn: Furn[] = (v.furn ?? []).map(f => {
+    const w = f.w * m, d = f.d * m, nm = f.name.replace(/^.*\$/, '').trim(), name = !nm || /^\*/.test(nm) ? undefined : nm.slice(0, 48)
+    const kind = classifyFurn(name ?? '', f.layer, w, d)
+    return { id: uid('f'), kind, name, x: f.cx * m, y: f.cy * m, w, d, ang: f.rot, h: furnTypeOf(kind).h, auto: true }
+  })
+  const labels: Label[] = (v.texts ?? []).slice(0, 600).map(t => ({ t: t.t.replace(/\s+/g, ' ').trim(), x: t.x * m, y: t.y * m, h: t.h * m, pri: /ten.?phong|room|space|name/i.test(t.ly ?? '') })).filter(t => t.t && t.t.length <= 60)
+  return { v: 1, walls, doors, furn, labels, dims: [], rooms: [], hWall: 3.3, hCol: 3.3, mPt: m, w: v.w * m, h: v.h * m }
+}
+
+// ---------- Nhận diện cửa từ cung quét cánh ----------
+type EdgeQ = (p: Pt, r: number) => { d: number; ang: number } | null
+function edgeIndex(walls: Wall[]): EdgeQ {
+  const cell = 0.5, grid = new Map<string, number[]>(), E: number[] = []
+  const put = (a: Pt, b: Pt) => { const i = E.length / 4; E.push(a[0], a[1], b[0], b[1]); const x0 = Math.floor(Math.min(a[0], b[0]) / cell), x1 = Math.floor(Math.max(a[0], b[0]) / cell), y0 = Math.floor(Math.min(a[1], b[1]) / cell), y1 = Math.floor(Math.max(a[1], b[1]) / cell)
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 400) return; for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) { const k = x + ',' + y; (grid.get(k) ?? grid.set(k, []).get(k)!).push(i) } }
+  for (const w of walls) { if (w.role === 'col') continue; for (const r of footprint(w)) for (let i = 0; i < r.length; i++) put(r[i], r[(i + 1) % r.length]) }
+  return (p, rad) => {
+    let best: { d: number; ang: number } | null = null; const n = Math.ceil(rad / cell), cx = Math.floor(p[0] / cell), cy = Math.floor(p[1] / cell), seen = new Set<number>()
+    for (let x = cx - n; x <= cx + n; x++) for (let y = cy - n; y <= cy + n; y++) for (const i of grid.get(x + ',' + y) ?? []) {
+      if (seen.has(i)) continue; seen.add(i)
+      const ax = E[i * 4], ay = E[i * 4 + 1], bx = E[i * 4 + 2], by = E[i * 4 + 3], dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy; if (L2 < 1e-9) continue
+      const t = Math.max(0, Math.min(1, ((p[0] - ax) * dx + (p[1] - ay) * dy) / L2)), d = Math.hypot(p[0] - ax - t * dx, p[1] - ay - t * dy)
+      if (d <= rad && (!best || d < best.d)) best = { d, ang: Math.atan2(dy, dx) }
+    }
+    return best
+  }
+}
+/** Mỗi cung ~90° trên layer cửa = một cánh cửa: bản lề = tâm cung, đầu cánh đóng nằm dọc tường. Hai cánh đối xứng chạm nhau ở giữa = cửa hai cánh. */
+export function detectDoors(arcs: VecPage['arcs'], m: number, walls: Wall[]): Door[] {
+  if (!arcs.length || !walls.length) return []
+  const near = edgeIndex(walls), cands: { H: Pt; C: Pt; O: Pt; R: number }[] = []
+  for (const a of arcs) {
+    const A: Pt = [a.a[0] * m, a.a[1] * m], B: Pt = [a.b[0] * m, a.b[1] * m], Mi: Pt = [a.m[0] * m, a.m[1] * m]
+    const dd = 2 * (A[0] * (B[1] - Mi[1]) + B[0] * (Mi[1] - A[1]) + Mi[0] * (A[1] - B[1])); if (Math.abs(dd) < 1e-9) continue
+    const sq = (p: Pt) => p[0] * p[0] + p[1] * p[1]
+    const H: Pt = [(sq(A) * (B[1] - Mi[1]) + sq(B) * (Mi[1] - A[1]) + sq(Mi) * (A[1] - B[1])) / dd, (sq(A) * (Mi[0] - B[0]) + sq(B) * (A[0] - Mi[0]) + sq(Mi) * (B[0] - A[0])) / dd]
+    const R = Math.hypot(A[0] - H[0], A[1] - H[1]); if (R < 0.45 || R > 1.5) continue
+    const cos = ((A[0] - H[0]) * (B[0] - H[0]) + (A[1] - H[1]) * (B[1] - H[1])) / (R * R); if (Math.abs(cos) > 0.4) continue // không phải cung ~90°
+    const score = (X: Pt) => { const q = near(X, 0.4); if (!q) return null; const hx = X[0] - H[0], hy = X[1] - H[1], c = Math.abs(Math.cos(Math.atan2(hy, hx) - q.ang)); return q.d + 0.5 * (1 - c) }
+    const sA = score(A), sB = score(B); if (sA === null && sB === null) continue
+    const useA = sB === null || (sA !== null && sA <= sB), C = useA ? A : B, O = useA ? B : A
+    if (cands.some(o => Math.hypot(o.H[0] - H[0], o.H[1] - H[1]) < 0.08 && Math.hypot(o.C[0] - C[0], o.C[1] - C[1]) < 0.08)) continue
+    cands.push({ H, C, O, R })
+  }
+  const used = new Set<number>(), out: Door[] = []
+  const side = (H: Pt, C: Pt, O: Pt) => { const ux = C[0] - H[0], uy = C[1] - H[1]; return ((O[0] - H[0]) * -uy + (O[1] - H[1]) * ux) > 0 ? 1 : -1 }
+  const mk = (kind: 'door' | 'double', H: Pt, C: Pt, O: Pt, w: number): Door => {
+    const ang = Math.atan2(C[1] - H[1], C[0] - H[0]), lib = kind === 'double' ? (w < 1.4 ? 'dr-dbl12' : w < 1.7 ? 'dr-dbl16' : 'dr-dbl18') : (w < 0.85 ? 'dr-flush08' : 'dr-flush09')
+    return { id: uid('d'), kind, lib, x: (H[0] + C[0]) / 2, y: (H[1] + C[1]) / 2, ang, w: Math.round(w * 100) / 100, h: 2.1, sill: 0, flip: side(H, C, O) < 0, auto: true, t: 0.2 }
+  }
+  for (let i = 0; i < cands.length; i++) {
+    if (used.has(i)) continue
+    const a = cands[i]; let pair = -1
+    for (let j = i + 1; j < cands.length; j++) { if (used.has(j)) continue; const b = cands[j]
+      // hai cánh: bản lề hai phía, đầu đóng gặp nhau ở giữa, cùng mở về một phía
+      const dir = Math.hypot(b.H[0] - a.H[0], b.H[1] - a.H[1])
+      if (Math.hypot(a.C[0] - b.C[0], a.C[1] - b.C[1]) < 0.3 && dir > (a.R + b.R) * 0.7 && dir < (a.R + b.R) * 1.3 && side(a.H, b.H, a.O) === side(a.H, b.H, b.O)) { pair = j; break } }
+    if (pair >= 0) { const b = cands[pair]; used.add(i); used.add(pair); out.push(mk('double', a.H, b.H, a.O, Math.hypot(b.H[0] - a.H[0], b.H[1] - a.H[1]))) }
+    else { used.add(i); out.push(mk('door', a.H, a.C, a.O, Math.hypot(a.C[0] - a.H[0], a.C[1] - a.H[1]))) }
+  }
+  return out
+}
+
+// ---------- Nhận diện vách kính từ nét trên layer kính ----------
+export const GLASS_LAYER = /kinh|glass|glaz|curtain|storefront|mat.?dung/i
+/** Nét song song gần nhau (≤ 0,4 m) trên layer kính = hai mặt của vách kính → đường tim + độ dày; nét đơn dài = vách kính mỏng. Gộp các đoạn thẳng hàng. */
+export function detectGlass(v: VecPage, m: number): Wall[] {
+  const seg: { a: Pt; b: Pt; L: number; ang: number }[] = []
+  for (let i = 0; i < v.nSeg; i++) {
+    const c = v.classes[v.cls[i]]; if (!c || c.fill || !GLASS_LAYER.test(c.layer)) continue
+    const a: Pt = [v.segs[i * 4] * m, v.segs[i * 4 + 1] * m], b: Pt = [v.segs[i * 4 + 2] * m, v.segs[i * 4 + 3] * m], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.15) continue
+    let ang = Math.atan2(b[1] - a[1], b[0] - a[0]); if (ang < 0) ang += Math.PI; if (ang >= Math.PI - 1e-9) ang -= Math.PI
+    seg.push({ a, b, L, ang })
+  }
+  if (!seg.length) return []
+  seg.sort((p, q) => q.L - p.L)
+  type Line = { ang: number; off: number; s0: number; s1: number; t: number }
+  const lines: Line[] = [], used = new Uint8Array(seg.length)
+  const proj = (p: Pt, ang: number) => ({ s: p[0] * Math.cos(ang) + p[1] * Math.sin(ang), o: -p[0] * Math.sin(ang) + p[1] * Math.cos(ang) })
+  for (let i = 0; i < seg.length; i++) {
+    if (used[i]) continue; used[i] = 1; const a = seg[i], pa = proj(a.a, a.ang), pb = proj(a.b, a.ang); const as0 = Math.min(pa.s, pb.s), as1 = Math.max(pa.s, pb.s)
+    let best = -1, bd = 1e9, bs0 = 0, bs1 = 0, bo = 0
+    for (let j = i + 1; j < seg.length; j++) {
+      if (used[j]) continue; const b = seg[j]; let da = Math.abs(a.ang - b.ang); da = Math.min(da, Math.PI - da); if (da > 0.05) continue
+      const qa = proj(b.a, a.ang), qb = proj(b.b, a.ang), o = (qa.o + qb.o) / 2, dist = Math.abs(o - pa.o); if (dist < 0.005 || dist > 0.4) continue
+      const s0 = Math.max(as0, Math.min(qa.s, qb.s)), s1 = Math.min(as1, Math.max(qa.s, qb.s)); if (s1 - s0 < 0.4 * Math.min(a.L, b.L)) continue
+      if (dist < bd) { bd = dist; best = j; bs0 = s0; bs1 = s1; bo = o }
+    }
+    if (best >= 0) { used[best] = 1; lines.push({ ang: a.ang, off: (pa.o + bo) / 2, s0: bs0, s1: bs1, t: bd }) }
+    else lines.push({ ang: a.ang, off: pa.o, s0: as0, s1: as1, t: 0.02 })
+  }
+  // gộp các đoạn thẳng hàng cùng hướng / cùng đường
+  lines.sort((p, q) => p.ang - q.ang || p.off - q.off || p.s0 - q.s0)
+  const merged: Line[] = []
+  for (const l of lines) { const o = merged[merged.length - 1]
+    if (o && Math.abs(o.ang - l.ang) < 0.03 && Math.abs(o.off - l.off) < 0.05 && Math.abs(o.t - l.t) < 0.04 && l.s0 <= o.s1 + 0.06) o.s1 = Math.max(o.s1, l.s1); else merged.push({ ...l }) }
+  return merged.filter(l => l.s1 - l.s0 >= 0.3).map(l => {
+    const c = Math.cos(l.ang), s = Math.sin(l.ang), P = (t: number): Pt => [t * c - l.off * s, t * s + l.off * c]
+    const thick = l.t >= 0.04
+    return { id: uid('w'), role: 'wall' as const, kind: thick ? 'curtain' : 'glass', name: 'Vách kính', panel: 1.2, auto: true, shape: { type: 'seg' as const, a: P(l.s0), b: P(l.s1), t: Math.max(0.012, l.t) } }
+  })
 }
 
 export const wallH = (w: Wall, M: Model) => w.h ?? (w.role === 'col' ? M.hCol : M.hWall)
@@ -132,26 +239,20 @@ export function snapToWall(M: Model, p: Pt, tol: number): { x: number; y: number
 export const polyArea = (l: Pt[]) => { let a = 0; for (let i = 0; i < l.length; i++) { const p = l[i], q = l[(i + 1) % l.length]; a += p[0] * q[1] - q[0] * p[1] } return Math.abs(a) / 2 }
 export const centroid = (l: Pt[]): Pt => { let x = 0, y = 0, a = 0; for (let i = 0; i < l.length; i++) { const p = l[i], q = l[(i + 1) % l.length], c = p[0] * q[1] - q[0] * p[1]; a += c; x += (p[0] + q[0]) * c; y += (p[1] + q[1]) * c } if (Math.abs(a) < 1e-9) return l[0]; return [x / (3 * a), y / (3 * a)] }
 
-/** Tìm không gian kín quanh điểm bấm: tô đặc tường + cửa lên ảnh 5 cm/pixel, loang từ điểm bấm, lấy đường bao. Trả null nếu hở. */
-export function floodRoom(M: Model, p: Pt, closeDoors = true): { poly: Pt[]; leaked: boolean; area?: number } | null {
+type Raster = { img: Uint8ClampedArray; W: number; H: number; S: number; x0: number; y0: number }
+/** Tô đặc tường + cửa lên ảnh 5 cm/pixel (đen = vật cản) */
+function raster(M: Model, closeDoors: boolean): Raster | null {
   const S = 20, pad = 1, x0 = -pad, y0 = -pad, W = Math.ceil((M.w + 2 * pad) * S), H = Math.ceil((M.h + 2 * pad) * S)
   if (W * H > 60e6) return null
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d', { willReadFrequently: true })!
   g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.fillStyle = '#000'; g.setTransform(S, 0, 0, S, -x0 * S, -y0 * S)
   for (const w of M.walls) { const path = new Path2D(footprint(w).map(r => 'M' + r.map(q => q[0] + ' ' + q[1]).join('L') + 'Z').join('')); g.fill(path, 'evenodd') }
   if (closeDoors) for (const d of M.doors) { const r = doorRect({ ...d }, 0.12); g.beginPath(); r.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); g.fill() }
-  const img = g.getImageData(0, 0, W, H).data, mask = new Uint8Array(W * H), sx = Math.round((p[0] - x0) * S), sy = Math.round((p[1] - y0) * S)
-  if (sx < 0 || sy < 0 || sx >= W || sy >= H || img[(sy * W + sx) * 4] < 128) return null
-  const st = [sy * W + sx]; mask[st[0]] = 1; let leaked = false
-  while (st.length) { const i = st.pop()!, x = i % W, y = (i / W) | 0
-    if (x === 0 || y === 0 || x === W - 1 || y === H - 1) { leaked = true; continue }
-    for (const j of [i - 1, i + 1, i - W, i + W]) if (!mask[j] && img[j * 4] >= 128) { mask[j] = 1; st.push(j) } }
-  if (leaked) return { poly: [], leaked: true }
-  // đường bao ngoài: đi dọc cạnh pixel (vùng luôn nằm bên phải hướng đi)
-  let sx0 = -1, sy0 = -1, count = 0
-  for (let i = 0; i < mask.length; i++) if (mask[i]) { count++; if (sx0 < 0) { sx0 = i % W; sy0 = (i / W) | 0 } }
-  const on = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H && mask[y * W + x] === 1
-  const DX = [1, 0, -1, 0], DY = [0, 1, 0, -1]
+  return { img: g.getImageData(0, 0, W, H).data, W, H, S, x0, y0 }
+}
+/** Đường bao ngoài của một vùng pixel (đi dọc cạnh pixel, vùng luôn nằm bên phải hướng đi) → đa giác (m) */
+function traceRing(R: Raster, on: (x: number, y: number) => boolean, sx0: number, sy0: number): Pt[] {
+  const { W, H, S, x0, y0 } = R, DX = [1, 0, -1, 0], DY = [0, 1, 0, -1]
   let vx = sx0, vy = sy0, d = 0, ring: Pt[] = [], guard = 0
   do {
     vx += DX[d]; vy += DY[d]
@@ -160,8 +261,47 @@ export function floodRoom(M: Model, p: Pt, closeDoors = true): { poly: Pt[]; lea
     const nd = al ? (d + 3) % 4 : ar ? d : (d + 1) % 4
     if (nd !== d) ring.push([vx, vy]); d = nd
   } while ((vx !== sx0 || vy !== sy0 || d !== 0) && ++guard < W * H * 4)
-  ring = simplify(ring, 1.2).map(q => [q[0] / S + x0, q[1] / S + y0] as Pt)
-  return { poly: ring, leaked: false, area: count / (S * S) }
+  return simplify(ring, 1.2).map(q => [q[0] / S + x0, q[1] / S + y0] as Pt)
+}
+/** Tìm không gian kín quanh điểm bấm: loang từ điểm bấm trên ảnh tường, lấy đường bao. Trả leaked nếu hở. */
+export function floodRoom(M: Model, p: Pt, closeDoors = true): { poly: Pt[]; leaked: boolean; area?: number } | null {
+  const R = raster(M, closeDoors); if (!R) return null
+  const { img, W, H, S, x0, y0 } = R, mask = new Uint8Array(W * H), sx = Math.round((p[0] - x0) * S), sy = Math.round((p[1] - y0) * S)
+  if (sx < 0 || sy < 0 || sx >= W || sy >= H || img[(sy * W + sx) * 4] < 128) return null
+  const st = [sy * W + sx]; mask[st[0]] = 1; let leaked = false
+  while (st.length) { const i = st.pop()!, x = i % W, y = (i / W) | 0
+    if (x === 0 || y === 0 || x === W - 1 || y === H - 1) { leaked = true; continue }
+    for (const j of [i - 1, i + 1, i - W, i + W]) if (!mask[j] && img[j * 4] >= 128) { mask[j] = 1; st.push(j) } }
+  if (leaked) return { poly: [], leaked: true }
+  let sx0 = -1, sy0 = -1, count = 0
+  for (let i = 0; i < mask.length; i++) if (mask[i]) { count++; if (sx0 < 0) { sx0 = i % W; sy0 = (i / W) | 0 } }
+  const on = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H && mask[y * W + x] === 1
+  return { poly: traceRing(R, on, sx0, sy0), leaked: false, area: count / (S * S) }
+}
+const NOT_NAME = /^[\d\s.,:x×m²㎡-]+$|^(\+|-)?\d/
+/** Nhận diện TẤT CẢ không gian kín (mọi vùng trống bị tường/cửa khép kín bao quanh) rồi tự đặt tên theo chữ trong bản vẽ. Bỏ qua vùng đã có phòng. */
+export function autoRooms(M: Model, minArea = 1.5): { rooms: Room[]; skipped: number } | null {
+  const R = raster(M, true); if (!R) return null
+  const { img, W, H, S } = R, lab = new Int32Array(W * H), have = M.rooms ?? [], out: Room[] = []; let nid = 0, skipped = 0
+  const free = (i: number) => img[i * 4] >= 128
+  for (let s0 = 0; s0 < W * H; s0++) {
+    if (lab[s0] || !free(s0)) continue
+    const id = ++nid, st = [s0]; lab[s0] = id; let count = 0, border = false
+    while (st.length) { const i = st.pop()!, x = i % W, y = (i / W) | 0; count++
+      if (x === 0 || y === 0 || x === W - 1 || y === H - 1) border = true
+      if (x > 0 && !lab[i - 1] && free(i - 1)) { lab[i - 1] = id; st.push(i - 1) }
+      if (x < W - 1 && !lab[i + 1] && free(i + 1)) { lab[i + 1] = id; st.push(i + 1) }
+      if (y > 0 && !lab[i - W] && free(i - W)) { lab[i - W] = id; st.push(i - W) }
+      if (y < H - 1 && !lab[i + W] && free(i + W)) { lab[i + W] = id; st.push(i + W) } }
+    const area = count / (S * S); if (border || area < minArea) { if (!border) skipped++; continue }
+    const poly = traceRing(R, (x, y) => x >= 0 && y >= 0 && x < W && y < H && lab[y * W + x] === id, s0 % W, (s0 / W) | 0)
+    if (poly.length < 3) continue
+    const c = centroid(poly), pin = inside(c, poly) ? c : poly[0]
+    if (have.some(r => inside(pin, r.poly))) { skipped++; continue }
+    const names = (M.labels ?? []).filter(l => inside([l.x, l.y], poly) && !NOT_NAME.test(l.t) && /[A-Za-zÀ-ỹ]/.test(l.t)).sort((a, b) => Number(!!b.pri) - Number(!!a.pri) || b.h - a.h)
+    out.push({ id: uid('r'), name: names[0]?.t ?? 'Phòng ' + (have.length + out.length + 1), en: names[1] && names[1].t !== names[0].t ? names[1].t : undefined, poly, area })
+  }
+  return { rooms: out, skipped }
 }
 function simplify(pts: Pt[], eps: number): Pt[] { // Ramer–Douglas–Peucker
   if (pts.length < 4) return pts

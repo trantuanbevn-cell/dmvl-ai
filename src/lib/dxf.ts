@@ -132,14 +132,19 @@ const NOISE = /defpoints|xref- ?ps|(^|\$)(m|p)-|g-impt|a-genm|dwatcopi|fitting|p
 /** layer ranh giới không gian khép kín (có sẵn trong bản vẽ) */
 /** layer của cửa đi/cửa sổ – chỉ cung ở các layer này mới được coi là cung quét cánh cửa (không lẫn với ghế, bàn, thiết bị) */
 export const DOOR_LAYER = /door|(^|\$)cua|cua ?di|cua ?so|(^|\$)dr[_ -]|window/i
+/** layer đồ nội thất / thiết bị rời (chỉ để dựng khối 3D đúng độ cao, không phải tường) */
+export const FURN_LAYER = /noi.?that|furn|equip|k-general|interior|fixture|sanitary|thiet.?bi|(^|\$)fur(\$|$)|(^|\$)(chair|table|sofa|bed|ghe|ban|giuong)/i
+export type FurnRaw = { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number; src: 'block' | 'loose' }
 export const ZONE_LAYER = /(^|\$)area$|ranh.?gioi|dien.?tich|room.?bound|space.?bound/i
 
 /** DXF → các đường (toạ độ bản vẽ, đơn vị gốc) + chữ */
-function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>): { paths: Path[]; texts: Txt[]; layers: Record<string, { color: number; off: boolean }> } {
+function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>): { paths: Path[]; texts: Txt[]; layers: Record<string, { color: number; off: boolean }>; insts: { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number }[]; loose: { x0: number; y0: number; x1: number; y1: number; layer: string }[] } {
   const layers: Record<string, { color: number; off: boolean }> = {}
   for (const [k, l] of Object.entries<any>(dxf.tables?.layer?.layers ?? {})) layers[k] = { color: Math.abs(l.colorIndex ?? l.color ?? 7) || 7, off: l.visible === false || l.frozen === true }
   const blocks: Record<string, any> = dxf.blocks ?? {}
   const paths: Path[] = [], texts: Txt[] = []
+  const insts: { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number }[] = [], loose: { x0: number; y0: number; x1: number; y1: number; layer: string }[] = []
+  let inFurn = 0
   const apT = (m: M, p: Pt): Pt => [m[0] * p[0] + m[2] * p[1] + m[4], m[1] * p[0] + m[3] * p[1] + m[5]]
   const walk = (ents: any[], m: M, inherit: { layer?: string; color?: number }, depth: number, paper: boolean) => {
     for (const e of ents) {
@@ -149,7 +154,11 @@ function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>): { paths: Pa
       let color: number | undefined = typeof e.colorIndex === 'number' && e.colorIndex > 0 && e.colorIndex < 256 ? e.colorIndex : undefined
       if (color === undefined && inherit.color) color = inherit.color
       const lw = typeof e.lineweight === 'number' && e.lineweight > 0 ? e.lineweight / 100 : undefined
-      const add = (pts: Pt[], closed = false, fill = false) => { if (pts.length >= 2) paths.push({ pts: pts.map(p => apT(m, p)), layer, color, lw, closed, fill }) }
+      const add = (pts: Pt[], closed = false, fill = false) => {
+        if (pts.length < 2) return
+        const tp = pts.map(p => apT(m, p)); paths.push({ pts: tp, layer, color, lw, closed, fill })
+        if (!inFurn && FURN_LAYER.test(layer)) { let x0 = 1e18, y0 = 1e18, x1 = -1e18, y1 = -1e18; for (const t of tp) { x0 = Math.min(x0, t[0]); x1 = Math.max(x1, t[0]); y0 = Math.min(y0, t[1]); y1 = Math.max(y1, t[1]) } loose.push({ x0, y0, x1, y1, layer }) }
+      }
       switch (e.type) {
         case 'HATCH': {
           // chỉ tô hatch của tường/cột/bê tông (nhận theo layer); lấy đường biên ngoài (lớn nhất)
@@ -189,7 +198,16 @@ function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>): { paths: Pa
           const bp = b.position ?? { x: 0, y: 0 }
           const ins: M = mul([c * sx, s * sx, -s * sy, c * sy, e.position?.x ?? 0, e.position?.y ?? 0], [1, 0, 0, 1, -bp.x, -bp.y])
           const cols = e.columnCount > 1 || e.rowCount > 1 ? { c: e.columnCount ?? 1, r: e.rowCount ?? 1, dc: e.columnSpacing ?? 0, dr: e.rowSpacing ?? 0 } : { c: 1, r: 1, dc: 0, dr: 0 }
-          for (let i = 0; i < Math.min(cols.c, 200); i++) for (let j = 0; j < Math.min(cols.r, 200); j++) walk(b.entities, mul(m, mul([1, 0, 0, 1, i * cols.dc * c - j * cols.dr * s, i * cols.dc * s + j * cols.dr * c], ins)), { layer, color }, depth + 1, paper)
+          const isF = depth === 0 && FURN_LAYER.test(layer) && !inFurn
+          for (let i = 0; i < Math.min(cols.c, 200); i++) for (let j = 0; j < Math.min(cols.r, 200); j++) {
+            const n0 = paths.length; if (isF) inFurn++
+            walk(b.entities, mul(m, mul([1, 0, 0, 1, i * cols.dc * c - j * cols.dr * s, i * cols.dc * s + j * cols.dr * c], ins)), { layer, color }, depth + 1, paper)
+            if (isF) { inFurn--
+              // khung bao theo hướng chèn khối (xoay theo góc INSERT) → kích thước thật của món đồ
+              const co = Math.cos(-r), si = Math.sin(-r); let a0 = 1e18, b0 = 1e18, a1 = -1e18, b1 = -1e18
+              for (let q = n0; q < paths.length; q++) for (const t of paths[q].pts) { const u = t[0] * co - t[1] * si, v2 = t[0] * si + t[1] * co; a0 = Math.min(a0, u); a1 = Math.max(a1, u); b0 = Math.min(b0, v2); b1 = Math.max(b1, v2) }
+              if (a1 > a0 && b1 > b0) { const cu = (a0 + a1) / 2, cv = (b0 + b1) / 2; insts.push({ name: String(e.name ?? ''), layer, cx: cu * Math.cos(r) - cv * Math.sin(r), cy: cu * Math.sin(r) + cv * Math.cos(r), w: a1 - a0, d: b1 - b0, rot: r }) } }
+          }
           break
         }
       }
@@ -199,7 +217,7 @@ function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>): { paths: Pa
   if (hatches) for (const [n, hs] of Object.entries(hatches.blocks)) if (blocks[n]) blocks[n] = { ...blocks[n], entities: [...(blocks[n].entities ?? []), ...hs] }
   const hasModel = ents.some(e => !e.inPaperSpace)
   walk(ents, ID, {}, 0, !hasModel)
-  return { paths, texts, layers }
+  return { paths, texts, layers, insts, loose }
 }
 
 const q = (a: number[], p: number) => { const s = a.slice().sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.max(0, Math.floor(p * (s.length - 1))))] }
@@ -213,7 +231,7 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
   let dxf: any
   let hatches: ReturnType<typeof rawHatches> | undefined
   try { const txt = decode(data); dxf = new DxfParser().parseSync(txt); try { hatches = rawHatches(txt) } catch { /* bỏ hatch */ } } catch (e) { throw new Error('Không đọc được DXF: ' + String(e)) }
-  const { paths, texts: rawT, layers } = collect(dxf, hatches)
+  const { paths, texts: rawT, layers, insts, loose } = collect(dxf, hatches)
   if (paths.length < 20) throw new Error('DXF gần như không có nét vẽ trong Model space.')
   const xs: number[] = [], ys: number[] = []
   // khung bản vẽ: ưu tiên nét tường / ô diện tích (bản vẽ hay có vật thể lạc rất xa), không có thì lấy mọi nét trừ Defpoints
@@ -351,7 +369,24 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
   const texts: VecText[] = rawT.filter(t => { const tk = t.t + '|' + Math.round(t.x / (4 * k)) + '|' + Math.round(t.y / (4 * k)); if (seenT.has(tk)) return false; seenT.add(tk); return true }).filter(t => t.x >= x0 && t.x <= x1 && t.y >= y0 && t.y <= y1).map(t => ({ t: t.t, x: X(t.x), y: Y(t.y), h: Math.max(1, t.h / k), rot: Math.round(-t.rot * 10) / 10, ly: t.ly }))
   if (arcs.length < 8) arcs.splice(0, arcs.length, ...allArcs) // file không đặt layer cửa rõ ràng → dò theo hình học như PDF
   onLog?.(`  DXF: ${nWall} khối tường + ${nCol} cột (hatch), ${arcs.length} cung cửa; ${segs.length / 4} đoạn nét, ${classes.length} nhóm layer/nét, ${texts.length} chữ, đơn vị ${unit}, tỉ lệ 1:${den}`)
-  return { ...(opt.draw ? { draw: [...hatchRuns, ...runs] } : {}), arcs, w: W, h: H, segs: new Float32Array(segs), cls: new Uint16Array(segCls), fills, classes, texts, nSeg: segs.length / 4, zones, dxf: { unit, mmPerUnit: mmU, den, extentM: [(x1 - x0) * mmU / 1000, (y1 - y0) * mmU / 1000] } }
+  // đồ nội thất rời: khối INSERT (có tên) + cụm nét rời trên layer nội thất (gom các nét chạm nhau)
+  const furn: FurnRaw[] = []
+  {
+    const mPt = (PT_MM * den) / 1000, mU = mmU / 1000   // m / pt, m / đơn vị bản vẽ
+    const ok = (wm: number, dm: number) => Math.min(wm, dm) >= 0.12 && Math.max(wm, dm) <= 8 && wm * dm <= 40
+    for (const it of insts) { const wm = it.w * mU, dm = it.d * mU; if (!ok(wm, dm) || it.cx < x0 || it.cx > x1 || it.cy < y0 || it.cy > y1) continue
+      furn.push({ name: it.name, layer: it.layer, cx: X(it.cx), cy: Y(it.cy), w: wm / mPt, d: dm / mPt, rot: -it.rot, src: 'block' }) }
+    const tol = 0.03 / mU, L = loose.slice(0, 20000), par = L.map((_, i) => i), find = (i: number): number => (par[i] === i ? i : (par[i] = find(par[i])))
+    const order = L.map((_, i) => i).sort((a, b) => L[a].x0 - L[b].x0)
+    for (let ai = 0; ai < order.length; ai++) { const a = L[order[ai]]; for (let bi = ai + 1; bi < order.length; bi++) { const b = L[order[bi]]; if (b.x0 > a.x1 + tol) break
+      if (b.y0 <= a.y1 + tol && b.y1 >= a.y0 - tol) par[find(order[bi])] = find(order[ai]) } }
+    const cl = new Map<number, { x0: number; y0: number; x1: number; y1: number; layer: string }>()
+    L.forEach((b, i) => { const r = find(i), c = cl.get(r); if (!c) cl.set(r, { ...b }); else { c.x0 = Math.min(c.x0, b.x0); c.y0 = Math.min(c.y0, b.y0); c.x1 = Math.max(c.x1, b.x1); c.y1 = Math.max(c.y1, b.y1) } })
+    for (const c of cl.values()) { const wm = (c.x1 - c.x0) * mU, dm = (c.y1 - c.y0) * mU, cx = (c.x0 + c.x1) / 2, cy = (c.y0 + c.y1) / 2
+      if (!ok(wm, dm) || cx < x0 || cx > x1 || cy < y0 || cy > y1) continue
+      furn.push({ name: '', layer: c.layer, cx: X(cx), cy: Y(cy), w: wm / mPt, d: dm / mPt, rot: 0, src: 'loose' }) }
+  }
+  return { ...(opt.draw ? { draw: [...hatchRuns, ...runs] } : {}), furn, arcs, w: W, h: H, segs: new Float32Array(segs), cls: new Uint16Array(segCls), fills, classes, texts, nSeg: segs.length / 4, zones, dxf: { unit, mmPerUnit: mmU, den, extentM: [(x1 - x0) * mmU / 1000, (y1 - y0) * mmU / 1000] } }
 }
 
 /** Ảnh xem trước từ DXF (JPEG) */

@@ -17,6 +17,8 @@ export type VecPage = {
   classes: VecClass[]; texts: VecText[]; nSeg: number
   arcs: { a: [number, number]; b: [number, number]; m: [number, number]; r: number }[] // các cung ~90° (nghi là cánh cửa quay)
   draw?: DrawRun[]
+  /** đồ nội thất rời nhận từ DXF (pt, y xuống): tâm, kích thước theo 2 trục, góc xoay (rad) */
+  furn?: { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number; src: 'block' | 'loose' }[]
 }
 
 type M = [number, number, number, number, number, number]
