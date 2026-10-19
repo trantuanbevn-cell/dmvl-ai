@@ -48,7 +48,7 @@ export default function Scene3D({ model, view, custom = [], customDoors = [], ce
         grp.add(gp)
       }
       for (const d of M.doors) { // cánh cửa, khung, kính… theo thư viện
-        const m = buildDoor(d, doorSpec(d.lib, cd), cf, 0.2); m.position.set(d.x, d.sill, d.y); m.rotation.y = -d.ang; if (d.flip) m.scale.z = -1; grp.add(m)
+        const m = buildDoor(d, doorSpec(d.lib, cd), cf, d.t ?? 0.2); m.position.set(d.x, d.sill, d.y); m.rotation.y = -d.ang; if (d.flip) m.scale.z = -1; grp.add(m)
         if (d.auto && d.kind !== 'window' && d.sill + d.h < M.hWall - 0.05) { // lanh-tô trên đầu cửa (nét tường đã bị hở)
           const lt = new THREE.Mesh(new THREE.BoxGeometry(d.w, M.hWall - d.sill - d.h, (d.t ?? 0.2)), mat('brick')); lt.position.set(d.x, d.sill + d.h + (M.hWall - d.sill - d.h) / 2, d.y); lt.rotation.y = -d.ang; grp.add(lt)
         }

@@ -32,6 +32,10 @@ export const FURN_TYPES: FurnType[] = [
   T('wc', 'Bồn cầu (400, két nước 800)', 'Vệ sinh', 0.7, 0.4, 0.4, '#f1f1ee', { back: 0.8, backT: 0.2 }),
   T('basin', 'Chậu rửa / lavabo (850)', 'Vệ sinh', 0.6, 0.5, 0.85, '#f1f1ee'),
   T('bath', 'Bồn tắm (550)', 'Vệ sinh', 1.7, 0.75, 0.55, '#f1f1ee'),
+  T('vanity', 'Bàn lavabo / bàn đá chậu rửa (850)', 'Vệ sinh', 1.2, 0.55, 0.85, '#d9d6cf'),
+  T('urinal', 'Tiểu nam treo tường (cao 800, thân 1000)', 'Vệ sinh', 0.35, 0.35, 0.8, '#f1f1ee', { back: 1.0, backT: 0.1 }),
+  T('lift', 'Thang máy (thân hộp + cửa thép)', 'Khác', 2.0, 2.4, 3.3, '#b9bdc2'),
+  T('stair', 'Thang bộ (bậc cao 170, rộng theo bản vẽ)', 'Khác', 4.0, 1.2, 3.3, '#c8c2b6'),
   T('plant', 'Cây / chậu cây (1200)', 'Khác', 0.5, 0.5, 1.2, '#6b8f5e', { shape: 'round' }),
   T('stage', 'Bục / sân khấu / thảm nền (300)', 'Khác', 3.0, 2.0, 0.3, '#9a9a96'),
   T('group', 'Cụm nội thất gộp (thấp, chưa tách) 450', 'Khác', 3.0, 3.0, 0.45, '#b8a58c'),
@@ -42,8 +46,12 @@ export const furnTypeOf = (k: string) => FURN_TYPES.find(t => t.key === k) ?? FU
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase()
 /** Đoán loại đồ từ tên khối/layer, không có thì từ kích thước (m). Chỉ là gợi ý – người dùng đổi loại trong bảng thuộc tính. */
 export function classifyFurn(name: string, layer: string, w: number, d: number): string {
-  const n = norm(name), a = Math.max(w, d), b = Math.min(w, d), rnd = Math.abs(w - d) / a < 0.12
+  const n = norm(name), a = Math.max(w, d), b = Math.min(w, d), rnd = Math.abs(w - d) / a < 0.12, ly = norm(layer)
   const has = (re: RegExp) => re.test(n)
+  if (/stair|cau thang|thang bo/.test(ly) || has(/stair|cau thang|thang bo/)) return 'stair'
+  if (/\blift\b|elev|thang may/.test(ly) || has(/\blift\b|elevator|thang may/)) return 'lift'
+  if (/urinal|tieu nam/.test(ly) || has(/urinal|tieu nam|tieu treo/)) return 'urinal'
+  if (/lavabo|vanity|wash ?basin/.test(ly) || has(/vanity|lavabo|wash ?basin|ban da chau/)) return a >= 0.9 ? 'vanity' : 'basin'
   if (n) {
     if (has(/fridge|refriger|freezer|tu lanh|tu dong|chiller/)) return 'fridge'
     if (has(/\b(bar ?)?stool\b|ghe dau|ghe bar/)) return 'stool'
@@ -53,7 +61,7 @@ export function classifyFurn(name: string, layer: string, w: number, d: number):
     if (has(/\bbed\b|giuong|mattress/)) return 'bed'
     if (has(/wardrobe|closet|locker|tu quan ao|tu cao/)) return 'wardrobe'
     if (has(/urinal|toilet|\bwc\b|bon cau/)) return 'wc'
-    if (has(/basin|lavabo|wash ?hand|chau rua|sink/) && a < 1.0) return 'basin'
+    if (has(/basin|lavabo|wash ?hand|chau rua|sink/)) return a >= 0.9 ? 'vanity' : 'basin'
     if (has(/bath ?tub|bathtub|bon tam/)) return 'bath'
     if (has(/reception|counter|quay|\bbar\b/)) return 'counter'
     if (has(/kitchen|tu bep|dishwash|oven|stove|cooker|hood|cart|trolley|dispenser|machine|may /)) return 'kitchen'
@@ -67,6 +75,7 @@ export function classifyFurn(name: string, layer: string, w: number, d: number):
     if (has(/stage|san khau|podium|\bbuc\b|carpet|tham/)) return 'stage'
   }
   const area = w * d
+  if (a >= 0.62 && a <= 0.78 && b >= 0.34 && b <= 0.46 && a / b >= 1.5) return 'wc'
   if (area > 5) return 'group'
   if (a < 0.35) return 'side'
   if (a <= 0.75 && b >= 0.3) return rnd ? 'chair' : 'side'

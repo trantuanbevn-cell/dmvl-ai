@@ -11,7 +11,7 @@ import Scene3D from './Scene3D'
 import LibraryBrowser from './LibraryBrowser'
 import { DoorElevSection, DoorPlanSection, WallLayerSection } from './Sections'
 import { COL_LIB, DOOR_LIB, FINISHES, WALL_TYPES, doorSpec, finishOf, type DoorSpec, type Finish } from '../lib/plan3d/library'
-import { WALL_KINDS, autoRooms, centerline, centroid, doorRect, floodRoom, footprint, inside, kindOf, modelFromVec, polyArea, snapToWall, uid, type Dim, type Door, type Furn, type Model, type Pt, type Room, type Wall } from '../lib/plan3d/model'
+import { WALL_KINDS, autoRooms, centerline, centroid, doorRect, floodRoom, footprint, inside, kindOf, modelFromVec, polyArea, snapToWall, uid, wallThickAt, type Dim, type Door, type Furn, type Model, type Pt, type Room, type Wall } from '../lib/plan3d/model'
 import { FURN_TYPES, furnTypeOf } from '../lib/plan3d/furn'
 
 type Box = { x: number; y: number; w: number; h: number }
@@ -23,22 +23,25 @@ const ringPath = (r: Pt[]) => 'M' + r.map(p => p[0].toFixed(3) + ' ' + p[1].toFi
 const WallPath = memo(function WallPath({ w, sel, onDown }: { w: Wall; sel: boolean; onDown: (e: React.PointerEvent, w: Wall) => void }) {
   const d = useMemo(() => footprint(w).map(ringPath).join(''), [w])
   const k = kindOf(w.kind)
-  return <path d={d} fill={k.color} fillOpacity={k.glass ? 0.55 : 0.92} fillRule="evenodd" stroke={sel ? '#e07000' : '#222'} strokeWidth={sel ? 2.4 : 1} vectorEffect="non-scaling-stroke" onPointerDown={e => onDown(e, w)} style={{ cursor: 'pointer' }} />
+  return <path d={d} fill={k.glass ? '#8fd8ee' : w.role === 'col' ? '#6a6a6a' : '#b1b1b1'} fillOpacity={k.glass ? 0.7 : 0.95} fillRule="evenodd" stroke={sel ? '#e07000' : k.glass ? '#1b87a8' : '#3a3a3a'} strokeWidth={sel ? 2.4 : 1} vectorEffect="non-scaling-stroke" onPointerDown={e => onDown(e, w)} style={{ cursor: 'pointer' }} />
 })
 
-function DoorGlyph({ d, sel, onDown }: { d: Door; sel: boolean; onDown: (e: React.PointerEvent, d: Door) => void }) {
-  const ux = Math.cos(d.ang), uy = Math.sin(d.ang), s = d.flip ? -1 : 1
+function DoorGlyph({ d, sel, frame, onDown }: { d: Door; sel: boolean; frame: number; onDown: (e: React.PointerEvent, d: Door) => void }) {
+  // khung cửa dày đúng bề dày tường tại cửa (d.t); cánh dày 40 mm; cung quét theo bề rộng thật
+  const ux = Math.cos(d.ang), uy = Math.sin(d.ang), s = d.flip ? -1 : 1, t = d.t ?? 0.2, fr = Math.min(frame, d.w / 6)
   const P = (a: number, b: number) => [d.x + ux * a - uy * b * s, d.y + uy * a + ux * b * s] as Pt
-  const r = doorRect(d, 0.3), swing = d.kind === 'door' || d.kind === 'double'
-  const arcs: string[] = []
-  const arc = (hx: number, dir: number) => { const h = P(hx, 0), t = P(hx + dir * d.w / (d.kind === 'double' ? 2 : 1), 0), f = P(hx, d.w / (d.kind === 'double' ? 2 : 1)); return `M${h[0]} ${h[1]}L${f[0]} ${f[1]}M${f[0]} ${f[1]}A${d.w / (d.kind === 'double' ? 2 : 1)} ${d.w / (d.kind === 'double' ? 2 : 1)} 0 0 ${(dir > 0 ? 0 : 1) ^ (s < 0 ? 1 : 0)} ${t[0]} ${t[1]}` }
-  if (swing) { if (d.kind === 'double') { arcs.push(arc(-d.w / 2, 1)); arcs.push(arc(d.w / 2, -1)) } else arcs.push(arc(-d.w / 2, 1)) }
-  const win = d.kind === 'window' || d.kind === 'slide'
-  const a = P(-d.w / 2, 0), b = P(d.w / 2, 0)
+  const rect = (a0: number, a1: number, b0: number, b1: number) => ringPath([P(a0, b0), P(a1, b0), P(a1, b1), P(a0, b1)])
+  const swing = d.kind === 'door' || d.kind === 'double', win = d.kind === 'window' || d.kind === 'slide'
+  const stroke = sel ? '#e07000' : '#1e5ac8'
+  const leaves: { hx: number; dir: number; len: number }[] = d.kind === 'double' ? [{ hx: -d.w / 2 + fr, dir: 1, len: d.w / 2 - fr }, { hx: d.w / 2 - fr, dir: -1, len: d.w / 2 - fr }] : swing ? [{ hx: -d.w / 2 + fr, dir: 1, len: d.w - 2 * fr }] : []
+  const arc = (l: { hx: number; dir: number; len: number }) => { const h = P(l.hx, 0), f = P(l.hx, l.len), e = P(l.hx + l.dir * l.len, 0); return `M${h[0]} ${h[1]}L${f[0]} ${f[1]}M${f[0]} ${f[1]}A${l.len} ${l.len} 0 0 ${(l.dir > 0 ? 0 : 1) ^ (s < 0 ? 1 : 0)} ${e[0]} ${e[1]}` }
   return <g onPointerDown={e => onDown(e, d)} style={{ cursor: 'move' }}>
-    <path d={ringPath(r)} fill="#fff" fillOpacity={0.95} stroke={sel ? '#e07000' : '#1e5ac8'} strokeWidth={sel ? 2.4 : 1.2} vectorEffect="non-scaling-stroke" />
-    {win && <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="#1e5ac8" strokeWidth={1.4} vectorEffect="non-scaling-stroke" />}
-    {arcs.map((p, i) => <path key={i} d={p} fill="none" stroke="#1e5ac8" strokeWidth={1.2} vectorEffect="non-scaling-stroke" />)}
+    <path d={rect(-d.w / 2, d.w / 2, -t / 2, t / 2)} fill="#fff" stroke="none" />
+    {[-1, 1].map(k => <path key={k} d={k < 0 ? rect(-d.w / 2, -d.w / 2 + fr, -t / 2, t / 2) : rect(d.w / 2 - fr, d.w / 2, -t / 2, t / 2)} fill="#cfe0ff" stroke={stroke} strokeWidth={sel ? 2 : 1} vectorEffect="non-scaling-stroke" />)}
+    {win && <path d={`M${P(-d.w / 2, -t / 2 + t * 0.3)[0]} ${P(-d.w / 2, -t / 2 + t * 0.3)[1]}L${P(d.w / 2, -t / 2 + t * 0.3)[0]} ${P(d.w / 2, -t / 2 + t * 0.3)[1]}M${P(-d.w / 2, t / 2 - t * 0.3)[0]} ${P(-d.w / 2, t / 2 - t * 0.3)[1]}L${P(d.w / 2, t / 2 - t * 0.3)[0]} ${P(d.w / 2, t / 2 - t * 0.3)[1]}`} stroke={stroke} strokeWidth={1} vectorEffect="non-scaling-stroke" fill="none" />}
+    {leaves.map((l, i) => <g key={i}><path d={arc(l)} fill="none" stroke={stroke} strokeWidth={1} vectorEffect="non-scaling-stroke" strokeDasharray="0" />
+      <path d={`M${P(l.hx, 0)[0]} ${P(l.hx, 0)[1]}L${P(l.hx, l.len)[0]} ${P(l.hx, l.len)[1]}`} stroke={stroke} strokeWidth={0.04} fill="none" strokeLinecap="butt" /></g>)}
+    <path d={rect(-d.w / 2 - 0.02, d.w / 2 + 0.02, -t / 2, t / 2)} fill="transparent" stroke="none" />
   </g>
 }
 
@@ -198,7 +201,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     }
     if (tool === 'door') {
       const sp = doorSpec(libDoor, customDoors) ?? DOOR_LIB[0], sn = snapToWall(M, p, 0.6); if (!sn) { setErr('Bấm sát vào một đoạn tường để đặt cửa.'); return }
-      setErr(''); const d: Door = { id: uid('d'), kind: sp.kind, lib: sp.id, x: sn.x, y: sn.y, ang: sn.ang, w: sp.w, h: sp.h, sill: sp.sill }
+      setErr(''); const d: Door = { id: uid('d'), kind: sp.kind, lib: sp.id, x: sn.x, y: sn.y, ang: sn.ang, w: sp.w, h: sp.h, sill: sp.sill, t: wallThickAt(M.walls, sn.x, sn.y, sn.ang, sp.w) }
       commit({ ...M, doors: [...M.doors, d] }); setSel({ t: 'door', id: d.id }); return
     }
     setSel(null); drag.current = { k: 'pan', x: e.clientX, y: e.clientY, vb }; (box.current as HTMLElement).setPointerCapture(e.pointerId)
@@ -217,7 +220,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     else if (d.k === 'moveFurn') { const dx = p[0] - d.p0[0], dy = p[1] - d.p0[1]; setM(cur => cur && { ...cur, furn: (cur.furn ?? []).map(x => x.id === d.id ? { ...x, x: d.orig.x + dx, y: d.orig.y + dy } : x) }) }
     else if (d.k === 'dimA' || d.k === 'dimB') { const o = d.orig as Dim, q = snapPt(p, d.k === 'dimA' ? o.b : o.a); setM(cur => cur && { ...cur, dims: (cur.dims ?? []).map(x => x.id === d.id ? { ...x, [d.k === 'dimA' ? 'a' : 'b']: q } : x) }) }
     else if (d.k === 'dimOff') { const o = d.orig as Dim, L = Math.hypot(o.b[0] - o.a[0], o.b[1] - o.a[1]) || 1, off = ((p[0] - o.a[0]) * -(o.b[1] - o.a[1]) + (p[1] - o.a[1]) * (o.b[0] - o.a[0])) / L; setM(cur => cur && { ...cur, dims: (cur.dims ?? []).map(x => x.id === d.id ? { ...x, off } : x) }) }
-    else if (d.k === 'moveDoor') { const s = snapToWall(M, p, 1.2); if (s) setM(cur => cur && { ...cur, doors: cur.doors.map(x => x.id === d.id ? { ...x, x: s.x, y: s.y, ang: s.ang } : x) }) }
+    else if (d.k === 'moveDoor') { const s = snapToWall(M, p, 1.2); if (s) setM(cur => cur && { ...cur, doors: cur.doors.map(x => x.id === d.id ? { ...x, x: s.x, y: s.y, ang: s.ang, t: wallThickAt(cur.walls, s.x, s.y, s.ang, x.w) } : x) }) }
   }
   const onUp = () => { drag.current = null }
   const closePoly = () => { if (!M || pts.length < 3) return; const n = (M.rooms ?? []).length + 1, room: Room = { id: uid('r'), name: 'Phòng ' + n, poly: pts }; commit({ ...M, rooms: [...(M.rooms ?? []), room] }); setPts([]); setSel({ t: 'room', id: room.id }) }
@@ -350,7 +353,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
               {showFurn && (M.furn ?? []).map(f => <FurnGlyph key={f.id} f={f} sel={selFurn?.id === f.id} onDown={onFurnDown} />)}
               {M.walls.map(w => <WallPath key={w.id} w={w} sel={selWall?.id === w.id} onDown={onWallDown} />)}
               {M.walls.map(w => kindOf(w.kind).glass && w.shape.type === 'seg' ? <GlassTicks key={'g' + w.id} w={w} panel={w.panel ?? kindOf(w.kind).panel ?? 1.2} /> : null)}
-              {M.doors.map(d => <DoorGlyph key={d.id} d={d} sel={selDoor?.id === d.id} onDown={onDoorDown} />)}
+              {M.doors.map(d => <DoorGlyph key={d.id} d={d} sel={selDoor?.id === d.id} frame={doorSpec(d.lib, customDoors)?.frame ?? 0.05} onDown={onDoorDown} />)}
               {(M.dims ?? []).map(d => <DimGlyph key={d.id} d={d} sel={selDim?.id === d.id} fs={fsz} mm={dimMm} onDown={onDimDown} />)}
               {(M.rooms ?? []).map(r => { const c = centroid(r.poly), a = r.area ?? polyArea(r.poly); return <text key={'t' + r.id} x={c[0]} y={c[1]} textAnchor="middle" fontSize={fsz * 1.1} fill="#111" stroke="#fff" strokeWidth={fsz * 0.25} paintOrder="stroke" style={{ cursor: 'pointer', userSelect: 'none' }} onPointerDown={e => { if (tool === 'select') { e.stopPropagation(); setSel({ t: 'room', id: r.id }) } }}><tspan x={c[0]} dy={-fsz * 0.1} fontWeight="bold">{r.name}</tspan><tspan x={c[0]} dy={fsz * 1.25}>{a.toFixed(1)} m²</tspan></text> })}
               {selRoom && selRoom.poly.map((a, i) => { const b = selRoom.poly[(i + 1) % selRoom.poly.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); return L < 0.3 ? null : <text key={'re' + i} x={(a[0] + b[0]) / 2} y={(a[1] + b[1]) / 2} fontSize={fsz * 0.85} textAnchor="middle" fill="#c0392b" stroke="#fff" strokeWidth={fsz * 0.2} paintOrder="stroke" style={{ pointerEvents: 'none' }}>{fmtLen(L, dimMm)}</text> })}
@@ -416,6 +419,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
               <label>Vật liệu khung <select value={selDoor.frameFinish ?? doorSpec(selDoor.lib, customDoors)?.frameFinish ?? ''} style={{ maxWidth: 150 }} onChange={e => setDoor(selDoor.id, { frameFinish: e.target.value })}>{[...custom, ...FINISHES].filter(f => f.group === 'Cửa / khung' || f.group === 'Của tôi').map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
               <label>Rộng (m) <input style={{ width: 70 }} key={'w' + selDoor.id + selDoor.w} defaultValue={selDoor.w} onBlur={e => setDoor(selDoor.id, { w: Math.max(0.3, num(e.target.value, selDoor.w)) })} /></label>
               <label>Cao (m) <input style={{ width: 70 }} key={'h' + selDoor.id + selDoor.h} defaultValue={selDoor.h} onBlur={e => setDoor(selDoor.id, { h: Math.max(0.3, num(e.target.value, selDoor.h)) })} /></label>
+              <label>Dày tường/khung (m) <input style={{ width: 60 }} key={'t' + selDoor.id + (selDoor.t ?? '')} defaultValue={selDoor.t ?? 0.2} onBlur={e => setDoor(selDoor.id, { t: Math.max(0.04, num(e.target.value, selDoor.t ?? 0.2)) })} /></label>
               <label>Bệ cao (m) <input style={{ width: 70 }} key={'s' + selDoor.id + selDoor.sill} defaultValue={selDoor.sill} onBlur={e => setDoor(selDoor.id, { sill: Math.max(0, num(e.target.value, selDoor.sill)) })} /></label>
               <button className="btn sm" onClick={() => setDoor(selDoor.id, { flip: !selDoor.flip })}>Đảo phía mở</button>
               <button className="btn sm" onClick={dup}>Nhân đôi</button>

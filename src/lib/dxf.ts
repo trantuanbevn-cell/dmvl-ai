@@ -133,7 +133,7 @@ const NOISE = /defpoints|xref- ?ps|(^|\$)(m|p)-|g-impt|a-genm|dwatcopi|fitting|p
 /** layer của cửa đi/cửa sổ – chỉ cung ở các layer này mới được coi là cung quét cánh cửa (không lẫn với ghế, bàn, thiết bị) */
 export const DOOR_LAYER = /door|(^|\$)cua|cua ?di|cua ?so|(^|\$)dr[_ -]|window/i
 /** layer đồ nội thất / thiết bị rời (chỉ để dựng khối 3D đúng độ cao, không phải tường) */
-export const FURN_LAYER = /noi.?that|furn|equip|k-general|interior|fixture|sanitary|thiet.?bi|(^|\$)fur(\$|$)|(^|\$)(chair|table|sofa|bed|ghe|ban|giuong)/i
+export const FURN_LAYER = /noi.?that|furn|loose.?fur|equip|k-general|interior|fixture|sanitary|thiet.?bi|stair|thang|lift|elev|toilet|basin|lavabo|urinal|(^|\$)wc|(^|\$)fur(\$|$)|(^|\$)(chair|table|sofa|bed|ghe|ban|giuong)/i
 export type FurnRaw = { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number; src: 'block' | 'loose' }
 export const ZONE_LAYER = /(^|\$)area$|ranh.?gioi|dien.?tich|room.?bound|space.?bound/i
 
