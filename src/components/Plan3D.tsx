@@ -89,7 +89,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const [busy, setBusy] = useState(''), [err, setErr] = useState('')
   const [tool, setTool] = useState<Tool>('select'), [sel, setSel] = useState<Sel>(null)
   const [mode, setMode] = useState<'2d' | '3d'>('2d'), [view3, setView3] = useState(0)
-  const [ortho, setOrtho] = useState(true), [under, setUnder] = useState(true), [showFurn, setShowFurn] = useState(true), [libFurn, setLibFurn] = useState('chair'), [dimMm, setDimMm] = useState(true), [newPanel, setNewPanel] = useState(1.2), [shp, setShp] = useState<Shape>('line'), [hud, setHud] = useState<{ p: Pt; t: string } | null>(null), [lenBuf, setLenBuf] = useState(''), [floorFin, setFloorFin] = useState(''), [tf, setTf] = useState({ dx: '0', dy: '0', rot: '90', k: '100', n: '1', cx: '1000', cy: '0' })
+  const [ortho, setOrtho] = useState(true), [under, setUnder] = useState(true), [showFurn, setShowFurn] = useState(true), [libFurn, setLibFurn] = useState('chair'), [dimMm, setDimMm] = useState(true), [newPanel, setNewPanel] = useState(1.2), [shp, setShp] = useState<Shape>('line'), [hud, setHud] = useState<{ p: Pt; t: string } | null>(null), [lenBuf, setLenBuf] = useState(''), [ed, setEd] = useState<{ k: 'poly' | 'seg' | 'room'; id: string; ring: number; vi: number; q: Pt } | null>(null), [edv, setEdv] = useState({ len: '', push: '0', thick: '', fix: 'c' }), [floorFin, setFloorFin] = useState(''), [tf, setTf] = useState({ dx: '0', dy: '0', rot: '90', k: '100', n: '1', cx: '1000', cy: '0' })
   const hist = useRef<Model[]>([]), [nh, setNh] = useState(0), clip = useRef<Sel>(null), pasteN = useRef(0)
   const [vb, setVb] = useState<Box>({ x: 0, y: 0, w: 100, h: 60 }), [size, setSize] = useState({ w: 0, h: 0 })
   const box = useRef<HTMLDivElement>(null), drag = useRef<any>(null)
@@ -225,6 +225,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   }
   const onDown = (e: React.PointerEvent) => {
     if (!M) return
+    if (ed) setEd(null)
     if (e.button === 2) { setPending(null); setPts([]); return }
     const p = toModel(e)
     const shpE: Shape = tool === 'roomPoly' && shp === 'arc' ? 'line' : shp
@@ -302,18 +303,45 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const onDouble = (e: React.MouseEvent) => {
     setPending(null)
     if (tool === 'roomPoly') { return }
-    if (tool === 'select' && M && selRoom) { // thêm đỉnh vào cạnh phòng gần nhất
+    if (tool === 'select' && M && selRoom) { // sửa cạnh phòng gần nhất
       const p = toModel(e), tol = vb.w / Math.max(300, size.w) * 12; let bi = -1, bq: Pt = [0, 0], bd = tol
       selRoom.poly.forEach((a, i) => { const b = selRoom.poly[(i + 1) % selRoom.poly.length], dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy; if (L2 < 1e-9) return; const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2)), q: Pt = [a[0] + t * dx, a[1] + t * dy], d = Math.hypot(p[0] - q[0], p[1] - q[1]); if (d < bd) { bd = d; bi = i; bq = q } })
-      if (bi >= 0) setRoom(selRoom.id, { poly: [...selRoom.poly.slice(0, bi + 1), bq, ...selRoom.poly.slice(bi + 1)], area: undefined })
+      if (bi >= 0) openEd('room', selRoom.id, 0, bi, bq, Math.hypot(selRoom.poly[(bi + 1) % selRoom.poly.length][0] - selRoom.poly[bi][0], selRoom.poly[(bi + 1) % selRoom.poly.length][1] - selRoom.poly[bi][1]))
       return
     }
-    if (tool === 'select' && M && selWall?.shape.type === 'poly') { // thêm đỉnh vào cạnh gần nhất
-      const p = toModel(e), tol = vb.w / Math.max(300, size.w) * 10; let best: { ri: number; i: number; q: Pt } | null = null, bd = tol
-      selWall.shape.rings.forEach((r, ri) => r.forEach((a, i) => { const b = r[(i + 1) % r.length], dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy; if (L2 < 1e-9) return; const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2)), q: Pt = [a[0] + t * dx, a[1] + t * dy], d = Math.hypot(p[0] - q[0], p[1] - q[1]); if (d < bd) { bd = d; best = { ri, i, q } } }))
-      const bb = best as { ri: number; i: number; q: Pt } | null
-      if (bb) { const sh = selWall.shape; setWall(selWall.id, { shape: { type: 'poly', rings: sh.rings.map((r, ri) => ri === bb.ri ? [...r.slice(0, bb.i + 1), bb.q, ...r.slice(bb.i + 1)] : r) } }) }
+    if (tool === 'select' && M && selWall?.shape.type === 'poly') { // sửa cạnh gần nhất
+      const p = toModel(e), tol = vb.w / Math.max(300, size.w) * 10; let best: { ri: number; i: number; q: Pt; L: number } | null = null, bd = tol
+      selWall.shape.rings.forEach((r, ri) => r.forEach((a, i) => { const b = r[(i + 1) % r.length], dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy; if (L2 < 1e-9) return; const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2)), q: Pt = [a[0] + t * dx, a[1] + t * dy], d = Math.hypot(p[0] - q[0], p[1] - q[1]); if (d < bd) { bd = d; best = { ri, i, q, L: Math.sqrt(L2) } } }))
+      const bb = best as { ri: number; i: number; q: Pt; L: number } | null
+      if (bb) openEd('poly', selWall.id, bb.ri, bb.i, bb.q, bb.L)
+      return
     }
+    if (tool === 'select' && M && selWall?.shape.type === 'seg') { const sh = selWall.shape; openEd('seg', selWall.id, 0, 0, toModel(e), Math.hypot(sh.b[0] - sh.a[0], sh.b[1] - sh.a[1]), sh.t) }
+  }
+  const openEd = (k: 'poly' | 'seg' | 'room', id: string, ring: number, vi: number, q: Pt, L: number, t?: number) => { setEd({ k, id, ring, vi, q }); setEdv({ len: String(Math.round(L * 1000)), push: '0', thick: t !== undefined ? String(Math.round(t * 1000)) : '', fix: 'c' }) }
+  /** Áp số gõ vào cạnh: đổi chiều dài (giữ đầu A / B / giữa), đẩy vuông góc, đổi dày */
+  const applyEd = () => {
+    if (!ed || !M) return
+    const nzv = (v: string, d: number) => { const n = parseFloat(v.replace(',', '.')); return isFinite(n) ? n : d }
+    let A: Pt, B: Pt
+    if (ed.k === 'poly') { const w = M.walls.find(x => x.id === ed.id); if (w?.shape.type !== 'poly') return; const r = w.shape.rings[ed.ring]; A = r[ed.vi]; B = r[(ed.vi + 1) % r.length] }
+    else if (ed.k === 'seg') { const w = M.walls.find(x => x.id === ed.id); if (w?.shape.type !== 'seg') return; A = w.shape.a; B = w.shape.b }
+    else { const r = (M.rooms ?? []).find(x => x.id === ed.id); if (!r) return; A = r.poly[ed.vi]; B = r.poly[(ed.vi + 1) % r.poly.length] }
+    const L0 = Math.hypot(B[0] - A[0], B[1] - A[1]) || 1, ux = (B[0] - A[0]) / L0, uy = (B[1] - A[1]) / L0, L1 = Math.max(0.01, nzv(edv.len, L0 * 1000) / 1000), ps = nzv(edv.push, 0) / 1000
+    const mx = (A[0] + B[0]) / 2, my = (A[1] + B[1]) / 2
+    let A2: Pt = edv.fix === 'a' ? A : edv.fix === 'b' ? [B[0] - ux * L1, B[1] - uy * L1] : [mx - ux * L1 / 2, my - uy * L1 / 2]
+    let B2: Pt = edv.fix === 'a' ? [A[0] + ux * L1, A[1] + uy * L1] : edv.fix === 'b' ? B : [mx + ux * L1 / 2, my + uy * L1 / 2]
+    A2 = [A2[0] - uy * ps, A2[1] + ux * ps]; B2 = [B2[0] - uy * ps, B2[1] + ux * ps]
+    if (ed.k === 'poly') commit({ ...M, walls: M.walls.map(w => w.id === ed.id && w.shape.type === 'poly' ? { ...w, shape: { type: 'poly', rings: w.shape.rings.map((r, ri) => ri === ed.ring ? r.map((v, j) => j === ed.vi ? A2 : j === (ed.vi + 1) % r.length ? B2 : v) : r) } } : w) })
+    else if (ed.k === 'seg') commit({ ...M, walls: M.walls.map(w => w.id === ed.id && w.shape.type === 'seg' ? { ...w, shape: { ...w.shape, a: A2, b: B2, t: edv.thick ? Math.max(0.02, nzv(edv.thick, w.shape.t * 1000) / 1000) : w.shape.t } } : w) })
+    else commit({ ...M, rooms: (M.rooms ?? []).map(r => r.id === ed.id ? { ...r, poly: r.poly.map((v, j) => j === ed.vi ? A2 : j === (ed.vi + 1) % r.poly.length ? B2 : v), area: undefined } : r) })
+    setEd(null)
+  }
+  const addVertexEd = () => {
+    if (!ed || !M || ed.k === 'seg') return
+    if (ed.k === 'poly') { const w = M.walls.find(x => x.id === ed.id); if (w?.shape.type !== 'poly') return; setWall(w.id, { shape: { type: 'poly', rings: w.shape.rings.map((r, ri) => ri === ed.ring ? [...r.slice(0, ed.vi + 1), ed.q, ...r.slice(ed.vi + 1)] : r) } }) }
+    else { const r = (M.rooms ?? []).find(x => x.id === ed.id); if (r) setRoom(r.id, { poly: [...r.poly.slice(0, ed.vi + 1), ed.q, ...r.poly.slice(ed.vi + 1)], area: undefined }) }
+    setEd(null)
   }
 
   // zoom bằng con lăn (gắn thủ công để chặn cuộn trang)
@@ -459,7 +487,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
               {selWall?.shape.type === 'poly' && selWall.shape.rings.flatMap((r, ri) => (r.length > 260 ? [] : r).map((q, vi) => <circle key={ri + '_' + vi} cx={q[0]} cy={q[1]} r={hs} fill="#fff" stroke="#e07000" strokeWidth={1.4} vectorEffect="non-scaling-stroke" style={{ cursor: 'grab' }} onPointerDown={e => onHandleDown(e, selWall.id, ri, vi)} onContextMenu={e => { e.preventDefault(); e.stopPropagation(); const sh = selWall.shape as { type: 'poly'; rings: Pt[][] }; if (sh.rings[ri].length > 3) setWall(selWall.id, { shape: { type: 'poly', rings: sh.rings.map((r, i) => i === ri ? r.filter((_, j) => j !== vi) : r) } }) }} />))}
               {selWall?.shape.type === 'seg' && (['a', 'b'] as const).map(k => { const sh = selWall.shape as { a: Pt; b: Pt }, q = sh[k], o = k === 'a' ? sh.b : sh.a, cl = centerline(selWall), tp = k === 'a' ? cl[1] : cl[cl.length - 2], ref = selWall.shape.type === 'seg' && (selWall.shape as { bulge?: number }).bulge ? tp : o, ang = Math.atan2(q[1] - ref[1], q[0] - ref[0]); return <Arrow key={k} x={q[0]} y={q[1]} ang={ang} s={hs * 1.1} title="Kéo để co/giãn tường (bắt điểm; nhập số chính xác ở bảng bên phải)" onDown={e => onEndDown(e, selWall.id, k)} /> })}
               {selWall?.shape.type === 'seg' && !selWall.shape.bulge && segLen > 0.6 && (() => { const sh = selWall.shape as { a: Pt; b: Pt; t: number }, ux = (sh.b[0] - sh.a[0]) / segLen, uy = (sh.b[1] - sh.a[1]) / segLen, nx = -uy, ny = ux, pos: Pt = [sh.a[0] + ux * segLen * 0.25 + nx * (sh.t / 2 + hs * 0.2), sh.a[1] + uy * segLen * 0.25 + ny * (sh.t / 2 + hs * 0.2)]; return <Arrow x={pos[0]} y={pos[1]} ang={Math.atan2(ny, nx)} s={hs} color="#2d7ff9" title="Kéo để đổi độ dày tường" onDown={e => onArrow(e, 'wThick', selWall.id, selWall)} /> })()}
-              {selWall?.shape.type === 'poly' && selWall.shape.rings.flat().length <= 40 && selWall.shape.rings.flatMap((r, ri) => r.map((a, i) => { const b = r[(i + 1) % r.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.15) return null; const nx = -(b[1] - a[1]) / L, ny = (b[0] - a[0]) / L; return <Arrow key={'ed' + ri + '_' + i} x={(a[0] + b[0]) / 2} y={(a[1] + b[1]) / 2} ang={Math.atan2(ny, nx)} s={hs * 0.85} color="#2d7ff9" title="Kéo để đẩy cả cạnh này (đổi độ dày / kích thước)" onDown={e => onArrow(e, 'edge', selWall.id, selWall, { ring: ri, vi: i })} /> }))}
+              {selWall?.shape.type === 'poly' && selWall.shape.rings.flat().length <= 400 && selWall.shape.rings.flatMap((r, ri) => r.map((a, i) => { const b = r[(i + 1) % r.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.08) return null; const nx = -(b[1] - a[1]) / L, ny = (b[0] - a[0]) / L; return <Arrow key={'ed' + ri + '_' + i} x={(a[0] + b[0]) / 2} y={(a[1] + b[1]) / 2} ang={Math.atan2(ny, nx)} s={hs * 0.85} color="#2d7ff9" title="Kéo để đẩy cả cạnh này · bấm đúp lên cạnh để gõ số mm chính xác" onDown={e => onArrow(e, 'edge', selWall.id, selWall, { ring: ri, vi: i })} /> }))}
               {selDoor && ([1, -1] as const).map(sg => { const ux = Math.cos(selDoor.ang), uy = Math.sin(selDoor.ang); return <Arrow key={'de' + sg} x={selDoor.x + ux * sg * selDoor.w / 2} y={selDoor.y + uy * sg * selDoor.w / 2} ang={selDoor.ang + (sg < 0 ? Math.PI : 0)} s={hs * 1.1} title="Kéo để đổi bề rộng cửa" onDown={e => onArrow(e, 'doorEnd', selDoor.id, selDoor, { sg })} /> })}
               {selFurn && (() => { const f = selFurn, c = Math.cos(f.ang), sn = Math.sin(f.ang), rp: Pt = [f.x + sn * (f.d / 2 + hs * 5), f.y - c * (f.d / 2 + hs * 5)]; return <>
                 {([['w', 1], ['w', -1], ['d', 1], ['d', -1]] as const).map(([ax, sg]) => { const u: Pt = ax === 'w' ? [c, sn] : [-sn, c], h = (ax === 'w' ? f.w : f.d) / 2; return <Arrow key={ax + sg} x={f.x + u[0] * sg * h} y={f.y + u[1] * sg * h} ang={Math.atan2(u[1], u[0]) + (sg < 0 ? Math.PI : 0)} s={hs} title={ax === 'w' ? 'Kéo để đổi bề rộng' : 'Kéo để đổi chiều sâu'} onDown={e => onArrow(e, 'furnSz', f.id, f, { ax, sg })} /> })}
@@ -482,6 +510,14 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
               {hud && <text x={hud.p[0] + hs * 2} y={hud.p[1] - hs * 2} fontSize={fsz} fill="#c0392b" fontWeight="bold" stroke="#fff" strokeWidth={fsz * 0.25} paintOrder="stroke" style={{ pointerEvents: 'none' }}>{hud.t}</text>}
               {(() => { const mk = snapMark ?? (cursor && tool !== 'select' && tool !== 'door' ? (() => { const q = snapPt(cursor, pending ?? pts[pts.length - 1] ?? null); return Math.hypot(q[0] - cursor[0], q[1] - cursor[1]) > 1e-6 ? q : null })() : null); return mk ? <g style={{ pointerEvents: 'none' }}><rect x={mk[0] - hs * 1.1} y={mk[1] - hs * 1.1} width={hs * 2.2} height={hs * 2.2} fill="none" stroke="#00a86b" strokeWidth={2} vectorEffect="non-scaling-stroke" /><circle cx={mk[0]} cy={mk[1]} r={hs * 0.35} fill="#00a86b" /></g> : null })()}
             </svg>
+            {ed && (() => { const lx = Math.min(Math.max(4, (ed.q[0] - vb.x) / vb.w * size.w + 12), Math.max(4, size.w - 250)), ly = Math.min(Math.max(4, (ed.q[1] - vb.y) / vb.h * size.h + 12), Math.max(4, size.h - 230))
+              return <div onPointerDown={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Enter') applyEd(); if (e.key === 'Escape') setEd(null) }} style={{ position: 'absolute', left: lx, top: ly, width: 238, background: '#fff', border: '1px solid #e07000', borderRadius: 6, boxShadow: '0 4px 14px rgba(0,0,0,.25)', padding: 8, display: 'grid', gap: 5, fontSize: 13, zIndex: 5 }}>
+                <b>Sửa cạnh bằng số (mm)</b>
+                <label className="small">Chiều dài <input autoFocus style={{ width: 70 }} value={edv.len} onChange={e => setEdv({ ...edv, len: e.target.value })} onFocus={e => e.target.select()} /> mm</label>
+                <label className="small">Giữ cố định <select value={edv.fix} onChange={e => setEdv({ ...edv, fix: e.target.value })}><option value="c">Điểm giữa</option><option value="a">Đầu A (đầu đầu)</option><option value="b">Đầu B (đầu cuối)</option></select></label>
+                <label className="small">Đẩy vuông góc <input style={{ width: 70 }} value={edv.push} onChange={e => setEdv({ ...edv, push: e.target.value })} onFocus={e => e.target.select()} /> mm <span className="muted">(+ theo mũi tên xanh)</span></label>
+                {ed.k === 'seg' && <label className="small">Độ dày <input style={{ width: 70 }} value={edv.thick} onChange={e => setEdv({ ...edv, thick: e.target.value })} onFocus={e => e.target.select()} /> mm</label>}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><button className="btn sm primary" onClick={applyEd}>Áp dụng ↵</button>{ed.k !== 'seg' && <button className="btn sm" onClick={addVertexEd}>＋ Thêm đỉnh tại đây</button>}<button className="btn sm" onClick={() => setEd(null)}>Đóng</button></div></div> })()}
             <div className="muted small" style={{ position: 'absolute', left: 6, bottom: 4, background: 'rgba(255,255,255,.85)', padding: '0 4px' }}>
               {tool === 'wall' || tool === 'glasskit' ? (shp === 'arc' ? 'Cung: bấm điểm đầu, điểm cuối, rồi điểm nằm trên cung' : shp === 'circle' ? 'Tròn: bấm tâm rồi bấm điểm trên đường tròn' : shp === 'rect' ? 'Chữ nhật: bấm hai góc đối diện' : 'Bấm điểm đầu, rồi các điểm tiếp theo · gõ số mm + Enter để đặt đúng chiều dài · Esc/chuột phải để dừng') : tool === 'dim' ? 'Bấm điểm đầu, điểm cuối, rồi bấm để kéo đường kích thước ra' : tool === 'room' ? 'Bấm vào bên trong một không gian kín' : tool === 'roomPoly' ? (shp === 'line' || shp === 'arc' ? 'Bấm từng góc sàn; bấm lại điểm đầu hoặc Enter để chốt' : shp === 'circle' ? 'Bấm tâm rồi bấm điểm trên đường tròn' : 'Bấm hai góc đối diện') : tool === 'furn' ? 'Bấm để đặt món nội thất' : tool !== 'select' ? 'Bấm sát vào tường để đặt cửa' : 'Cuộn = zoom · kéo nền = dời · bấm tường/cửa để chọn · Del = xoá · Ctrl+Z = hoàn tác'}</div>
           </div>
