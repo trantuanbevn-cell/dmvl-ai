@@ -25,12 +25,12 @@ export type Door = { id: string; kind: DoorKind; lib?: string; finish?: string; 
 export type Dim = { id: string; a: Pt; b: Pt; off: number; /** chữ ghi đè (thay cho số đo) */ txt?: string }
 export type Room = { id: string; name: string; en?: string; poly: Pt[]; area?: number; floor?: string; ceil?: string; /** cốt trần (m, tính từ cốt ±0.00) */ ceilH?: number; /** cốt sàn hoàn thiện (m, so với ±0.00); mặc định 0 */ z?: number }
 /** Trục cột: dir 'v' = đường thẳng đứng x = pos; 'h' = đường nằm ngang y = pos */
-export type Axis = { id: string; dir: 'v' | 'h'; pos: number; name: string; auto?: boolean }
+export type Axis = { id: string; dir: 'v' | 'h'; pos: number; name: string; auto?: boolean; /** khoảng cách riêng của bong bóng tới mép bản vẽ (m) – bỏ trống = theo cả dãy */ off?: number }
 /** Đồ nội thất rời: x,y = tâm (m); w theo trục dọc (sau khi xoay ang), d theo trục ngang; h = chiều cao thật theo loại; flip = đảo phía lưng tựa */
 export type Furn = { id: string; kind: string; name?: string; x: number; y: number; w: number; d: number; ang: number; h: number; finish?: string; flip?: boolean; auto?: boolean; /** cao độ đáy (m) so với sàn – tủ trên, gương… */ z?: number }
 /** chữ trong bản vẽ (tên phòng…) để tự đặt tên phòng */
 export type Label = { t: string; x: number; y: number; h: number; pri?: boolean }
-export type Model = { v: 1; walls: Wall[]; doors: Door[]; furn?: Furn[]; labels?: Label[]; dims?: Dim[]; rooms?: Room[]; axes?: Axis[]; hWall: number; hCol: number; mPt: number; w: number; h: number }
+export type Model = { v: 1; walls: Wall[]; doors: Door[]; furn?: Furn[]; labels?: Label[]; dims?: Dim[]; rooms?: Room[]; axes?: Axis[]; /** khoảng cách bong bóng trục tới mép bản vẽ (m) theo dãy: v = trục dọc (phía trên), h = trục ngang (bên trái) */ axOff?: { v?: number; h?: number }; hWall: number; hCol: number; mPt: number; w: number; h: number }
 
 let seq = 0
 export const uid = (p: string) => p + Date.now().toString(36) + (seq++).toString(36)
