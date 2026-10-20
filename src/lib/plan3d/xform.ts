@@ -189,3 +189,14 @@ export function fitWallsToDoor(M: Model, o: Door, n: Door): Model {
   })
   return changed ? { ...M, walls } : M
 }
+
+/** Cắt phần sàn mới trùng với các sàn đã có: trả về các mảnh còn trống (sàn chỉ được chạm biên nhau). holes = true nếu mảnh bao quanh sàn khác (không biểu diễn được). */
+export function trimToFree(M: Model, poly: Pt[], excludeId?: string): { polys: Pt[][]; holes: boolean } {
+  const others = (M.rooms ?? []).filter(r => r.id !== excludeId && r.poly.length >= 3).map(r => [r.poly] as never)
+  try {
+    const res = (others.length ? polygonClipping.difference([poly] as never, ...others) : [[poly]]) as unknown as Pt[][][]
+    const polys: Pt[][] = []; let holes = false
+    for (const pg of res) { const o = pg[0], outer = o.length > 1 && o[0][0] === o[o.length - 1][0] && o[0][1] === o[o.length - 1][1] ? o.slice(0, -1) : o; if (polyArea(outer) < 0.05) continue; if (pg.length > 1) holes = true; polys.push(outer) }
+    return { polys, holes }
+  } catch { return { polys: [poly], holes: false } }
+}

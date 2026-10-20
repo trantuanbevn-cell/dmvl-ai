@@ -13,7 +13,7 @@ import { DoorElevSection, DoorPlanSection, WallLayerSection } from './Sections'
 import { COL_LIB, DOOR_LIB, FINISHES, WALL_TYPES, doorSpec, finishOf, type DoorLeaf, type DoorSpec, type Finish } from '../lib/plan3d/library'
 import { WALL_KINDS, autoRooms, centerline, centroid, doorRect, floodRoom, centerDoor, footprint, inside, kindOf, modelFromVec, polyArea, snapToWall, uid, wallThickAt, type Dim, type Door, type Furn, type Model, type Pt, type Room, type Wall } from '../lib/plan3d/model'
 import { FURN_GROUPS, FURN_TYPES, furnTypeOf } from '../lib/plan3d/furn'
-import { applyXf, buildShape, detectAxes, fitWallsToDoor, joinEnds, furnHitsWall, mkMove, mkRot, mkScale, newWallOverlap, roomOverlap, selCenter, shapePoly, type Shape } from '../lib/plan3d/xform'
+import { applyXf, buildShape, detectAxes, fitWallsToDoor, joinEnds, furnHitsWall, mkMove, mkRot, mkScale, newWallOverlap, roomOverlap, selCenter, trimToFree, shapePoly, type Shape } from '../lib/plan3d/xform'
 
 type Box = { x: number; y: number; w: number; h: number }
 type Tool = 'select' | 'wall' | 'glasskit' | 'axisV' | 'axisH' | 'dim' | 'room' | 'roomPoly' | 'door' | 'col' | 'furn'
@@ -361,7 +361,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     if ((tool === 'wall' || tool === 'glasskit' || tool === 'roomPoly') && shpE !== 'line') {
       const q = snapPt(p, pts[pts.length - 1] ?? null), n = [...pts, q], need = shpE === 'arc' ? 3 : 2
       if (n.length < need) { setPts(n); return }
-      if (tool === 'roomPoly') { const poly = shapePoly(shpE, n); setPts([]); if (!poly) return; const ov = roomOverlap(M, poly); if (ov) { setErr(`Sàn này đè lên «${ov.name}». Sàn chỉ được chạm biên nhau, không chồng lên nhau.`); return } setErr(''); const k = (M.rooms ?? []).length + 1, room: Room = { id: uid('r'), name: 'Sàn ' + k, poly, floor: floorFin || undefined }; commit({ ...M, rooms: [...(M.rooms ?? []), room] }); setSel({ t: 'room', id: room.id }); return }
+      if (tool === 'roomPoly') { const poly = shapePoly(shpE, n); setPts([]); if (!poly) return; addFloors(poly); return }
       const kd = tool === 'glasskit' ? gKind : newKind, ws = buildShape(shpE, n, kd, tool === 'glasskit' ? kindOf(kd).panel ?? newPanel : newPanel); setPts([]); if (ws) commit({ ...M, walls: [...M.walls, ...ws] }); return
     }
     if (tool === 'wall' || tool === 'glasskit') {
@@ -449,7 +449,15 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     else if (d.k === 'furnRot') { const o = d.orig as Furn; let a = Math.atan2(p[1] - o.y, p[0] - o.x) + Math.PI / 2; const st = (e.shiftKey ? 15 : 1) * Math.PI / 180; if (!e.altKey) a = Math.round(a / st) * st; if (d.sh === undefined) d.sh = !!furnHitsWall(M, o); if (!d.sh && furnHitsWall(M, { ...o, ang: a })) { setHud({ p, t: '⛔ đụng tường' }); return } setHud({ p, t: `xoay ${(((a * 180 / Math.PI) % 360 + 360) % 360).toFixed(0)}°` }); setM(cur => cur && { ...cur, furn: (cur.furn ?? []).map(x => x.id === d.id ? { ...x, ang: a } : x) }) }
   }
   const onUp = () => { drag.current = null; setSnapMark(null); setHud(null); gref.current = []; setGuides([]) }
-  const closePoly = () => { if (!M || pts.length < 3) return; const ov = roomOverlap(M, pts); if (ov) { setErr(`Sàn này đè lên «${ov.name}». Sàn chỉ được chạm biên nhau, không chồng lên nhau.`); setPts([]); return } setErr(''); const n = (M.rooms ?? []).length + 1, room: Room = { id: uid('r'), name: 'Sàn ' + n, poly: pts, floor: floorFin || undefined }; commit({ ...M, rooms: [...(M.rooms ?? []), room] }); setPts([]); setSel({ t: 'room', id: room.id }) }
+  /** Thêm sàn: phần trùng với sàn khác được tự cắt bỏ để chỉ chạm biên (không báo lỗi rồi mất sàn như trước) */
+  const addFloors = (poly: Pt[]) => {
+    if (!M) return
+    const ov = roomOverlap(M, poly); let polys = [poly]
+    if (ov) { const tr = trimToFree(M, poly); if (tr.holes) { setErr('Đường bao này ôm trọn một sàn khác bên trong – hãy vẽ chừa lối (sàn không có lỗ rỗng).'); return } if (!tr.polys.length) { setErr(`Sàn này nằm trọn trong «${ov.name}» – không còn phần trống để tạo sàn.`); return } polys = tr.polys; setBusy(`Đã tự cắt phần trùng với «${ov.name}»${polys.length > 1 ? ` · tách thành ${polys.length} sàn` : ''}.`); setTimeout(() => setBusy(''), 4000) }
+    setErr(''); const n0 = (M.rooms ?? []).length, rooms: Room[] = polys.map((pl, i) => ({ id: uid('r'), name: 'Sàn ' + (n0 + i + 1), poly: pl, floor: floorFin || undefined }))
+    commit({ ...M, rooms: [...(M.rooms ?? []), ...rooms] }); setSel({ t: 'room', id: rooms[0].id })
+  }
+  const closePoly = () => { if (!M || pts.length < 3) return; const p0 = pts; setPts([]); addFloors(p0) }
   const onDouble = (e: React.MouseEvent) => {
     setPending(null)
     if (tool === 'roomPoly') { return }
