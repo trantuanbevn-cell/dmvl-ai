@@ -150,3 +150,19 @@ export function joinEnds(M: Model, a: Pt, b: Pt, ext = 0.4): { a: Pt; b: Pt; wa?
   if (Math.hypot(nb[0] - na[0], nb[1] - na[1]) < 0.05) return { a, b }
   return { a: na, b: nb, wa: ba?.w, wb: bb?.w }
 }
+
+/** Tường mới (a→b, dày t) có chồng lên tường cũ không. Chỉ chạm hoặc giao nhau gọn ở đầu mút (nối góc / chữ T) thì được; chồng dài là va chạm. */
+export function newWallOverlap(M: Model, a: Pt, b: Pt, t: number): Wall | null {
+  const fp = footprint({ id: 'x', role: 'wall', kind: '', shape: { type: 'seg', a, b, t } } as unknown as Wall), bb = bboxOf(fp)
+  for (const w of M.walls) {
+    const c = wallFp(w); if (c.bb[2] < bb[0] || bb[2] < c.bb[0] || c.bb[3] < bb[1] || bb[3] < c.bb[1]) continue
+    try {
+      const r = polygonClipping.intersection(fp as never, c.rings as never) as unknown as Pt[][][]; let A = 0
+      for (const poly of r) { A += ringA(poly[0]); for (let i = 1; i < poly.length; i++) A -= ringA(poly[i]) }
+      if (A < 0.004) continue
+      const ob = bboxOf(r.flat()), D = Math.max(ob[2] - ob[0], ob[3] - ob[1])
+      if (D > 0.65 || A > 0.3) return w
+    } catch { /* bỏ */ }
+  }
+  return null
+}

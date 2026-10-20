@@ -13,7 +13,7 @@ import { DoorElevSection, DoorPlanSection, WallLayerSection } from './Sections'
 import { COL_LIB, DOOR_LIB, FINISHES, WALL_TYPES, doorSpec, finishOf, type DoorSpec, type Finish } from '../lib/plan3d/library'
 import { WALL_KINDS, autoRooms, centerline, centroid, doorRect, floodRoom, centerDoor, footprint, inside, kindOf, modelFromVec, polyArea, snapToWall, uid, wallThickAt, type Dim, type Door, type Furn, type Model, type Pt, type Room, type Wall } from '../lib/plan3d/model'
 import { FURN_GROUPS, FURN_TYPES, furnTypeOf } from '../lib/plan3d/furn'
-import { applyXf, buildShape, detectAxes, joinEnds, furnHitsWall, mkMove, mkRot, mkScale, roomOverlap, selCenter, shapePoly, type Shape } from '../lib/plan3d/xform'
+import { applyXf, buildShape, detectAxes, joinEnds, furnHitsWall, mkMove, mkRot, mkScale, newWallOverlap, roomOverlap, selCenter, shapePoly, type Shape } from '../lib/plan3d/xform'
 
 type Box = { x: number; y: number; w: number; h: number }
 type Tool = 'select' | 'wall' | 'glasskit' | 'axisV' | 'axisH' | 'dim' | 'room' | 'roomPoly' | 'door' | 'col' | 'furn'
@@ -159,7 +159,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const saveJson = () => { if (!M) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(M)], { type: 'application/json' })); a.download = 'mat-bang-3d.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000) }
 
   // ---- Bắt điểm (như CAD): đỉnh / trung điểm / góc đồ / mép tường. Cache theo model để kéo mượt.
-  const snapCache = useRef<{ M: Model; v: Pt[]; e: [Pt, Pt][]; mk: Set<string>; ck: Set<string>; lk: string; xs: number[]; ys: number[] } | null>(null)
+  const snapCache = useRef<{ M: Model; v: Pt[]; e: [Pt, Pt][]; fe: [Pt, Pt][]; mk: Set<string>; ck: Set<string>; lk: string; xs: number[]; ys: number[] } | null>(null)
   useEffect(() => { try { localStorage.setItem('plan3d-lay', JSON.stringify(lay)); localStorage.setItem('plan3d-lock', JSON.stringify(lock)) } catch { /* bỏ */ } }, [lay, lock])
   const showFurn = lay.furn
   const lay3 = useMemo(() => ({ walls: lay.walls, cols: lay.cols, doors: lay.doors, furn: lay.furn, rooms: lay.rooms }), [lay])
@@ -168,19 +168,19 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const pk = (q: Pt) => q[0].toFixed(4) + ',' + q[1].toFixed(4)
   const furnCorners = (f: Furn): Pt[] => { const c = Math.cos(f.ang), s = Math.sin(f.ang); return ([[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]] as [number, number][]).map(([a, b]) => [f.x + c * a * f.w / 2 - s * b * f.d / 2, f.y + s * a * f.w / 2 + c * b * f.d / 2] as Pt) }
   const snapSet = (excl?: string) => {
-    if (!M) return { v: [] as Pt[], e: [] as [Pt, Pt][], mk: new Set<string>(), ck: new Set<string>(), xs: [] as number[], ys: [] as number[] }
+    if (!M) return { v: [] as Pt[], e: [] as [Pt, Pt][], fe: [] as [Pt, Pt][], mk: new Set<string>(), ck: new Set<string>(), xs: [] as number[], ys: [] as number[] }
     if (!excl && snapCache.current?.M === M && snapCache.current.lk === layKey) return snapCache.current
-    const v: Pt[] = [], e: [Pt, Pt][] = [], mk = new Set<string>(), ck = new Set<string>()
+    const v: Pt[] = [], e: [Pt, Pt][] = [], fe: [Pt, Pt][] = [], mk = new Set<string>(), ck = new Set<string>()
     for (const w of M.walls) { if (w.id === excl || !(w.role === 'col' ? lay.cols : lay.walls)) continue
       const rings: Pt[][] = w.shape.type === 'poly' ? w.shape.rings : [centerline(w)], seg = w.shape.type === 'seg'
-      for (const r of rings) for (let i = 0; i < r.length; i++) { v.push(r[i]); if (seg && i === r.length - 1) continue; const q = r[(i + 1) % r.length]; if (w.role !== 'col') { const mq: Pt = [(r[i][0] + q[0]) / 2, (r[i][1] + q[1]) / 2]; v.push(mq); mk.add(pk(mq)) } e.push([r[i], q]) }
-      if (seg) for (const r of footprint(w)) for (let i = 0; i < r.length; i++) { v.push(r[i]); e.push([r[i], r[(i + 1) % r.length]]) } }
+      for (const r of rings) for (let i = 0; i < r.length; i++) { v.push(r[i]); if (seg && i === r.length - 1) continue; const q = r[(i + 1) % r.length]; if (w.role !== 'col') { const mq: Pt = [(r[i][0] + q[0]) / 2, (r[i][1] + q[1]) / 2]; v.push(mq); mk.add(pk(mq)) } e.push([r[i], q]); if (!seg) fe.push([r[i], q]) }
+      if (seg) for (const r of footprint(w)) for (let i = 0; i < r.length; i++) { v.push(r[i]); e.push([r[i], r[(i + 1) % r.length]]); fe.push([r[i], r[(i + 1) % r.length]]) } }
     for (const r of M.rooms ?? []) { if (r.id === excl || !lay.rooms) continue; for (const q of r.poly) v.push(q) }
     for (const f of M.furn ?? []) { if (f.id === excl || !lay.furn || fgHide.includes(furnTypeOf(f.kind).group)) continue; const c = furnCorners(f); v.push(...c); ck.add(pk(c[4])); for (let i = 0; i < 4; i++) e.push([c[i], c[(i + 1) % 4]]) }
     for (const dr of M.doors) { if (dr.id === excl || !lay.doors) continue; v.push(...doorRect(dr, dr.t ?? 0.2)) }
     const uq = (a: number[]) => { const r = a.map(x => Math.round(x * 1000) / 1000).sort((p, q) => p - q); return r.filter((x, i) => i === 0 || x !== r[i - 1]) }
     const xs = uq([...v.map(q => q[0]), ...(lay.axes ? (M.axes ?? []).filter(a => a.dir === 'v').map(a => a.pos) : [])]), ys = uq([...v.map(q => q[1]), ...(lay.axes ? (M.axes ?? []).filter(a => a.dir === 'h').map(a => a.pos) : [])])
-    const out = { M, v, e, mk, ck, lk: layKey, xs, ys }; if (!excl) snapCache.current = out; return out
+    const out = { M, v, e, fe, mk, ck, lk: layKey, xs, ys }; if (!excl) snapCache.current = out; return out
   }
   /** Độ dời để một nhóm điểm của vật đang kéo bắt vào đối tượng khác: ưu tiên đỉnh, rồi gióng thẳng trục, rồi áp mép (giữ Alt để tắt) */
   const nearestIn = (a: number[], x: number) => { let lo = 0, hi = a.length - 1; if (hi < 0) return null; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (a[m] < x) lo = m; else hi = m } return Math.abs(a[lo] - x) <= Math.abs(a[hi] - x) ? a[lo] : a[hi] }
@@ -211,7 +211,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   /** Bắt điểm kiểu CAD: đầu mút › giao điểm › giữa › tâm › trục › vuông góc › gần nhất › góc cực/ngang-dọc › lưới */
   const snapInfo = (p: Pt, from?: Pt | null): { p: Pt; kind: SnapKind; g?: [Pt, Pt][] } => {
     if (!M) return { p, kind: '' }
-    const tol = vb.w / Math.max(300, size.w) * 8, { v, e, mk, ck } = snapSet()
+    const tol = vb.w / Math.max(300, size.w) * 8, { v, e, fe, mk, ck } = snapSet()
     let bd = tol, bq: Pt | null = null, bk: SnapKind = ''
     for (const q of v) { const kd: SnapKind = mk.has(pk(q)) ? 'mid' : ck.has(pk(q)) ? 'cen' : 'end'; if (!sm[kd]) continue; const k = Math.hypot(q[0] - p[0], q[1] - p[1]) * (kd === 'end' ? 0.85 : 1); if (k < bd) { bd = k; bq = q; bk = kd } }
     if (bq) return { p: bq, kind: bk }
@@ -220,6 +220,17 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     if (sm.int) { bd = tol; for (let i = 0; i < near.length; i++) for (let j = i + 1; j < near.length; j++) { const [a, b] = near[i], [c, d] = near[j], r1x = b[0] - a[0], r1y = b[1] - a[1], r2x = d[0] - c[0], r2y = d[1] - c[1], den = r1x * r2y - r1y * r2x; if (Math.abs(den) < 1e-9) continue; const t = ((c[0] - a[0]) * r2y - (c[1] - a[1]) * r2x) / den, u = ((c[0] - a[0]) * r1y - (c[1] - a[1]) * r1x) / den; if (t < -0.001 || t > 1.001 || u < -0.001 || u > 1.001) continue; const q: Pt = [a[0] + t * r1x, a[1] + t * r1y], k = Math.hypot(q[0] - p[0], q[1] - p[1]); if (k < bd) { bd = k; bq = q } } if (bq) return { p: bq, kind: 'int' } }
     if (sm.axis && M.axes?.length) { let x: number | null = null, y: number | null = null; for (const a of M.axes) { if (a.dir === 'v' && Math.abs(p[0] - a.pos) < tol && (x === null || Math.abs(p[0] - a.pos) < Math.abs(p[0] - x))) x = a.pos; if (a.dir === 'h' && Math.abs(p[1] - a.pos) < tol && (y === null || Math.abs(p[1] - a.pos) < Math.abs(p[1] - y))) y = a.pos } if (x !== null || y !== null) return { p: [x ?? p[0], y ?? p[1]], kind: 'axis' } }
     if (sm.per && from) { bd = tol; for (const [a, b] of near) { const ex = b[0] - a[0], ey = b[1] - a[1], L2 = ex * ex + ey * ey, t = ((from[0] - a[0]) * ex + (from[1] - a[1]) * ey) / L2; if (t < 0 || t > 1) continue; const q: Pt = [a[0] + t * ex, a[1] + t * ey], k = Math.hypot(q[0] - p[0], q[1] - p[1]); if (k < bd) { bd = k; bq = q } } if (bq) return { p: bq, kind: 'per' } }
+    if (sm.nea && (tool === 'wall' || tool === 'glasskit')) {
+      const wt = tool === 'glasskit' ? kindOf(gKind).t : kindOf(newKind).t, h = wt / 2, cand: { err: number; q: Pt; g: [Pt, Pt] }[] = []
+      for (const [a, b] of fe) { const ex = b[0] - a[0], ey = b[1] - a[1], el = Math.hypot(ex, ey); if (el < Math.max(0.1, wt)) continue
+        const ux = ex / el, uy = ey / el, nx = -uy, ny = ux, ds = (p[0] - a[0]) * nx + (p[1] - a[1]) * ny, t = ((p[0] - a[0]) * ux + (p[1] - a[1]) * uy) / el
+        if (t < -0.05 || t > 1.05) continue
+        if (from) { const dx = p[0] - from[0], dy = p[1] - from[1], L = Math.hypot(dx, dy); if (L > 0.05 && Math.abs(dx * uy - dy * ux) / L > 0.12) continue }
+        for (const sd of [1, -1]) { const err = Math.abs(ds - sd * h); if (err < tol * 1.5) cand.push({ err, q: [p[0] - nx * (ds - sd * h), p[1] - ny * (ds - sd * h)], g: [[a[0] + nx * sd * h, a[1] + ny * sd * h], [b[0] + nx * sd * h, b[1] + ny * sd * h]] }) } }
+      cand.sort((m, n) => m.err - n.err)
+      const inside = (q: Pt) => M.walls.some(w => footprint(w).some(r => { let c = false; for (let i = 0, k = r.length - 1; i < r.length; k = i++) { if ((r[i][1] > q[1]) !== (r[k][1] > q[1]) && q[0] < (r[k][0] - r[i][0]) * (q[1] - r[i][1]) / (r[k][1] - r[i][1]) + r[i][0]) c = !c } return c }))
+      for (const c of cand.slice(0, 12)) if (!inside(c.q)) return { p: c.q, kind: 'nea', g: [c.g] }
+    }
     if (sm.nea) { bd = tol * 0.6; for (const [a, b] of e) { const ex = b[0] - a[0], ey = b[1] - a[1], L2 = ex * ex + ey * ey; if (L2 < 1e-9) continue; const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * ex + (p[1] - a[1]) * ey) / L2)), q: Pt = [a[0] + t * ex, a[1] + t * ey], k = Math.hypot(q[0] - p[0], q[1] - p[1]); if (k < bd) { bd = k; bq = q } } if (bq) return { p: bq, kind: 'nea' } }
     if (sm.align) { const st = snapSet(), al = alignTo([p[0]], [p[1]], [p[0], p[1], p[0], p[1]], tol, st); if (al.hit) return { p: [p[0] + al.dx, p[1] + al.dy], kind: 'align', g: al.g } }
     if (from && sm.polar) { const dx = p[0] - from[0], dy = p[1] - from[1], L = Math.hypot(dx, dy), st = Math.PI / 12, a = Math.atan2(dy, dx), an = Math.round(a / st) * st; if (L > 1e-6 && Math.abs(a - an) < 0.045) return { p: [from[0] + Math.cos(an) * L, from[1] + Math.sin(an) * L], kind: 'polar' } }
@@ -253,6 +264,9 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     let src: Wall | undefined
     if (autoJoin) { const j = joinEnds(M, a, q); a = j.a; q = j.b; src = [j.wa, j.wb].find(w => w && w.role === 'wall') }
     const L = Math.hypot(q[0] - a[0], q[1] - a[1]); if (L < 0.02) return
+    { const nt = tool === 'glasskit' ? kindOf(gKind).t : (autoMatch && src && src.shape.type === 'seg' ? src.shape.t : kindOf(newKind).t), hit = newWallOverlap(M, a, q, nt)
+      if (hit) { setErr(`Tường mới đè lên ${hit.role === 'col' ? 'cột' : 'tường'} cũ «${kindOf(hit.kind).label}». Bật ◇ Mép: tường sẽ tự áp sát mép tường cũ (không đè); hoặc vẽ nối đầu mút để tự khớp.`); return }
+      setErr('') }
     const inh: Partial<Wall> = autoMatch && src ? { h: src.h, finish: src.finish } : {}
     const note = src ? (autoMatch ? `Đã khớp giao điểm với tường cũ và lấy cao độ${tool === 'wall' ? ', vật liệu, độ dày' : ''} của tường đó.` : 'Đã khớp giao điểm với tường cũ.') : autoJoin && (a !== undefined) ? '' : ''
     if (note) { setBusy(note); setTimeout(() => setBusy(''), 3500) }
