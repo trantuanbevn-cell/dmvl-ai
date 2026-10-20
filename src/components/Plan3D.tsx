@@ -13,7 +13,7 @@ import { DoorElevSection, DoorPlanSection, WallLayerSection } from './Sections'
 import { COL_LIB, DOOR_LIB, FINISHES, WALL_TYPES, doorSpec, finishOf, type DoorSpec, type Finish } from '../lib/plan3d/library'
 import { WALL_KINDS, autoRooms, centerline, centroid, doorRect, floodRoom, centerDoor, footprint, inside, kindOf, modelFromVec, polyArea, snapToWall, uid, wallThickAt, type Dim, type Door, type Furn, type Model, type Pt, type Room, type Wall } from '../lib/plan3d/model'
 import { FURN_GROUPS, FURN_TYPES, furnTypeOf } from '../lib/plan3d/furn'
-import { applyXf, buildShape, detectAxes, furnHitsWall, mkMove, mkRot, mkScale, roomOverlap, selCenter, shapePoly, type Shape } from '../lib/plan3d/xform'
+import { applyXf, buildShape, detectAxes, joinEnds, furnHitsWall, mkMove, mkRot, mkScale, roomOverlap, selCenter, shapePoly, type Shape } from '../lib/plan3d/xform'
 
 type Box = { x: number; y: number; w: number; h: number }
 type Tool = 'select' | 'wall' | 'glasskit' | 'axisV' | 'axisH' | 'dim' | 'room' | 'roomPoly' | 'door' | 'col' | 'furn'
@@ -98,7 +98,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const [busy, setBusy] = useState(''), [err, setErr] = useState('')
   const [tool, setTool] = useState<Tool>('select'), [sel, setSel] = useState<Sel>(null)
   const [mode, setMode] = useState<'2d' | '3d'>('2d'), [view3, setView3] = useState(0)
-  const [ortho, setOrtho] = useState(true), [under, setUnder] = useState(true), [libFurn, setLibFurn] = useState('chair'), [dimMm, setDimMm] = useState(true), [newPanel, setNewPanel] = useState(1.2), [shp, setShp] = useState<Shape>('line'), [lay, setLay] = useState<typeof LAY0>(() => { try { return { ...LAY0, ...JSON.parse(localStorage.getItem('plan3d-lay') ?? '{}') } } catch { return LAY0 } }), [lock, setLock] = useState<typeof LOCK0>(() => { try { return { ...LOCK0, ...JSON.parse(localStorage.getItem('plan3d-lock') ?? '{}') } } catch { return LOCK0 } }), [fgHide, setFgHide] = useState<string[]>([]), [showLayers, setShowLayers] = useState(false), [sm, setSm] = useState<typeof SM0>(() => { try { return { ...SM0, ...JSON.parse(localStorage.getItem('plan3d-snap') ?? '{}') } } catch { return SM0 } }), [showLv, setShowLv] = useState(true), [hud, setHud] = useState<{ p: Pt; t: string } | null>(null), [lenBuf, setLenBuf] = useState(''), [ed, setEd] = useState<{ k: 'poly' | 'seg' | 'room'; id: string; ring: number; vi: number; q: Pt } | null>(null), [edv, setEdv] = useState({ len: '', push: '0', thick: '', fix: 'c' }), [floorFin, setFloorFin] = useState(''), [tf, setTf] = useState({ dx: '0', dy: '0', rot: '90', k: '100', n: '1', cx: '1000', cy: '0' })
+  const [ortho, setOrtho] = useState(true), [under, setUnder] = useState(true), [libFurn, setLibFurn] = useState('chair'), [dimMm, setDimMm] = useState(true), [newPanel, setNewPanel] = useState(1.2), [shp, setShp] = useState<Shape>('line'), [autoJoin, setAutoJoin] = useState(true), [autoMatch, setAutoMatch] = useState(true), [lay, setLay] = useState<typeof LAY0>(() => { try { return { ...LAY0, ...JSON.parse(localStorage.getItem('plan3d-lay') ?? '{}') } } catch { return LAY0 } }), [lock, setLock] = useState<typeof LOCK0>(() => { try { return { ...LOCK0, ...JSON.parse(localStorage.getItem('plan3d-lock') ?? '{}') } } catch { return LOCK0 } }), [fgHide, setFgHide] = useState<string[]>([]), [showLayers, setShowLayers] = useState(false), [sm, setSm] = useState<typeof SM0>(() => { try { return { ...SM0, ...JSON.parse(localStorage.getItem('plan3d-snap') ?? '{}') } } catch { return SM0 } }), [showLv, setShowLv] = useState(true), [hud, setHud] = useState<{ p: Pt; t: string } | null>(null), [lenBuf, setLenBuf] = useState(''), [ed, setEd] = useState<{ k: 'poly' | 'seg' | 'room'; id: string; ring: number; vi: number; q: Pt } | null>(null), [edv, setEdv] = useState({ len: '', push: '0', thick: '', fix: 'c' }), [floorFin, setFloorFin] = useState(''), [tf, setTf] = useState({ dx: '0', dy: '0', rot: '90', k: '100', n: '1', cx: '1000', cy: '0' })
   const hist = useRef<Model[]>([]), [nh, setNh] = useState(0), clip = useRef<Sel>(null), pasteN = useRef(0)
   const [vb, setVb] = useState<Box>({ x: 0, y: 0, w: 100, h: 60 }), [size, setSize] = useState({ w: 0, h: 0 })
   const box = useRef<HTMLDivElement>(null), drag = useRef<any>(null)
@@ -235,15 +235,21 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   /** Thêm một đoạn tường (hoặc vách kính + cửa) từ a đến q, rồi nối tiếp từ q */
   const addLine = (a: Pt, q: Pt) => {
     if (!M) return
+    let src: Wall | undefined
+    if (autoJoin) { const j = joinEnds(M, a, q); a = j.a; q = j.b; src = [j.wa, j.wb].find(w => w && w.role === 'wall') }
     const L = Math.hypot(q[0] - a[0], q[1] - a[1]); if (L < 0.02) return
+    const inh: Partial<Wall> = autoMatch && src ? { h: src.h, finish: src.finish } : {}
+    const note = src ? (autoMatch ? `Đã khớp giao điểm với tường cũ và lấy cao độ${tool === 'wall' ? ', vật liệu, độ dày' : ''} của tường đó.` : 'Đã khớp giao điểm với tường cũ.') : autoJoin && (a !== undefined) ? '' : ''
+    if (note) { setBusy(note); setTimeout(() => setBusy(''), 3500) }
     if (tool === 'glasskit') {
-      const gk = kindOf(gKind), w: Wall = { id: uid('w'), role: 'wall', kind: gKind, panel: gk.panel ?? newPanel, shape: { type: 'seg', a, b: q, t: gk.t } }
+      const gk = kindOf(gKind), w: Wall = { id: uid('w'), role: 'wall', kind: gKind, h: inh.h, panel: gk.panel ?? newPanel, shape: { type: 'seg', a, b: q, t: gk.t } }
       const doors = [...M.doors], sp = gDoor === 'none' ? null : doorSpec(gDoor, customDoors)
       if (sp && L >= sp.w + 0.1) { const ux = (q[0] - a[0]) / L, uy = (q[1] - a[1]) / L, s = gPos === 'mid' ? L / 2 : gPos === 'start' ? sp.w / 2 + 0.05 : L - sp.w / 2 - 0.05
         doors.push({ id: uid('d'), kind: sp.kind, lib: sp.id, x: a[0] + ux * s, y: a[1] + uy * s, ang: Math.atan2(uy, ux), w: sp.w, h: sp.h, sill: sp.sill, t: gk.t }) }
       commit({ ...M, walls: [...M.walls, w], doors })
     } else {
-      const w: Wall = { id: uid('w'), role: 'wall', kind: newKind, panel: kindOf(newKind).glass ? newPanel : undefined, shape: { type: 'seg', a, b: q, t: kindOf(newKind).t } }
+      const kd = autoMatch && src ? src.kind : newKind, th = autoMatch && src && src.shape.type === 'seg' ? src.shape.t : kindOf(kd).t
+      const w: Wall = { id: uid('w'), role: 'wall', kind: kd, h: inh.h, finish: inh.finish, panel: kindOf(kd).glass ? (src?.panel ?? newPanel) : undefined, shape: { type: 'seg', a, b: q, t: th } }
       commit({ ...M, walls: [...M.walls, w] })
     }
     setPending(q); setLenBuf('')
@@ -500,6 +506,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const optBar = <div className="small" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', background: '#faf6ef', border: '1px solid #eadfcb', borderRadius: 6, padding: '4px 8px', minHeight: 30 }}>
     <b style={{ color: '#a85a00' }}>{mode === '3d' ? 'Xem 3D – chọn & sửa' : TOOL_NAME[tool]}</b>
     {mode === '2d' && <>
+      {(tool === 'wall' || tool === 'glasskit') && <><label title="Đầu tường mới gần tường cũ (≤ 400 mm) sẽ tự kéo dài / cắt bớt cho khít vào tường cũ"><input type="checkbox" checked={autoJoin} onChange={e => setAutoJoin(e.target.checked)} /> Tự khớp giao điểm</label><label title="Tường mới chạm vào tường cũ thì lấy luôn vật liệu, độ dày, cao độ, hoàn thiện của tường cũ"><input type="checkbox" checked={autoMatch} onChange={e => setAutoMatch(e.target.checked)} /> Lấy vật liệu / cao / dày của tường chạm vào</label></>}
       {tool === 'wall' && <><label className="small">Kết cấu: <select value={newKind} onChange={e => { setNewKind(e.target.value); const k = kindOf(e.target.value); if (k.glass && k.panel) setNewPanel(k.panel) }} style={{ maxWidth: 190 }}><optgroup label="Tường">{WALL_KINDS.filter(k => !k.glass).map(k => <option key={k.key} value={k.key}>{k.label}</option>)}</optgroup><optgroup label="Vách kính">{WALL_KINDS.filter(k => k.glass).map(k => <option key={k.key} value={k.key}>{k.label}</option>)}</optgroup></select></label> {kindOf(newKind).glass && <label className="small">Chia tấm kính mỗi <input style={{ width: 50 }} key={'np' + newPanel} defaultValue={newPanel} onBlur={e => setNewPanel(Math.max(0.3, num(e.target.value, newPanel)))} /> m</label>} {true && <label className="small">Hình <select value={shp} onChange={e => { setShp(e.target.value as Shape); setPts([]); setPending(null); setLenBuf('') }}><option value="line">{(tool as string) === 'roomPoly' ? 'Đa giác' : 'Thẳng (nhiều đoạn)'}</option>{(tool as string) !== 'roomPoly' && <option value="arc">Cung (đầu – cuối – điểm giữa)</option>}<option value="circle">Tròn (tâm – bán kính)</option><option value="rect">Chữ nhật (2 góc)</option></select></label>}</>}
       {tool === 'glasskit' && <><select value={gKind} onChange={e => setGKind(e.target.value)} style={{ maxWidth: 190 }}>{WALL_KINDS.filter(k => k.glass).map(k => <option key={k.key} value={k.key}>{k.label}</option>)}</select>
               <select value={gDoor} onChange={e => setGDoor(e.target.value)} style={{ maxWidth: 190 }}><option value="none">Không cửa</option>{DOOR_LIB.filter(d => d.group === 'Cửa kính').map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
@@ -564,7 +571,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
       </div>
       {mode === '2d' && <div className="small" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: '2px 0' }}>
         <b>Bắt điểm:</b>
-        {([['end', '■ Đầu mút'], ['mid', '△ Giữa'], ['cen', '○ Tâm'], ['int', '✕ Giao điểm'], ['per', '⊥ Vuông góc'], ['nea', '◇ Gần nhất'], ['axis', '┼ Trục'], ['polar', '∠ Góc cực 15°'], ['grid', '▦ Lưới 100']] as const).map(([k, l]) => <label key={k} style={{ whiteSpace: 'nowrap' }}><input type="checkbox" checked={sm[k]} onChange={e => setSm({ ...sm, [k]: e.target.checked })} /> {l}</label>)}
+        {([['end', '■ Đầu mút'], ['mid', '△ Giữa'], ['cen', '○ Tâm'], ['int', '✕ Giao điểm'], ['per', '⊥ Vuông góc'], ['nea', '◇ Mép / gần nhất'], ['axis', '┼ Trục'], ['polar', '∠ Góc cực 15°'], ['grid', '▦ Lưới 100']] as const).map(([k, l]) => <label key={k} style={{ whiteSpace: 'nowrap' }}><input type="checkbox" checked={sm[k]} onChange={e => setSm({ ...sm, [k]: e.target.checked })} /> {l}</label>)}
         <span style={{ borderLeft: '1px solid #ccc', height: 16 }} />
         {(M.axes ?? []).length > 0 && <button className="btn sm" onClick={() => commit({ ...M, axes: [] })}>Xoá hết trục</button>}
         <label><input type="checkbox" checked={showLv} onChange={e => setShowLv(e.target.checked)} /> Hiện cốt sàn / trần</label>

@@ -124,3 +124,29 @@ export function detectAxes(M: Model): Axis[] {
   if (xs.length > 40 || ys.length > 40) return []
   return [...xs.map((c, i): Axis => ({ id: uid('x'), dir: 'v', pos: Math.round(c.pos * 1000) / 1000, name: String(i + 1), auto: true })), ...ys.map((c, i): Axis => ({ id: uid('x'), dir: 'h', pos: Math.round(c.pos * 1000) / 1000, name: letter(i), auto: true }))]
 }
+
+// ───────── Tự khớp giao điểm khi vẽ tường mới ─────────
+import { centerline } from './model'
+/** Kéo dài / cắt bớt hai đầu của đoạn tường mới a→b cho vừa khít vào tường cũ (tim tường thêm tay, mép tường DXF).
+ *  Chỉ xét giao điểm cách đầu mút ≤ ext (m). Trả về tường cũ bị chạm ở mỗi đầu để kế thừa vật liệu / cao độ. */
+export function joinEnds(M: Model, a: Pt, b: Pt, ext = 0.4): { a: Pt; b: Pt; wa?: Wall; wb?: Wall } {
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.05) return { a, b }
+  const ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L
+  let ba: { d: number; s: number; w: Wall } | null = null, bb: { d: number; s: number; w: Wall } | null = null
+  const x0 = Math.min(a[0], b[0]) - ext - 0.5, x1 = Math.max(a[0], b[0]) + ext + 0.5, y0 = Math.min(a[1], b[1]) - ext - 0.5, y1 = Math.max(a[1], b[1]) + ext + 0.5
+  for (const w of M.walls) {
+    const rings: Pt[][] = w.shape.type === 'poly' ? w.shape.rings.map(r => [...r, r[0]]) : [centerline(w)]
+    const bx = bboxOf(rings); if (bx[2] < x0 || bx[0] > x1 || bx[3] < y0 || bx[1] > y1) continue
+    for (const r of rings) for (let i = 0; i < r.length - 1; i++) {
+      const p = r[i], q = r[i + 1], ex = q[0] - p[0], ey = q[1] - p[1], el = Math.hypot(ex, ey); if (el < 1e-6) continue
+      const den = ux * ey - uy * ex; if (Math.abs(den) / el < 0.17) continue
+      const s = ((p[0] - a[0]) * ey - (p[1] - a[1]) * ex) / den, k = ((p[0] - a[0]) * uy - (p[1] - a[1]) * ux) / den
+      if (k < -0.03 || k > 1.03) continue
+      if (s >= L / 2) { const d = Math.abs(s - L); if (d <= ext && (!bb || d < bb.d)) bb = { d, s, w } }
+      else { const d = Math.abs(s); if (d <= ext && (!ba || d < ba.d)) ba = { d, s, w } }
+    }
+  }
+  const na: Pt = ba ? [a[0] + ux * ba.s, a[1] + uy * ba.s] : a, nb: Pt = bb ? [a[0] + ux * bb.s, a[1] + uy * bb.s] : b
+  if (Math.hypot(nb[0] - na[0], nb[1] - na[1]) < 0.05) return { a, b }
+  return { a: na, b: nb, wa: ba?.w, wb: bb?.w }
+}
