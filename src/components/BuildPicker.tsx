@@ -10,7 +10,7 @@ const keepText = (e: Pick<Entry, 'desc_vn'>) => (e.desc_vn ?? '').split('\n').fi
 /** Chế độ lưu: entry là mã đã có (nút Áp dụng cấu tạo). Chế độ nháp (draft): dùng khi đang tạo mã mới – chỉ trả lựa chọn ra ngoài, áp dụng sau khi mã được tạo. */
 export default function BuildPicker({ entry, all, onDone, draft }: { entry: BuildSeed | Entry; all?: Entry[]; onDone?: () => void; draft?: (st: BuildState | null) => void }) {
   const init: BuildState = entry.build?.sys ? entry.build : { sys: guessSystem(entry), sel: {}, vars: {} }
-  const [st, setSt] = useState<BuildState>(entry.build?.sys ? init : { ...init, extra: keepText(entry) }), [busy, setBusy] = useState(false), [show, setShow] = useState(!!entry.build || !!draft)
+  const [st, setSt] = useState<BuildState>(entry.build?.sys ? init : { ...init, extra: keepText(entry) }), [busy, setBusy] = useState(false), [quick, setQuick] = useState(false), [fine, setFine] = useState(false), [show, setShow] = useState(!!entry.build || !!draft)
   const sys = systemOf(st.sys), cl = useMemo(() => cleanSel(sys, st), [sys, st])
   const pv = useMemo(() => renderBuild(cl), [cl])
   useEffect(() => { draft?.(Object.values(cl.sel).some(a => a.length) ? cl : null) }, [cl]) // eslint-disable-line
@@ -23,8 +23,8 @@ export default function BuildPicker({ entry, all, onDone, draft }: { entry: Buil
   const setVar = (lk: string, ok: string, v: string) => setSt(s => ({ ...s, vars: { ...s.vars, [`${lk}/${ok}`]: v } }))
   const apply = async () => { setBusy(true); const er = await applyBuild(entry as Entry, cl, all ?? []); setBusy(false); if (er) return alert(er.message); onDone?.() }
   const grp = groupOfBuild(cl)
-  const preset = (i: number) => { const p = PRESETS[i]; if (p) { const h = hintsOf(entry, p.sys); const sel = { ...p.sel, ...(h.type ? { type: h.type } : {}), ...(h.extra ? { extra: [...new Set([...(p.sel.extra ?? []), ...h.extra])] } : {}) }; setSt({ sys: p.sys, sel, vars: p.vars ?? {}, extra: st.extra }) } }
-  const chg = (k: System['k']) => setSt({ sys: k, sel: {}, vars: {}, extra: st.extra })
+  const preset = (i: number) => { const p = PRESETS[i]; if (p) { const h = hintsOf(entry, p.sys); const sel = { ...p.sel, ...(h.type ? { type: h.type } : {}), ...(h.extra ? { extra: [...new Set([...(p.sel.extra ?? []), ...h.extra])] } : {}) }; setSt({ sys: p.sys, sel, vars: p.vars ?? {}, extra: st.extra }); setQuick(true); setFine(false) } }
+  const chg = (k: System['k']) => { setSt({ sys: k, sel: {}, vars: {}, extra: st.extra }); setQuick(false); setFine(false) }
   return <div style={{ marginBottom: 12 }}>
     <div className="row between"><b>🧱 Cấu tạo lớp (tích chọn)</b><a className="small" style={{ cursor: 'pointer' }} onClick={() => setShow(!show)}>{show ? 'thu gọn' : 'mở'}</a></div>
     {show && <div className="card" style={{ padding: 8, marginTop: 6 }}>
@@ -35,7 +35,8 @@ export default function BuildPicker({ entry, all, onDone, draft }: { entry: Buil
         <option value="">⚡ Mẫu nhanh (vật liệu cơ bản – chọn sẵn các lớp, rồi tích sửa)…</option>
         {PRESETS.map((p, i) => <option key={i} value={i + 1}>{p.label}</option>)}
       </select>
-      {layers.map(l => <div key={l.k} style={{ marginBottom: 8 }}>
+      {quick && <div className="small" style={{ marginBottom: 6 }}>✓ Đã chọn mẫu nhanh – không cần tích từng lớp. <a style={{ cursor: 'pointer' }} onClick={() => setFine(!fine)}>{fine ? 'ẩn các lớp' : '✎ sửa từng lớp'}</a></div>}
+      {(!quick || fine) && layers.map(l => <div key={l.k} style={{ marginBottom: 8 }}>
         <div className="small"><b>{l.vn}</b>{l.multi ? <span className="muted"> (chọn nhiều)</span> : null}{l.hint && <span className="muted"> – {l.hint}</span>}</div>
         {l.opts.map(op => {
           const on = (cl.sel[l.k] ?? []).includes(op.k)
