@@ -1,5 +1,5 @@
 /** Biến đổi (dời / xoay / co giãn / sao chép) cho đối tượng đang chọn + dựng hình cung, tròn, chữ nhật */
-import { kindOf, polyArea, uid, type Model, type Pt, type Wall } from './model'
+import { kindOf, polyArea, uid, type Door, type Model, type Pt, type Wall } from './model'
 
 export type SelRef = { t: 'wall' | 'door' | 'room' | 'dim' | 'furn' | 'axis'; id: string }
 export type Xf = { p: (q: Pt) => Pt; dAng: number; k: number }
@@ -165,4 +165,26 @@ export function newWallOverlap(M: Model, a: Pt, b: Pt, t: number): Wall | null {
     } catch { /* bỏ */ }
   }
   return null
+}
+
+/** Cửa đổi bề rộng / dời: các đầu tường sát khuông cửa tự co hoặc giãn theo mép cửa mới (tường thừa thì cắt, thiếu thì kéo dài). */
+export function fitWallsToDoor(M: Model, o: Door, n: Door): Model {
+  const ux = Math.cos(o.ang), uy = Math.sin(o.ang), band = Math.max(o.t ?? 0.2, 0.06) / 2 + 0.06
+  const A = (q: Pt) => (q[0] - o.x) * ux + (q[1] - o.y) * uy, B = (q: Pt) => -(q[0] - o.x) * uy + (q[1] - o.y) * ux
+  const c = (n.x - o.x) * ux + (n.y - o.y) * uy
+  const moves = ([-1, 1] as const).map(sg => ({ sg, from: sg * o.w / 2, to: c + sg * n.w / 2 })).filter(m => Math.abs(m.to - m.from) > 1e-6)
+  if (!moves.length) return M
+  let changed = false
+  const mv = (q: Pt, tgtOff: (sg: number) => number): Pt => {
+    if (Math.abs(B(q)) > band) return q
+    const a = A(q); for (const m of moves) if (Math.abs(a - (m.from + tgtOff(m.sg))) <= 0.035) { changed = true; const k = m.to - m.from; return [q[0] + ux * k, q[1] + uy * k] }
+    return q
+  }
+  const walls = M.walls.map(w => {
+    if (w.role === 'col') return w
+    if (w.shape.type === 'poly') { const rings = w.shape.rings.map(r => r.map(q => mv(q, () => 0))); return rings.some((r, i) => r.some((q, j) => q !== (w.shape as { rings: Pt[][] }).rings[i][j])) ? { ...w, shape: { type: 'poly' as const, rings } } : w }
+    if (w.shape.type === 'seg' && !w.shape.bulge) { const e = w.shape.t / 2, a = mv(w.shape.a, sg => sg * e), b = mv(w.shape.b, sg => sg * e); return a !== w.shape.a || b !== w.shape.b ? { ...w, shape: { ...w.shape, a, b } } : w }
+    return w
+  })
+  return changed ? { ...M, walls } : M
 }
