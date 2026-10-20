@@ -200,3 +200,23 @@ export function trimToFree(M: Model, poly: Pt[], excludeId?: string): { polys: P
     return { polys, holes }
   } catch { return { polys: [poly], holes: false } }
 }
+
+/** Tên trục thứ i của một dãy bắt đầu từ `first` (số: 1,2,3… · chữ: A,B,…,Z,AA,AB…) */
+export function axisLabel(first: string, i: number): string {
+  const f = (first || '').trim(), n0 = /^\d+$/.test(f) ? parseInt(f, 10) : null
+  if (n0 !== null) return String(n0 + i)
+  if (/^[A-Za-z]+$/.test(f)) { let n = 0; for (const ch of f.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64); n += i; let out = ''; while (n > 0) { const r = (n - 1) % 26; out = String.fromCharCode(65 + r) + out; n = Math.floor((n - 1) / 26) } return out }
+  return f + (i + 1)
+}
+/** Tự đánh lại tên trục theo thứ tự vị trí (trục dọc: trái→phải, trục ngang: trên→dưới) – chạy mỗi khi thêm / bớt / dời trục. Dãy nào đã gõ tên tay (axMan) thì giữ nguyên. */
+export function syncAxisNames(M: Model): Model {
+  if (!M.axes?.length) return M
+  const axes = M.axes.slice(); let ch = false
+  for (const dir of ['v', 'h'] as const) {
+    if (M.axMan?.[dir]) continue
+    const list = axes.filter(a => a.dir === dir).sort((a, b) => a.pos - b.pos); if (M.axRev?.[dir]) list.reverse()
+    const first = M.axStart?.[dir] ?? (dir === 'v' ? '1' : 'A')
+    list.forEach((a, i) => { const nm = axisLabel(first, i); if (a.name !== nm) { axes[axes.findIndex(x => x.id === a.id)] = { ...a, name: nm }; ch = true } })
+  }
+  return ch ? { ...M, axes } : M
+}
