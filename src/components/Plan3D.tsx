@@ -797,7 +797,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
               {tool === 'axisV' || tool === 'axisH' ? 'Bấm vào vị trí đặt trục (tự hút vào tâm cột / đầu mút) · Esc để dừng' : tool === 'wall' || tool === 'glasskit' ? (shp === 'arc' ? 'Cung: bấm điểm đầu, điểm cuối, rồi điểm nằm trên cung' : shp === 'circle' ? 'Tròn: bấm tâm rồi bấm điểm trên đường tròn' : shp === 'rect' ? 'Chữ nhật: bấm hai góc đối diện' : 'Bấm điểm đầu, rồi các điểm tiếp theo · gõ số mm + Enter để đặt đúng chiều dài · Esc/chuột phải để dừng') : tool === 'dim' ? 'Bấm điểm đầu, điểm cuối, rồi bấm để kéo đường kích thước ra' : tool === 'room' ? 'Bấm vào bên trong một không gian kín' : tool === 'roomPoly' ? (shp === 'line' || shp === 'arc' ? 'Bấm từng góc sàn; bấm lại điểm đầu hoặc Enter để chốt' : shp === 'circle' ? 'Bấm tâm rồi bấm điểm trên đường tròn' : 'Bấm hai góc đối diện') : tool === 'furn' ? 'Bấm để đặt món nội thất' : tool !== 'select' ? 'Bấm sát vào tường để đặt cửa' : 'Cuộn = zoom · kéo nền = dời · bấm tường/cửa để chọn · Del = xoá · Ctrl+Z = hoàn tác'}</div>
           </div>}
         </div>
-          <div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
+          <div style={{ display: 'grid', gap: 8, fontSize: 13 }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && (e.target as HTMLElement).tagName === 'INPUT' && (e.target as HTMLInputElement).type !== 'checkbox') { e.preventDefault(); (e.target as HTMLInputElement).blur() } }}>
             {layersPanel}
             {selWall ? <div className="card" style={{ display: 'grid', gap: 6 }}>
               <b>{selWall.role === 'col' ? 'Cột' : 'Tường'} {selWall.auto ? '(tự nhận từ bản vẽ)' : selWall.shape.type === 'seg' ? '(thêm tay)' : '(từ DXF)'}</b>
