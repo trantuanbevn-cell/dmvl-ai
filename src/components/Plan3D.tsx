@@ -153,10 +153,10 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const [custom, setCustom] = useState<Finish[]>(() => ls('plan3d-custom-finishes', [])), [customDoors, setCustomDoors] = useState<DoorSpec[]>(() => ls('plan3d-custom-doors', []))
   useEffect(() => { try { localStorage.setItem('plan3d-custom-finishes', JSON.stringify(custom)) } catch { setErr('Ảnh vật liệu quá nặng, không lưu thêm được trong trình duyệt.') } }, [custom])
   useEffect(() => { try { localStorage.setItem('plan3d-custom-doors', JSON.stringify(customDoors)) } catch { /* bỏ */ } }, [customDoors])
-  const lastBub = useRef<{ id: string; t: number } | null>(null), chainRef = useRef<string | null>(null), [dpA, setDpA] = useState<{ p: Pt; ang: number } | null>(null), [libDoor, setLibDoor] = useState('dr-flush09'), [libCol, setLibCol] = useState('cl-r40'), [newKind, setNewKind] = useState('brick'), [gKind, setGKind] = useState('glassal'), [gDoor, setGDoor] = useState('dg-glass12'), [gPos, setGPos] = useState<'mid' | 'start' | 'end'>('mid'), [showLib, setShowLib] = useState(false), [ceiling, setCeiling] = useState(false)
+  const [autoTick, setAutoTick] = useState(0), [autoRoom, setAutoRoom] = useState(() => { try { return localStorage.getItem('plan3d-autofloor') !== '0' } catch { return true } }), Mr = useRef<Model | null>(null), lastAuto = useRef<{ w: unknown; d: unknown } | null>(null), lastBub = useRef<{ id: string; t: number } | null>(null), chainRef = useRef<string | null>(null), [dpA, setDpA] = useState<{ p: Pt; ang: number } | null>(null), [libDoor, setLibDoor] = useState('dr-flush09'), [libCol, setLibCol] = useState('cl-r40'), [newKind, setNewKind] = useState('brick'), [gKind, setGKind] = useState('glassal'), [gDoor, setGDoor] = useState('dg-glass12'), [gPos, setGPos] = useState<'mid' | 'start' | 'end'>('mid'), [showLib, setShowLib] = useState(false), [ceiling, setCeiling] = useState(false)
   const [pending, setPending] = useState<Pt | null>(null), [cursor, setCursor] = useState<Pt | null>(null), [pts, setPts] = useState<Pt[]>([])
 
-  const commit = useCallback((n: Model, push = true) => { setM(cur => { if (push && cur) { hist.current.push(cur); if (hist.current.length > 60) hist.current.shift(); setNh(hist.current.length) } return n }) }, [])
+  const commit = useCallback((n: Model, push = true) => { setAutoTick(t => t + 1); setM(cur => { if (push && cur) { hist.current.push(cur); if (hist.current.length > 60) hist.current.shift(); setNh(hist.current.length) } return n }) }, [])
   const undo = useCallback(() => { const p = hist.current.pop(); setNh(hist.current.length); if (p) { setM(p); setSel(null) } }, [])
   useEffect(() => { if (!M || proj) return; const t = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(M)) } catch { /* quá dung lượng */ } }, 600); return () => clearTimeout(t) }, [M])
 
@@ -451,7 +451,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     else if (d.k === 'furnSz') { const o = d.orig as Furn, ax: Pt = d.ax === 'w' ? [Math.cos(o.ang), Math.sin(o.ang)] : [-Math.sin(o.ang), Math.cos(o.ang)], sc = (p[0] - o.x) * ax[0] + (p[1] - o.y) * ax[1], cur0 = d.ax === 'w' ? o.w : o.d; let nv = d.sg > 0 ? sc + cur0 / 2 : cur0 / 2 - sc; nv = Math.max(0.1, nv); if (!e.altKey) nv = Math.round(nv * 100) / 100; const sh = d.sg * (nv - cur0) / 2; if (d.sh === undefined) d.sh = !!furnHitsWall(M, o); if (!d.sh && furnHitsWall(M, { ...o, [d.ax]: nv, x: o.x + ax[0] * sh, y: o.y + ax[1] * sh })) { setHud({ p, t: '⛔ đụng tường' }); return } setHud({ p, t: `${d.ax === 'w' ? 'rộng' : 'sâu'} ${mm(nv)} mm` }); setM(cur => cur && { ...cur, furn: (cur.furn ?? []).map(x => x.id === d.id ? { ...x, [d.ax]: nv, x: o.x + ax[0] * sh, y: o.y + ax[1] * sh } : x) }) }
     else if (d.k === 'furnRot') { const o = d.orig as Furn; let a = Math.atan2(p[1] - o.y, p[0] - o.x) + Math.PI / 2; const st = (e.shiftKey ? 15 : 1) * Math.PI / 180; if (!e.altKey) a = Math.round(a / st) * st; if (d.sh === undefined) d.sh = !!furnHitsWall(M, o); if (!d.sh && furnHitsWall(M, { ...o, ang: a })) { setHud({ p, t: '⛔ đụng tường' }); return } setHud({ p, t: `xoay ${(((a * 180 / Math.PI) % 360 + 360) % 360).toFixed(0)}°` }); setM(cur => cur && { ...cur, furn: (cur.furn ?? []).map(x => x.id === d.id ? { ...x, ang: a } : x) }) }
   }
-  const onUp = () => { drag.current = null; setSnapMark(null); setHud(null); gref.current = []; setGuides([]) }
+  const onUp = () => { if (drag.current?.moved) setAutoTick(t => t + 1); drag.current = null; setSnapMark(null); setHud(null); gref.current = []; setGuides([]) }
   /** Thêm sàn: phần trùng với sàn khác được tự cắt bỏ để chỉ chạm biên (không báo lỗi rồi mất sàn như trước) */
   const addFloors = (poly: Pt[]) => {
     if (!M) return
@@ -540,7 +540,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     }
     window.addEventListener('keydown', on); return () => window.removeEventListener('keydown', on)
   })
-  const del = () => { if (!sel || !M) return; if (sel.t === 'axis') { commit({ ...M, axes: (M.axes ?? []).filter(a => a.id !== sel.id) }); setSel(null); return } commit(sel.t === 'wall' ? { ...M, walls: M.walls.filter(w => w.id !== sel.id) } : sel.t === 'door' ? { ...M, doors: M.doors.filter(d => d.id !== sel.id) } : sel.t === 'room' ? { ...M, rooms: (M.rooms ?? []).filter(r => r.id !== sel.id) } : sel.t === 'furn' ? { ...M, furn: (M.furn ?? []).filter(f => f.id !== sel.id) } : { ...M, dims: (M.dims ?? []).filter(d => d.id !== sel.id) }); setSel(null) }
+  const del = () => { if (!sel || !M) return; if (sel.t === 'axis') { commit({ ...M, axes: (M.axes ?? []).filter(a => a.id !== sel.id) }); setSel(null); return } commit(sel.t === 'wall' ? { ...M, walls: M.walls.filter(w => w.id !== sel.id) } : sel.t === 'door' ? { ...M, doors: M.doors.filter(d => d.id !== sel.id) } : sel.t === 'room' ? { ...M, rooms: (M.rooms ?? []).filter(r => r.id !== sel.id), noAuto: [...(M.noAuto ?? []), ...(M.rooms ?? []).filter(r => r.id === sel.id).map(r => centroid(r.poly))] } : sel.t === 'furn' ? { ...M, furn: (M.furn ?? []).filter(f => f.id !== sel.id) } : { ...M, dims: (M.dims ?? []).filter(d => d.id !== sel.id) }); setSel(null) }
   const dup = () => { if (!sel || !M) return; const o = 0.6
     if (sel.t === 'wall') { const w = M.walls.find(x => x.id === sel.id); if (!w) return; const n: Wall = { ...w, id: uid('w'), shape: w.shape.type === 'poly' ? { type: 'poly', rings: w.shape.rings.map(r => r.map(q => [q[0] + o, q[1] + o] as Pt)) } : { ...w.shape, a: [w.shape.a[0] + o, w.shape.a[1] + o], b: [w.shape.b[0] + o, w.shape.b[1] + o], via: w.shape.via?.map(q => [q[0] + o, q[1] + o] as Pt) } }; commit({ ...M, walls: [...M.walls, n] }); setSel({ t: 'wall', id: n.id }) }
     else if (sel.t === 'furn') { const f = (M.furn ?? []).find(x => x.id === sel.id); if (!f) return; const n = { ...f, id: uid('f'), auto: false, x: f.x + 0.5, y: f.y + 0.5 }; commit({ ...M, furn: [...(M.furn ?? []), n] }); setSel({ t: 'furn', id: n.id }) }
@@ -569,6 +569,27 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const selAxis = sel?.t === 'axis' ? (M?.axes ?? []).find(a => a.id === sel.id) : undefined
   const renameAxis = (id: string) => { if (!M) return; const a = (M.axes ?? []).find(x => x.id === id); if (!a) return; const nm = window.prompt?.('Tên trục', a.name); if (nm && nm.trim()) commit({ ...M, axMan: { ...M.axMan, [a.dir]: true }, axes: (M.axes ?? []).map(x => x.id === id ? { ...x, name: nm.trim() } : x) }) }
   useEffect(() => { if (M) { const n = syncAxisNames(M); if (n !== M) setM(n) } }, [M])
+  Mr.current = M
+  /** Tự tạo sàn: khi tường + cửa khép thành vùng kín chưa có sàn → thêm sàn (tên "Phòng n", diện tích tự tính) để điền thông tin sau */
+  useEffect(() => {
+    if (!autoRoom || mode !== '2d' || pending || !autoTick) return
+    const t = setTimeout(() => {
+      const m = Mr.current; if (!m || drag.current) return
+      if (lastAuto.current && lastAuto.current.w === m.walls && lastAuto.current.d === m.doors) return
+      lastAuto.current = { w: m.walls, d: m.doors }
+      try {
+        const r = autoRooms(m, 1.5); if (!r || !r.rooms.length) return
+        const made: Room[] = []; let cur = m
+        for (const rm of r.rooms) {
+          if ((m.noAuto ?? []).some(q => inside(q, rm.poly))) continue
+          let polys = [rm.poly]; if (roomOverlap(cur, rm.poly)) { const tr = trimToFree(cur, rm.poly); if (tr.holes || !tr.polys.length) continue; polys = tr.polys }
+          for (const pl of polys) { const n = (cur.rooms ?? []).length + 1, nr: Room = { ...rm, id: uid('r'), name: rm.name.startsWith('Phòng ') ? 'Phòng ' + n : rm.name, poly: pl, area: polys.length === 1 ? rm.area : undefined, floor: floorFin || undefined }; made.push(nr); cur = { ...cur, rooms: [...(cur.rooms ?? []), nr] } }
+        }
+        if (made.length) { setM(cur); hist.current.push(m); setNh(hist.current.length); setBusy(`Tự tạo ${made.length} sàn từ không gian kín – điền tên / cốt sau (Ctrl+Z để huỷ).`); setTimeout(() => setBusy(''), 5000) }
+      } catch { /* bỏ */ }
+    }, 800)
+    return () => clearTimeout(t)
+  }, [autoTick, autoRoom, mode, pending])
   const addAxis = (dir: 'v' | 'h', pos: number) => { if (!M) return; const ax = M.axes ?? [], used = new Set(ax.filter(a => a.dir === dir).map(a => a.name)); let name = ''; if (dir === 'v') { let i = 1; while (used.has(String(i))) i++; name = String(i) } else { let i = 0; while (used.has(String.fromCharCode(65 + i))) i++; name = String.fromCharCode(65 + i) } const a = { id: uid('x'), dir, pos: Math.round(pos * 1000) / 1000, name }; commit({ ...M, axes: [...ax, a] }); setSel({ t: 'axis', id: a.id }) }
   const runDetectAxes = () => { if (!M) return; const det = detectAxes(M); if (!det.length) { setErr('Không thấy hàng cột thẳng hàng (cần ít nhất 2 cột cùng tim). Vẽ trục tay bằng nút Trục dọc / Trục ngang.'); return } setErr(''); commit({ ...M, axes: [...(M.axes ?? []).filter(a => !a.auto), ...det] }); setBusy(`Đã nhận ${det.filter(a => a.dir === 'v').length} trục dọc, ${det.filter(a => a.dir === 'h').length} trục ngang từ tâm cột. Đổi tên / dời bằng cách chọn trục.`); setTimeout(() => setBusy(''), 6000) }
   /** Dời đối tượng được kéo trong 3D: bắt điểm như 2D, cửa dính vào tường, chống đâm tường / chồng sàn */
@@ -686,6 +707,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
         {mode === '2d' ? <>
           <button className="btn sm" onClick={() => fit(M, size)}>⤢ Vừa khung</button>
           <label className="small"><input type="checkbox" checked={ortho} onChange={e => setOrtho(e.target.checked)} /> Bắt ngang/dọc</label>
+          <label className="small" title="Khi tường + cửa khép thành vùng kín chưa có sàn, tự tạo sàn (tên, diện tích) để điền thông tin sau"><input type="checkbox" checked={autoRoom} onChange={e => { setAutoRoom(e.target.checked); try { localStorage.setItem('plan3d-autofloor', e.target.checked ? '1' : '0') } catch { /* bỏ */ } }} /> Tự tạo sàn khi khép kín</label>
         </> : <>
           <button className="btn sm" onClick={() => setView3(v => (v === 0 ? 2 : 0))}>Góc nhìn chéo</button><button className="btn sm" onClick={() => setView3(1)}>Từ trên xuống</button><button className="btn sm" style={pan3 ? { background: '#ffe3b8', borderColor: '#e07000' } : undefined} title="Bật: kéo chuột trái = dịch màn hình. Luôn dùng được: giữ Shift + kéo, hoặc kéo chuột phải / chuột giữa" onClick={() => setPan3(v => !v)}>✋ Kéo dịch{pan3 ? ' (đang bật)' : ''}</button>
           <label className="small"><input type="checkbox" checked={ceiling} onChange={e => setCeiling(e.target.checked)} /> Hiện trần</label><span className="muted small">Bấm vật thể để chọn · kéo vật thể để dời · kéo nền = xoay · cuộn = zoom</span></>}
