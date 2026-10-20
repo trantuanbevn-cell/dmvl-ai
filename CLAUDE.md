@@ -14,4 +14,4 @@ Mọi tính năng lớn mới **mặc định chỉ admin (chủ dự án) thấ
 
 ## Thông báo cập nhật (🔔)
 `release.json` ở gốc repo quyết định ai nhận thông báo "có bản cập nhật": `{"scope":"concept"}` = chỉ người có quyền tính năng đó (admin luôn có); xoá file / bỏ scope = báo mọi người. Push chỉ sửa tính năng admin-only thì để scope tương ứng; push ảnh hưởng mọi người thì bỏ scope.
-`{"silent":true}` = cập nhật ngầm, không báo ai (dùng cho thay đổi nhỏ, tránh làm phiền). Nhớ XOÁ `silent` ở lần push sau nếu muốn báo lại.
+**Chủ sản phẩm yêu cầu: MẶC ĐỊNH luôn báo đầy đủ (không dùng silent); chỉ đặt silent khi chính chủ sản phẩm yêu cầu.** `{"silent":true}` = cập nhật ngầm, không báo ai (dùng cho thay đổi nhỏ, tránh làm phiền). Nhớ XOÁ `silent` ở lần push sau nếu muốn báo lại.
