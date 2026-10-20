@@ -12,6 +12,7 @@ import type { Entry, Occurrence } from '../../lib/types'
 import Crop from '../../components/Crop'
 import EntryPanel from '../../components/EntryPanel'
 import MaterialPopup from '../../components/MaterialPopup'
+import CropActions from '../../components/CropActions'
 import { StatusDot } from './MaterialView'
 import Bar from '../../components/Bar'
 import PlanMap from '../../components/PlanMap'
@@ -225,7 +226,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
         }
       }} />}
       {selEntry && !hidePanel && <EntryPanel d={d} entry={selEntry} onClose={() => { setSel(null); setSelOcc(null) }} />}
-      {pop && <MaterialPopup d={d} entryId={pop} lang={lang} onClose={() => setPop(null)} onDetail={id => { setPop(null); setSel(id); setHidePanel(false) }} />}
+      {pop && <MaterialPopup d={d} entryId={pop} lang={lang} onClose={() => setPop(null)} onDetail={id => { setPop(null); setSel(id); setHidePanel(false) }} actions={canEdit && selOcc && d.occ.some(x => x.id === selOcc) ? <CropActions d={d} occId={selOcc} symLabel={e => symbolOf(e, lang, undefined, symMap)} onChanged={id => { if (id) { setPop(id); setSel(id) } else setPop(null) }} /> : undefined} />}
     </div>
   )
 }
