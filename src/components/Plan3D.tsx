@@ -7,7 +7,7 @@ import type { ProjectData } from '../lib/useProject'
 import { applyPlanSync, planSyncRows, type SyncRow } from '../lib/planSync'
 import type { VecPage } from '../lib/vector'
 import { LinesCanvas } from './PlanView'
-import Scene3D from './Scene3D'
+import Scene3D, { type Pick3 } from './Scene3D'
 import LibraryBrowser from './LibraryBrowser'
 import { DoorElevSection, DoorPlanSection, WallLayerSection } from './Sections'
 import { COL_LIB, DOOR_LIB, FINISHES, WALL_TYPES, doorSpec, finishOf, type DoorSpec, type Finish } from '../lib/plan3d/library'
@@ -20,6 +20,8 @@ type Tool = 'select' | 'wall' | 'glasskit' | 'axisV' | 'axisH' | 'dim' | 'room' 
 type Sel = { t: 'wall' | 'door' | 'room' | 'dim' | 'furn' | 'axis'; id: string } | null
 type SnapKind = '' | 'end' | 'mid' | 'cen' | 'int' | 'per' | 'nea' | 'axis' | 'polar' | 'grid'
 const SNAP_LABEL: Record<string, string> = { end: 'Đầu mút', mid: 'Điểm giữa', cen: 'Tâm', int: 'Giao điểm', per: 'Vuông góc', nea: 'Gần nhất', axis: 'Trục', polar: 'Góc cực / ngang-dọc', grid: 'Lưới' }
+const LAY0 = { walls: true, cols: true, doors: true, furn: true, rooms: true, labels: true, dims: true, axes: true }
+const LOCK0 = { walls: false, cols: false, doors: false, furn: false, rooms: false, dims: false, axes: false }
 const SM0 = { end: true, mid: true, cen: true, int: true, per: true, nea: true, axis: true, polar: false, grid: false }
 const KEY = 'plan3d-model-v1'
 const ringPath = (r: Pt[]) => 'M' + r.map(p => p[0].toFixed(3) + ' ' + p[1].toFixed(3)).join('L') + 'Z'
@@ -29,6 +31,10 @@ const WallPath = memo(function WallPath({ w, sel, onDown }: { w: Wall; sel: bool
   const k = kindOf(w.kind)
   return <path d={d} fill={k.glass ? '#8fd8ee' : w.role === 'col' ? '#6a6a6a' : '#b1b1b1'} fillOpacity={k.glass ? 0.7 : 0.95} fillRule="evenodd" stroke={sel ? '#e07000' : k.glass ? '#1b87a8' : '#3a3a3a'} strokeWidth={sel ? 2.4 : 1} vectorEffect="non-scaling-stroke" onPointerDown={e => onDown(e, w)} style={{ cursor: 'pointer' }} />
 })
+
+function PalBtn({ on, ic, label, title, onClick }: { on: boolean; ic: string; label: string; title: string; onClick: () => void }) {
+  return <button title={title} onClick={onClick} style={{ display: 'grid', justifyItems: 'center', gap: 1, width: '100%', padding: '5px 2px', border: '1px solid ' + (on ? '#e07000' : '#ddd'), background: on ? '#fdebd6' : '#fff', borderRadius: 6, cursor: 'pointer', font: 'inherit', color: on ? '#a85a00' : '#222' }}><span style={{ fontSize: 19, lineHeight: 1.1 }}>{ic}</span><span style={{ fontSize: 10.5, lineHeight: 1.1, textAlign: 'center' }}>{label}</span></button>
+}
 
 /** Mũi tên nắm kéo (quay theo hướng ang, cỡ s theo zoom) */
 function Arrow({ x, y, ang, s, onDown, title, color = '#e07000' }: { x: number; y: number; ang: number; s: number; onDown: (e: React.PointerEvent) => void; title: string; color?: string }) {
@@ -92,7 +98,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const [busy, setBusy] = useState(''), [err, setErr] = useState('')
   const [tool, setTool] = useState<Tool>('select'), [sel, setSel] = useState<Sel>(null)
   const [mode, setMode] = useState<'2d' | '3d'>('2d'), [view3, setView3] = useState(0)
-  const [ortho, setOrtho] = useState(true), [under, setUnder] = useState(true), [showFurn, setShowFurn] = useState(true), [libFurn, setLibFurn] = useState('chair'), [dimMm, setDimMm] = useState(true), [newPanel, setNewPanel] = useState(1.2), [shp, setShp] = useState<Shape>('line'), [sm, setSm] = useState<typeof SM0>(() => { try { return { ...SM0, ...JSON.parse(localStorage.getItem('plan3d-snap') ?? '{}') } } catch { return SM0 } }), [showLv, setShowLv] = useState(true), [hud, setHud] = useState<{ p: Pt; t: string } | null>(null), [lenBuf, setLenBuf] = useState(''), [ed, setEd] = useState<{ k: 'poly' | 'seg' | 'room'; id: string; ring: number; vi: number; q: Pt } | null>(null), [edv, setEdv] = useState({ len: '', push: '0', thick: '', fix: 'c' }), [floorFin, setFloorFin] = useState(''), [tf, setTf] = useState({ dx: '0', dy: '0', rot: '90', k: '100', n: '1', cx: '1000', cy: '0' })
+  const [ortho, setOrtho] = useState(true), [under, setUnder] = useState(true), [libFurn, setLibFurn] = useState('chair'), [dimMm, setDimMm] = useState(true), [newPanel, setNewPanel] = useState(1.2), [shp, setShp] = useState<Shape>('line'), [lay, setLay] = useState<typeof LAY0>(() => { try { return { ...LAY0, ...JSON.parse(localStorage.getItem('plan3d-lay') ?? '{}') } } catch { return LAY0 } }), [lock, setLock] = useState<typeof LOCK0>(() => { try { return { ...LOCK0, ...JSON.parse(localStorage.getItem('plan3d-lock') ?? '{}') } } catch { return LOCK0 } }), [fgHide, setFgHide] = useState<string[]>([]), [showLayers, setShowLayers] = useState(false), [sm, setSm] = useState<typeof SM0>(() => { try { return { ...SM0, ...JSON.parse(localStorage.getItem('plan3d-snap') ?? '{}') } } catch { return SM0 } }), [showLv, setShowLv] = useState(true), [hud, setHud] = useState<{ p: Pt; t: string } | null>(null), [lenBuf, setLenBuf] = useState(''), [ed, setEd] = useState<{ k: 'poly' | 'seg' | 'room'; id: string; ring: number; vi: number; q: Pt } | null>(null), [edv, setEdv] = useState({ len: '', push: '0', thick: '', fix: 'c' }), [floorFin, setFloorFin] = useState(''), [tf, setTf] = useState({ dx: '0', dy: '0', rot: '90', k: '100', n: '1', cx: '1000', cy: '0' })
   const hist = useRef<Model[]>([]), [nh, setNh] = useState(0), clip = useRef<Sel>(null), pasteN = useRef(0)
   const [vb, setVb] = useState<Box>({ x: 0, y: 0, w: 100, h: 60 }), [size, setSize] = useState({ w: 0, h: 0 })
   const box = useRef<HTMLDivElement>(null), drag = useRef<any>(null)
@@ -153,22 +159,26 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const saveJson = () => { if (!M) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(M)], { type: 'application/json' })); a.download = 'mat-bang-3d.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000) }
 
   // ---- Bắt điểm (như CAD): đỉnh / trung điểm / góc đồ / mép tường. Cache theo model để kéo mượt.
-  const snapCache = useRef<{ M: Model; v: Pt[]; e: [Pt, Pt][]; mk: Set<string>; ck: Set<string> } | null>(null)
+  const snapCache = useRef<{ M: Model; v: Pt[]; e: [Pt, Pt][]; mk: Set<string>; ck: Set<string>; lk: string } | null>(null)
+  useEffect(() => { try { localStorage.setItem('plan3d-lay', JSON.stringify(lay)); localStorage.setItem('plan3d-lock', JSON.stringify(lock)) } catch { /* bỏ */ } }, [lay, lock])
+  const showFurn = lay.furn
+  const lay3 = useMemo(() => ({ walls: lay.walls, cols: lay.cols, doors: lay.doors, furn: lay.furn, rooms: lay.rooms }), [lay])
+  const layKey = JSON.stringify(lay) + fgHide.join()
   useEffect(() => { try { localStorage.setItem('plan3d-snap', JSON.stringify(sm)) } catch { /* bỏ */ } }, [sm])
   const pk = (q: Pt) => q[0].toFixed(4) + ',' + q[1].toFixed(4)
   const furnCorners = (f: Furn): Pt[] => { const c = Math.cos(f.ang), s = Math.sin(f.ang); return ([[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]] as [number, number][]).map(([a, b]) => [f.x + c * a * f.w / 2 - s * b * f.d / 2, f.y + s * a * f.w / 2 + c * b * f.d / 2] as Pt) }
   const snapSet = (excl?: string) => {
     if (!M) return { v: [] as Pt[], e: [] as [Pt, Pt][], mk: new Set<string>(), ck: new Set<string>() }
-    if (!excl && snapCache.current?.M === M) return snapCache.current
+    if (!excl && snapCache.current?.M === M && snapCache.current.lk === layKey) return snapCache.current
     const v: Pt[] = [], e: [Pt, Pt][] = [], mk = new Set<string>(), ck = new Set<string>()
-    for (const w of M.walls) { if (w.id === excl) continue
+    for (const w of M.walls) { if (w.id === excl || !(w.role === 'col' ? lay.cols : lay.walls)) continue
       const rings: Pt[][] = w.shape.type === 'poly' ? w.shape.rings : [centerline(w)], seg = w.shape.type === 'seg'
       for (const r of rings) for (let i = 0; i < r.length; i++) { v.push(r[i]); if (seg && i === r.length - 1) continue; const q = r[(i + 1) % r.length]; if (w.role !== 'col') { const mq: Pt = [(r[i][0] + q[0]) / 2, (r[i][1] + q[1]) / 2]; v.push(mq); mk.add(pk(mq)) } e.push([r[i], q]) }
       if (seg) for (const r of footprint(w)) for (let i = 0; i < r.length; i++) { v.push(r[i]); e.push([r[i], r[(i + 1) % r.length]]) } }
-    for (const r of M.rooms ?? []) { if (r.id === excl) continue; for (const q of r.poly) v.push(q) }
-    for (const f of M.furn ?? []) { if (f.id === excl) continue; const c = furnCorners(f); v.push(...c); ck.add(pk(c[4])); for (let i = 0; i < 4; i++) e.push([c[i], c[(i + 1) % 4]]) }
-    for (const dr of M.doors) { if (dr.id === excl) continue; v.push(...doorRect(dr, dr.t ?? 0.2)) }
-    const out = { M, v, e, mk, ck }; if (!excl) snapCache.current = out; return out
+    for (const r of M.rooms ?? []) { if (r.id === excl || !lay.rooms) continue; for (const q of r.poly) v.push(q) }
+    for (const f of M.furn ?? []) { if (f.id === excl || !lay.furn || fgHide.includes(furnTypeOf(f.kind).group)) continue; const c = furnCorners(f); v.push(...c); ck.add(pk(c[4])); for (let i = 0; i < 4; i++) e.push([c[i], c[(i + 1) % 4]]) }
+    for (const dr of M.doors) { if (dr.id === excl || !lay.doors) continue; v.push(...doorRect(dr, dr.t ?? 0.2)) }
+    const out = { M, v, e, mk, ck, lk: layKey }; if (!excl) snapCache.current = out; return out
   }
   /** Độ dời để một nhóm điểm của vật đang kéo bắt vào đối tượng khác: ưu tiên đỉnh, rồi gióng thẳng trục, rồi áp mép (giữ Alt để tắt) */
   const snapDelta = (pts: Pt[], excl: string): { d: Pt; mark: Pt | null } => {
@@ -205,17 +215,17 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const snapPt = (p: Pt, from?: Pt | null): Pt => snapInfo(p, from).p
 
   const onWallDown = (e: React.PointerEvent, w: Wall) => {
-    if (tool !== 'select') return
+    if (tool !== 'select' || (w.role === 'col' ? lock.cols : lock.walls)) return
     e.stopPropagation(); let o = w; if ((e.ctrlKey || e.metaKey) && M) { const r = applyXf(M, { t: 'wall', id: w.id }, mkMove(0, 0), true); hist.current.push(M); setNh(hist.current.length); setM(r.M); o = r.M.walls.find(x => x.id === r.sel.id)!; setSel(r.sel); drag.current = { k: 'moveWall', id: o.id, p0: toModel(e), orig: o, moved: true } } else { setSel({ t: 'wall', id: w.id }); drag.current = { k: 'moveWall', id: w.id, p0: toModel(e), orig: w, moved: false } }; (box.current as HTMLElement).setPointerCapture(e.pointerId)
   }
   const onDoorDown = (e: React.PointerEvent, d: Door) => {
-    if (tool !== 'select') return
+    if (tool !== 'select' || lock.doors) return
     e.stopPropagation(); if ((e.ctrlKey || e.metaKey) && M) { const r = applyXf(M, { t: 'door', id: d.id }, mkMove(0, 0), true); hist.current.push(M); setNh(hist.current.length); setM(r.M); const o = r.M.doors.find(x => x.id === r.sel.id)!; setSel(r.sel); drag.current = { k: 'moveDoor', id: o.id, orig: o, moved: true } } else { setSel({ t: 'door', id: d.id }); drag.current = { k: 'moveDoor', id: d.id, orig: d, moved: false } }; (box.current as HTMLElement).setPointerCapture(e.pointerId)
   }
   const onHandleDown = (e: React.PointerEvent, id: string, ring: number, vi: number) => { e.stopPropagation(); drag.current = { k: 'vertex', id, ring, vi, orig: M!.walls.find(w => w.id === id), moved: false }; (box.current as HTMLElement).setPointerCapture(e.pointerId) }
   const onBendDown = (e: React.PointerEvent, id: string) => { e.stopPropagation(); drag.current = { k: 'bend', id, orig: M!.walls.find(w => w.id === id), moved: false }; (box.current as HTMLElement).setPointerCapture(e.pointerId) }
-  const onDimDown = (e: React.PointerEvent, d: Dim) => { if (tool !== 'select') return; e.stopPropagation(); setSel({ t: 'dim', id: d.id }) }
-  const onFurnDown = (e: React.PointerEvent, f: Furn) => { if (tool !== 'select') return; e.stopPropagation(); if ((e.ctrlKey || e.metaKey) && M) { const r = applyXf(M, { t: 'furn', id: f.id }, mkMove(0, 0), true); hist.current.push(M); setNh(hist.current.length); setM(r.M); const o = (r.M.furn ?? []).find(x => x.id === r.sel.id)!; setSel(r.sel); drag.current = { k: 'moveFurn', id: o.id, p0: toModel(e), orig: o, moved: true } } else { setSel({ t: 'furn', id: f.id }); drag.current = { k: 'moveFurn', id: f.id, p0: toModel(e), orig: f, moved: false } }; (box.current as HTMLElement).setPointerCapture(e.pointerId) }
+  const onDimDown = (e: React.PointerEvent, d: Dim) => { if (tool !== 'select' || lock.dims) return; e.stopPropagation(); setSel({ t: 'dim', id: d.id }) }
+  const onFurnDown = (e: React.PointerEvent, f: Furn) => { if (tool !== 'select' || lock.furn) return; e.stopPropagation(); if ((e.ctrlKey || e.metaKey) && M) { const r = applyXf(M, { t: 'furn', id: f.id }, mkMove(0, 0), true); hist.current.push(M); setNh(hist.current.length); setM(r.M); const o = (r.M.furn ?? []).find(x => x.id === r.sel.id)!; setSel(r.sel); drag.current = { k: 'moveFurn', id: o.id, p0: toModel(e), orig: o, moved: true } } else { setSel({ t: 'furn', id: f.id }); drag.current = { k: 'moveFurn', id: f.id, p0: toModel(e), orig: f, moved: false } }; (box.current as HTMLElement).setPointerCapture(e.pointerId) }
   /** Nắm mũi tên đổi kích thước / xoay: k = loại, ex = tham số thêm */
   const onArrow = (e: React.PointerEvent, k: string, id: string, orig: unknown, ex: Record<string, unknown> = {}) => { e.stopPropagation(); drag.current = { k, id, orig, moved: false, p0: toModel(e), ...ex }; (box.current as HTMLElement).setPointerCapture(e.pointerId) }
   const mm = (v: number) => Math.round(v * 1000)
@@ -431,6 +441,16 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const selAxis = sel?.t === 'axis' ? (M?.axes ?? []).find(a => a.id === sel.id) : undefined
   const addAxis = (dir: 'v' | 'h', pos: number) => { if (!M) return; const ax = M.axes ?? [], used = new Set(ax.filter(a => a.dir === dir).map(a => a.name)); let name = ''; if (dir === 'v') { let i = 1; while (used.has(String(i))) i++; name = String(i) } else { let i = 0; while (used.has(String.fromCharCode(65 + i))) i++; name = String.fromCharCode(65 + i) } const a = { id: uid('x'), dir, pos: Math.round(pos * 1000) / 1000, name }; commit({ ...M, axes: [...ax, a] }); setSel({ t: 'axis', id: a.id }) }
   const runDetectAxes = () => { if (!M) return; const det = detectAxes(M); if (!det.length) { setErr('Không thấy hàng cột thẳng hàng (cần ít nhất 2 cột cùng tim). Vẽ trục tay bằng nút Trục dọc / Trục ngang.'); return } setErr(''); commit({ ...M, axes: [...(M.axes ?? []).filter(a => !a.auto), ...det] }); setBusy(`Đã nhận ${det.filter(a => a.dir === 'v').length} trục dọc, ${det.filter(a => a.dir === 'h').length} trục ngang từ tâm cột. Đổi tên / dời bằng cách chọn trục.`); setTimeout(() => setBusy(''), 6000) }
+  /** Dời đối tượng được kéo trong 3D: bắt điểm như 2D, cửa dính vào tường, chống đâm tường / chồng sàn */
+  const moveSel = (s: NonNullable<Pick3>, dx: number, dy: number) => {
+    if (!M) return
+    if (s.t === 'door') { const d = M.doors.find(x => x.id === s.id); if (!d) return; const sn = snapToWall(M, [d.x + dx, d.y + dy], 1.2, d.w); if (sn) commit({ ...M, doors: M.doors.map(x => x.id === d.id ? { ...x, x: sn.x, y: sn.y, ang: sn.ang, t: sn.thick || x.t } : x) }); return }
+    let ddx = dx, ddy = dy
+    if (s.t === 'furn') { const f = (M.furn ?? []).find(x => x.id === s.id); if (!f) return; const sn = snapDelta(furnCorners({ ...f, x: f.x + dx, y: f.y + dy }), f.id); ddx += sn.d[0]; ddy += sn.d[1]; const nf = { ...f, x: f.x + ddx, y: f.y + ddy }; if (furnHitsWall(M, nf) && !furnHitsWall(M, f)) { setErr('Vị trí đó đâm vào tường/cột – không dời.'); return } }
+    else if (s.t === 'wall') { const w = M.walls.find(x => x.id === s.id); if (!w) return; const mp = (w.shape.type === 'poly' ? w.shape.rings.flat() : [w.shape.a, w.shape.b]).filter((_, i, a) => a.length <= 40 || i % Math.ceil(a.length / 40) === 0).map(q => [q[0] + dx, q[1] + dy] as Pt), sn = snapDelta(mp, w.id); ddx += sn.d[0]; ddy += sn.d[1] }
+    else if (s.t === 'room') { const r = (M.rooms ?? []).find(x => x.id === s.id); if (!r) return; const ov = roomOverlap(M, r.poly.map(q => [q[0] + dx, q[1] + dy] as Pt), r.id); if (ov) { setErr(`Sàn sẽ đè lên «${ov.name}» – không dời.`); return } }
+    setErr(''); const r = applyXf(M, s, mkMove(ddx, ddy), false); commit(r.M); setSel(s)
+  }
   const selWall = sel?.t === 'wall' ? M?.walls.find(w => w.id === sel.id) : undefined
   const selDoor = sel?.t === 'door' ? M?.doors.find(d => d.id === sel.id) : undefined
   const vbPt = useMemo(() => M ? { x: vb.x / M.mPt, y: vb.y / M.mPt, w: vb.w / M.mPt, h: vb.h / M.mPt } : vb, [vb, M])
@@ -442,6 +462,74 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const num = (v: string, d: number) => { const n = parseFloat(v.replace(',', '.')); return isFinite(n) ? n : d }
   const segLen = selWall?.shape.type === 'seg' ? Math.hypot(selWall.shape.b[0] - selWall.shape.a[0], selWall.shape.b[1] - selWall.shape.a[1]) : 0
 
+  const go = (t: Tool, sh?: Shape) => { setTool(t); setPending(null); setPts([]); setLenBuf(''); setErr(''); if (sh) setShp(sh) }
+  const focTf = (id: string) => { if (!sel) { setErr('Hãy chọn một đối tượng trước, rồi bấm lệnh này.'); return } setErr(''); setTimeout(() => { const el = document.getElementById(id) as HTMLInputElement | null; el?.focus(); el?.select() }, 30) }
+  const GH = (t: string) => <div style={{ fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: 0.5, margin: '6px 0 0', textAlign: 'center', borderTop: '1px solid #e5e5e5', paddingTop: 4 }}>{t}</div>
+  const palette = <>
+    <div style={{ fontSize: 10, fontWeight: 700, color: '#888', textAlign: 'center' }}>CHỌN</div>
+    <PalBtn on={tool === 'select'} ic="➤" label="Chọn (V)" title="Chọn / kéo đối tượng" onClick={() => go('select')} />
+    {mode === '2d' && <>
+      {GH('VẼ KIẾN TRÚC')}
+      <PalBtn on={tool === 'wall'} ic="▬" label="Tường (L)" title="Vẽ tường: thẳng, cung, tròn, chữ nhật" onClick={() => go('wall')} />
+      <PalBtn on={tool === 'glasskit'} ic="▯" label="Vách kính (K)" title="Vách kính + cửa kính vẽ nhanh" onClick={() => go('glasskit')} />
+      <PalBtn on={tool === 'col'} ic="■" label="Cột" title="Đặt cột từ thư viện" onClick={() => go('col')} />
+      <PalBtn on={tool === 'roomPoly'} ic="▱" label="Sàn (F)" title="Vẽ sàn / đo diện tích: đa giác, chữ nhật, tròn" onClick={() => go('roomPoly')} />
+      <PalBtn on={tool === 'room'} ic="▣" label="Phòng (bấm trong)" title="Bấm vào bên trong không gian kín để lấy phòng" onClick={() => go('room')} />
+      {GH('HỆ TRỤC')}
+      <PalBtn on={tool === 'axisV'} ic="┃" label="Trục dọc (G)" title="Đặt trục cột dọc 1, 2, 3…" onClick={() => go('axisV')} />
+      <PalBtn on={tool === 'axisH'} ic="━" label="Trục ngang (H)" title="Đặt trục cột ngang A, B, C…" onClick={() => go('axisH')} />
+      {GH('THƯ VIỆN')}
+      <PalBtn on={tool === 'door'} ic="🚪" label="Cửa (D)" title="Đặt cửa từ thư viện vào tường" onClick={() => go('door')} />
+      <PalBtn on={tool === 'furn'} ic="🛋" label="Nội thất" title="Đặt đồ rời, thiết bị vệ sinh, tủ liền tường" onClick={() => go('furn')} />
+      {GH('GHI CHÚ')}
+      <PalBtn on={tool === 'dim'} ic="📏" label="Kích thước" title="Ghi kích thước" onClick={() => go('dim')} />
+    </>}
+    {GH('SỬA')}
+    <PalBtn on={false} ic="✥" label="Dời (M)" title="Dời chính xác: nhập X/Y (mm)" onClick={() => focTf('tf-dx')} />
+    <PalBtn on={false} ic="⟳" label="Xoay (Q)" title="Xoay quanh tâm theo độ" onClick={() => focTf('tf-rot')} />
+    <PalBtn on={false} ic="⤢" label="Co giãn (E)" title="Co giãn theo %" onClick={() => focTf('tf-k')} />
+    <PalBtn on={false} ic="⧉" label="Sao chép (N)" title="Sao chép nhiều bản cách đều" onClick={() => focTf('tf-n')} />
+    <PalBtn on={false} ic="🗑" label="Xoá (Del)" title="Xoá đối tượng đang chọn" onClick={() => { if (sel) del() }} />
+    {mode === '2d' && <>
+      {GH('TỰ ĐỘNG')}
+      <PalBtn on={false} ic="⚡" label="Nhận phòng" title="Tự nhận diện tất cả phòng kín" onClick={runAutoRooms} />
+      <PalBtn on={false} ic="⚡" label="Nhận trục" title="Tự nhận hệ trục từ tâm cột" onClick={runDetectAxes} />
+    </>}
+  </>
+  const TOOL_NAME: Record<string, string> = { select: 'Chọn / kéo', wall: 'Vẽ tường', glasskit: 'Bộ vách kính + cửa', col: 'Đặt cột', roomPoly: 'Vẽ sàn / đo diện tích', room: 'Phòng (bấm vào trong)', door: 'Đặt cửa', furn: 'Đặt nội thất', dim: 'Ghi kích thước', axisV: 'Trục dọc', axisH: 'Trục ngang' }
+  const optBar = <div className="small" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', background: '#faf6ef', border: '1px solid #eadfcb', borderRadius: 6, padding: '4px 8px', minHeight: 30 }}>
+    <b style={{ color: '#a85a00' }}>{mode === '3d' ? 'Xem 3D – chọn & sửa' : TOOL_NAME[tool]}</b>
+    {mode === '2d' && <>
+      {tool === 'wall' && <><label className="small">Kết cấu: <select value={newKind} onChange={e => { setNewKind(e.target.value); const k = kindOf(e.target.value); if (k.glass && k.panel) setNewPanel(k.panel) }} style={{ maxWidth: 190 }}><optgroup label="Tường">{WALL_KINDS.filter(k => !k.glass).map(k => <option key={k.key} value={k.key}>{k.label}</option>)}</optgroup><optgroup label="Vách kính">{WALL_KINDS.filter(k => k.glass).map(k => <option key={k.key} value={k.key}>{k.label}</option>)}</optgroup></select></label> {kindOf(newKind).glass && <label className="small">Chia tấm kính mỗi <input style={{ width: 50 }} key={'np' + newPanel} defaultValue={newPanel} onBlur={e => setNewPanel(Math.max(0.3, num(e.target.value, newPanel)))} /> m</label>} {true && <label className="small">Hình <select value={shp} onChange={e => { setShp(e.target.value as Shape); setPts([]); setPending(null); setLenBuf('') }}><option value="line">{(tool as string) === 'roomPoly' ? 'Đa giác' : 'Thẳng (nhiều đoạn)'}</option>{(tool as string) !== 'roomPoly' && <option value="arc">Cung (đầu – cuối – điểm giữa)</option>}<option value="circle">Tròn (tâm – bán kính)</option><option value="rect">Chữ nhật (2 góc)</option></select></label>}</>}
+      {tool === 'glasskit' && <><select value={gKind} onChange={e => setGKind(e.target.value)} style={{ maxWidth: 190 }}>{WALL_KINDS.filter(k => k.glass).map(k => <option key={k.key} value={k.key}>{k.label}</option>)}</select>
+              <select value={gDoor} onChange={e => setGDoor(e.target.value)} style={{ maxWidth: 190 }}><option value="none">Không cửa</option>{DOOR_LIB.filter(d => d.group === 'Cửa kính').map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
+              <select value={gPos} onChange={e => setGPos(e.target.value as 'mid' | 'start' | 'end')}><option value="mid">Cửa ở giữa</option><option value="start">Cửa ở đầu</option><option value="end">Cửa ở cuối</option></select> {true && <label className="small">Hình <select value={shp} onChange={e => { setShp(e.target.value as Shape); setPts([]); setPending(null); setLenBuf('') }}><option value="line">{(tool as string) === 'roomPoly' ? 'Đa giác' : 'Thẳng (nhiều đoạn)'}</option>{(tool as string) !== 'roomPoly' && <option value="arc">Cung (đầu – cuối – điểm giữa)</option>}<option value="circle">Tròn (tâm – bán kính)</option><option value="rect">Chữ nhật (2 góc)</option></select></label>}</>}
+      {tool === 'col' && <><select value={libCol} onChange={e => { setLibCol(e.target.value); setTool('col') }} style={{ maxWidth: 160 }}>{COL_LIB.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></>}
+      {tool === 'roomPoly' && <>{true && <label className="small">Hình <select value={shp} onChange={e => { setShp(e.target.value as Shape); setPts([]); setPending(null); setLenBuf('') }}><option value="line">{(tool as string) === 'roomPoly' ? 'Đa giác' : 'Thẳng (nhiều đoạn)'}</option>{(tool as string) !== 'roomPoly' && <option value="arc">Cung (đầu – cuối – điểm giữa)</option>}<option value="circle">Tròn (tâm – bán kính)</option><option value="rect">Chữ nhật (2 góc)</option></select></label>} {true && <label className="small">Vật liệu sàn <select value={floorFin} onChange={e => setFloorFin(e.target.value)} style={{ maxWidth: 170 }}><option value="">(chưa chọn)</option>{[...custom, ...FINISHES].filter(f => f.group === 'Sàn' || f.group === 'Của tôi').map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}</>}
+      {tool === 'door' && <><select value={libDoor} onChange={e => { setLibDoor(e.target.value); setTool('door') }} style={{ maxWidth: 190 }}>{['Cửa đi', 'Cửa kính', 'Cửa sổ', 'Khác'].map(g => <optgroup key={g} label={g}>{[...customDoors, ...DOOR_LIB].filter(d => (customDoors.includes(d) ? g === 'Cửa đi' : d.group === g)).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</optgroup>)}</select></>}
+      {tool === 'furn' && <><select value={libFurn} onChange={e => { setLibFurn(e.target.value); setTool('furn') }} style={{ maxWidth: 190 }}>{FURN_GROUPS.map(g => <optgroup key={g} label={g}>{FURN_TYPES.filter(t => t.group === g).map(t => <option key={t.key} value={t.key}>{t.label}</option>)}</optgroup>)}</select></>}
+      {tool === 'dim' && <label><input type="checkbox" checked={dimMm} onChange={e => setDimMm(e.target.checked)} /> Hiện đơn vị mm</label>}
+      {tool === 'room' && <span className="muted">Bấm vào bên trong một không gian kín (tường phải khép kín, cửa tính là kín).</span>}
+      {(tool === 'axisV' || tool === 'axisH') && <span className="muted">Bấm vị trí đặt trục; tự hút vào tâm cột, đầu mút.</span>}
+      {tool === 'select' && <span className="muted">Bấm đối tượng để chọn · kéo = dời · Ctrl+kéo = sao chép · bấm đúp cạnh = gõ số mm · Alt = tắt bắt điểm</span>}
+    </>}
+    {mode === '3d' && <span className="muted">Bấm vật thể trong 3D để chọn, kéo để dời trên sàn; sửa số liệu ở bảng bên phải. Ẩn / khoá từng loại ở «Lớp hiển thị».</span>}
+  </div>
+  const layCount: Record<string, number> = { walls: M ? M.walls.filter(w => w.role !== 'col').length : 0, cols: M ? M.walls.filter(w => w.role === 'col').length : 0, doors: M?.doors.length ?? 0, furn: (M?.furn ?? []).length, rooms: (M?.rooms ?? []).length, labels: (M?.rooms ?? []).length, dims: (M?.dims ?? []).length, axes: (M?.axes ?? []).length }
+  const LAYERS: [keyof typeof LAY0, string][] = [['walls', 'Tường / vách'], ['cols', 'Cột'], ['doors', 'Cửa'], ['furn', 'Đồ rời · thiết bị · tủ liền tường'], ['rooms', 'Sàn / phòng'], ['labels', 'Tên phòng & cốt'], ['dims', 'Kích thước'], ['axes', 'Hệ trục']]
+  const layersPanel = showLayers && M ? <div className="card small" style={{ display: 'grid', gap: 4 }}>
+    <b>🗂 Lớp hiển thị &amp; khoá</b>
+    <table className="tbl" style={{ width: '100%' }}><thead><tr><th style={{ textAlign: 'left' }}>Lớp</th><th>Hiện</th><th>Khoá</th><th>SL</th></tr></thead><tbody>
+      {LAYERS.map(([k, label]) => <tr key={k}><td>{label}</td><td style={{ textAlign: 'center' }}><input type="checkbox" checked={lay[k]} onChange={e => setLay({ ...lay, [k]: e.target.checked })} /></td><td style={{ textAlign: 'center' }}>{k in LOCK0 ? <input type="checkbox" checked={lock[k as keyof typeof LOCK0]} onChange={e => setLock({ ...lock, [k]: e.target.checked })} title="Khoá: không chọn / kéo được, tránh lỡ tay" /> : null}</td><td style={{ textAlign: 'center' }}>{layCount[k]}</td></tr>)}
+      {base && <tr><td>Nét bản vẽ gốc (DXF)</td><td style={{ textAlign: 'center' }}><input type="checkbox" checked={under} onChange={e => setUnder(e.target.checked)} /></td><td /><td /></tr>}
+      {lay.furn && FURN_GROUPS.map(g => { const n = (M.furn ?? []).filter(f => furnTypeOf(f.kind).group === g).length; return n ? <tr key={g}><td style={{ paddingLeft: 18, color: '#666' }}>↳ {g}</td><td style={{ textAlign: 'center' }}><input type="checkbox" checked={!fgHide.includes(g)} onChange={e => setFgHide(e.target.checked ? fgHide.filter(x => x !== g) : [...fgHide, g])} /></td><td /><td style={{ textAlign: 'center' }}>{n}</td></tr> : null })}
+    </tbody></table>
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      <button className="btn sm" onClick={() => { setLay(LAY0); setFgHide([]); setUnder(true) }}>Hiện tất cả</button>
+      <button className="btn sm" onClick={() => setLay({ ...LAY0, furn: false, labels: false, dims: false })}>Chỉ kiến trúc (ẩn đồ rời, kích thước)</button>
+      <button className="btn sm" onClick={() => setLock({ walls: true, cols: true, doors: true, furn: false, rooms: true, dims: true, axes: true })}>Khoá hết, chỉ sửa đồ rời</button>
+      <button className="btn sm" onClick={() => setLock(LOCK0)}>Mở khoá hết</button></div>
+    <div className="muted">Ẩn = không vẽ, không bắt điểm, ẩn cả trong 3D. Khoá = vẫn thấy nhưng không chọn / kéo nhầm.</div></div> : null
   return <div className="card" style={{ display: 'grid', gap: 10 }}>
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
       <b>Soạn mặt bằng &amp; dựng 3D</b><span className="muted small">– thử nghiệm: nhập DXF, sửa tường · cột · cửa, xem 3D</span>
@@ -463,47 +551,21 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     {!M ? <div className="muted">Nhập file DXF mặt bằng. Phần mềm dựng sẵn hệ tường và cột; bạn sửa tiếp trên mặt bằng rồi xem 3D. Bản sửa tự lưu trong trình duyệt này.</div> : <>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
         <div className="mp-tabs"><button className={'mp-tab' + (mode === '2d' ? ' on' : '')} onClick={() => setMode('2d')}>Mặt bằng 2D</button><button className={'mp-tab' + (mode === '3d' ? ' on' : '')} onClick={() => setMode('3d')}>Xem 3D</button></div>
+        <button className="btn sm" disabled={!nh} onClick={undo}>↩ Hoàn tác</button>
         {mode === '2d' ? <>
-          <button className={'btn sm' + (tool === 'select' ? ' primary' : '')} onClick={() => { setTool('select'); setPending(null); setPts([]) }}>Chọn / kéo</button>
-          <button className={'btn sm' + (tool === 'wall' ? ' primary' : '')} onClick={() => { setTool('wall'); setPending(null); setPts([]) }}>＋ Tường</button>
-          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><button className={'btn sm' + (tool === 'glasskit' ? ' primary' : '')} title="Vẽ nhanh vách kính + cửa kính cùng một đường" onClick={() => { setTool('glasskit'); setPending(null); setPts([]) }}>▭ Bộ vách kính</button>
-            {tool === 'glasskit' && <>
-              <select value={gKind} onChange={e => setGKind(e.target.value)} style={{ maxWidth: 190 }}>{WALL_KINDS.filter(k => k.glass).map(k => <option key={k.key} value={k.key}>{k.label}</option>)}</select>
-              <select value={gDoor} onChange={e => setGDoor(e.target.value)} style={{ maxWidth: 190 }}><option value="none">Không cửa</option>{DOOR_LIB.filter(d => d.group === 'Cửa kính').map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
-              <select value={gPos} onChange={e => setGPos(e.target.value as 'mid' | 'start' | 'end')}><option value="mid">Cửa ở giữa</option><option value="start">Cửa ở đầu</option><option value="end">Cửa ở cuối</option></select></>}</span>
-          <button className={'btn sm' + (tool === 'dim' ? ' primary' : '')} onClick={() => { setTool('dim'); setPending(null); setPts([]) }}>📏 Ghi kích thước</button>
-          <button className={'btn sm' + (tool === 'room' ? ' primary' : '')} onClick={() => { setTool('room'); setPending(null); setPts([]); setErr('') }}>▣ Phòng (bấm vào trong)</button>
-          <button className="btn sm" onClick={runAutoRooms}>⚡ Tự nhận diện tất cả phòng</button>
-          <button className={'btn sm' + (tool === 'roomPoly' ? ' primary' : '')} onClick={() => { setTool('roomPoly'); setPending(null); setPts([]) }}>▱ Vẽ sàn / đo diện tích</button>
-          {(tool === 'wall' || tool === 'glasskit' || tool === 'roomPoly') && <label className="small">Hình <select value={shp} onChange={e => { setShp(e.target.value as Shape); setPts([]); setPending(null); setLenBuf('') }}><option value="line">{tool === 'roomPoly' ? 'Đa giác' : 'Thẳng (nhiều đoạn)'}</option>{tool !== 'roomPoly' && <option value="arc">Cung (đầu – cuối – điểm giữa)</option>}<option value="circle">Tròn (tâm – bán kính)</option><option value="rect">Chữ nhật (2 góc)</option></select></label>}
-          {tool === 'roomPoly' && <label className="small">Vật liệu sàn <select value={floorFin} onChange={e => setFloorFin(e.target.value)} style={{ maxWidth: 170 }}><option value="">(chưa chọn)</option>{[...custom, ...FINISHES].filter(f => f.group === 'Sàn' || f.group === 'Của tôi').map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
-          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><button className={'btn sm' + (tool === 'door' ? ' primary' : '')} onClick={() => { setTool('door'); setPending(null); setPts([]); setErr('') }}>＋ Cửa</button>
-            <select value={libDoor} onChange={e => { setLibDoor(e.target.value); setTool('door') }} style={{ maxWidth: 190 }}>{['Cửa đi', 'Cửa kính', 'Cửa sổ', 'Khác'].map(g => <optgroup key={g} label={g}>{[...customDoors, ...DOOR_LIB].filter(d => (customDoors.includes(d) ? g === 'Cửa đi' : d.group === g)).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</optgroup>)}</select></span>
-          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><button className={'btn sm' + (tool === 'furn' ? ' primary' : '')} onClick={() => { setTool('furn'); setPending(null); setPts([]) }}>＋ Nội thất</button>
-            <select value={libFurn} onChange={e => { setLibFurn(e.target.value); setTool('furn') }} style={{ maxWidth: 190 }}>{FURN_GROUPS.map(g => <optgroup key={g} label={g}>{FURN_TYPES.filter(t => t.group === g).map(t => <option key={t.key} value={t.key}>{t.label}</option>)}</optgroup>)}</select></span>
-          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><button className={'btn sm' + (tool === 'col' ? ' primary' : '')} onClick={() => { setTool('col'); setPending(null); setPts([]) }}>＋ Cột</button>
-            <select value={libCol} onChange={e => { setLibCol(e.target.value); setTool('col') }} style={{ maxWidth: 160 }}>{COL_LIB.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></span>
-          <label className="small">Tường / vách mới: <select value={newKind} onChange={e => { setNewKind(e.target.value); const k = kindOf(e.target.value); if (k.glass && k.panel) setNewPanel(k.panel) }} style={{ maxWidth: 190 }}><optgroup label="Tường">{WALL_KINDS.filter(k => !k.glass).map(k => <option key={k.key} value={k.key}>{k.label}</option>)}</optgroup><optgroup label="Vách kính">{WALL_KINDS.filter(k => k.glass).map(k => <option key={k.key} value={k.key}>{k.label}</option>)}</optgroup></select></label>
-          {kindOf(newKind).glass && <label className="small">Chia tấm kính mỗi <input style={{ width: 50 }} key={'np' + newPanel} defaultValue={newPanel} onBlur={e => setNewPanel(Math.max(0.3, num(e.target.value, newPanel)))} /> m</label>}
-          <label className="small"><input type="checkbox" checked={dimMm} onChange={e => setDimMm(e.target.checked)} /> Dim mm</label>
-          <button className={'btn sm' + (showLib ? ' primary' : '')} onClick={() => setShowLib(v => !v)}>📚 Thư viện</button>
-          <button className="btn sm" disabled={!nh} onClick={undo}>↩ Hoàn tác</button>
+          <button className="btn sm" onClick={() => fit(M, size)}>⤢ Vừa khung</button>
           <label className="small"><input type="checkbox" checked={ortho} onChange={e => setOrtho(e.target.checked)} /> Bắt ngang/dọc</label>
-          {base && <label className="small"><input type="checkbox" checked={under} onChange={e => setUnder(e.target.checked)} /> Hiện nét bản vẽ gốc</label>}
-          <button className="btn sm" onClick={() => fit(M, size)}>Vừa khung</button>
         </> : <>
           <button className="btn sm" onClick={() => setView3(v => (v === 0 ? 2 : 0))}>Góc nhìn chéo</button><button className="btn sm" onClick={() => setView3(1)}>Từ trên xuống</button>
-          <label className="small"><input type="checkbox" checked={ceiling} onChange={e => setCeiling(e.target.checked)} /> Hiện trần</label><label className="small"><input type="checkbox" checked={showFurn} onChange={e => setShowFurn(e.target.checked)} /> Hiện nội thất</label><button className={'btn sm' + (showLib ? ' primary' : '')} onClick={() => setShowLib(v => !v)}>📚 Thư viện</button><span className="muted small">Kéo = xoay · cuộn = zoom · chuột phải kéo = dời</span></>}
+          <label className="small"><input type="checkbox" checked={ceiling} onChange={e => setCeiling(e.target.checked)} /> Hiện trần</label><span className="muted small">Bấm vật thể để chọn · kéo vật thể để dời · kéo nền = xoay · cuộn = zoom</span></>}
+        <button className={'btn sm' + (showLayers ? ' primary' : '')} onClick={() => setShowLayers(v => !v)}>🗂 Lớp hiển thị</button>
+        <button className={'btn sm' + (showLib ? ' primary' : '')} onClick={() => setShowLib(v => !v)}>📚 Thư viện</button>
         <span className="small muted" style={{ marginLeft: 'auto' }}>Cao tường mặc định <input style={{ width: 52 }} defaultValue={M.hWall} key={'hw' + M.hWall} onBlur={e => commit({ ...M, hWall: num(e.target.value, M.hWall) })} /> m · cột <input style={{ width: 52 }} defaultValue={M.hCol} key={'hc' + M.hCol} onBlur={e => commit({ ...M, hCol: num(e.target.value, M.hCol) })} /> m</span>
       </div>
       {mode === '2d' && <div className="small" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: '2px 0' }}>
         <b>Bắt điểm:</b>
         {([['end', '■ Đầu mút'], ['mid', '△ Giữa'], ['cen', '○ Tâm'], ['int', '✕ Giao điểm'], ['per', '⊥ Vuông góc'], ['nea', '◇ Gần nhất'], ['axis', '┼ Trục'], ['polar', '∠ Góc cực 15°'], ['grid', '▦ Lưới 100']] as const).map(([k, l]) => <label key={k} style={{ whiteSpace: 'nowrap' }}><input type="checkbox" checked={sm[k]} onChange={e => setSm({ ...sm, [k]: e.target.checked })} /> {l}</label>)}
         <span style={{ borderLeft: '1px solid #ccc', height: 16 }} />
-        <b>Hệ trục:</b>
-        <button className={'btn sm' + (tool === 'axisV' ? ' primary' : '')} onClick={() => { setTool('axisV'); setPending(null); setPts([]) }}>＋ Trục dọc (1,2,3)</button>
-        <button className={'btn sm' + (tool === 'axisH' ? ' primary' : '')} onClick={() => { setTool('axisH'); setPending(null); setPts([]) }}>＋ Trục ngang (A,B,C)</button>
-        <button className="btn sm" onClick={runDetectAxes}>⚡ Nhận từ cột</button>
         {(M.axes ?? []).length > 0 && <button className="btn sm" onClick={() => commit({ ...M, axes: [] })}>Xoá hết trục</button>}
         <label><input type="checkbox" checked={showLv} onChange={e => setShowLv(e.target.checked)} /> Hiện cốt sàn / trần</label>
         <span className="muted">Phím tắt: V chọn · L tường · A cung · C tròn · R chữ nhật · F sàn · D cửa · K vách kính · G/H trục · M dời · Q xoay · E co giãn · N sao chép</span>
@@ -516,17 +578,19 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
         onFinish={f => { if (selRoom) { if (f.group === 'Trần') setRoom(selRoom.id, { ceil: f.id }); else setRoom(selRoom.id, { floor: f.id }) } else if (selWall) setWall(selWall.id, { finish: f.id }); else if (selDoor) setDoor(selDoor.id, f.group === 'Cửa / khung' || f.group === 'Của tôi' ? { finish: f.id } : {}) }}
         onAddImage={async (file, name, sz, group) => { const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file) }); const c = document.createElement('canvas'), k = Math.min(1, 384 / Math.max(img.width, img.height)); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height); setCustom(cs => [{ id: 'my-' + uid(''), group, name, color: '#cccccc', pattern: 'image', size: sz, img: c.toDataURL('image/jpeg', 0.82) }, ...cs]) }}
         onRemoveCustom={id => setCustom(cs => cs.filter(c => c.id !== id))} />}
-      {mode === '3d' ? <Scene3D model={M} view={view3} custom={custom} customDoors={customDoors} ceiling={ceiling} showFurn={showFurn} /> :
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 250px', gap: 10, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '88px minmax(0,1fr) 250px', gap: 10, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gap: 4, alignContent: 'start' }}>{palette}</div>
+        <div style={{ display: 'grid', gap: 6, minWidth: 0 }}>{optBar}
+      {mode === '3d' ? <Scene3D model={M} view={view3} custom={custom} customDoors={customDoors} ceiling={ceiling} showFurn={showFurn} sel={sel} lay={lay3} lock={lock} fgHide={fgHide} onPick={s => { setSel(s); setTool('select') }} onMoveSel={moveSel} /> :
           <div ref={box} style={{ position: 'relative', height: '72vh', border: '1px solid #ddd', background: '#fff', overflow: 'hidden', touchAction: 'none', userSelect: 'none', cursor: tool === 'select' ? 'default' : 'crosshair' }}
             onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onDoubleClick={onDouble} onContextMenu={e => { e.preventDefault(); setPending(null); setPts([]) }}>
             {under && base?.draw?.length ? <div style={{ position: 'absolute', inset: 0, opacity: 0.6, pointerEvents: 'none' }}><LinesCanvas base={base} vb={vbPt} size={size} /></div> : null}
             <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-              {(M.rooms ?? []).map((r, i) => <path key={r.id} d={ringPath(r.poly)} fill={`hsl(${(i * 47) % 360} 70% 70%)`} fillOpacity={selRoom?.id === r.id ? 0.55 : 0.35} stroke={selRoom?.id === r.id ? '#e07000' : 'none'} strokeWidth={2} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />)}
-              {showFurn && (M.furn ?? []).map(f => <FurnGlyph key={f.id} f={f} sel={selFurn?.id === f.id} onDown={onFurnDown} />)}
-              {(M.axes ?? []).length > 0 && (() => { const ax = M.axes ?? [], [x0, y0, x1, y1] = wb, e1 = hs * 7, br = hs * 3.4, red = '#c0392b'
+              {lay.rooms && (M.rooms ?? []).map((r, i) => <path key={r.id} d={ringPath(r.poly)} fill={`hsl(${(i * 47) % 360} 70% 70%)`} fillOpacity={selRoom?.id === r.id ? 0.55 : 0.35} stroke={selRoom?.id === r.id ? '#e07000' : 'none'} strokeWidth={2} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />)}
+              {showFurn && (M.furn ?? []).filter(f => !fgHide.includes(furnTypeOf(f.kind).group)).map(f => <FurnGlyph key={f.id} f={f} sel={selFurn?.id === f.id} onDown={onFurnDown} />)}
+              {lay.axes && (M.axes ?? []).length > 0 && (() => { const ax = M.axes ?? [], [x0, y0, x1, y1] = wb, e1 = hs * 7, br = hs * 3.4, red = '#c0392b'
                 const vs = ax.filter(a => a.dir === 'v').sort((a, b) => a.pos - b.pos), hh = ax.filter(a => a.dir === 'h').sort((a, b) => a.pos - b.pos)
-                const down = (e: React.PointerEvent, a: { id: string; dir: 'v' | 'h'; pos: number }) => { if (tool !== 'select') return; e.stopPropagation(); setSel({ t: 'axis', id: a.id }); drag.current = { k: 'axisMove', id: a.id, orig: a, moved: false }; (box.current as HTMLElement).setPointerCapture(e.pointerId) }
+                const down = (e: React.PointerEvent, a: { id: string; dir: 'v' | 'h'; pos: number }) => { if (tool !== 'select' || lock.axes) return; e.stopPropagation(); setSel({ t: 'axis', id: a.id }); drag.current = { k: 'axisMove', id: a.id, orig: a, moved: false }; (box.current as HTMLElement).setPointerCapture(e.pointerId) }
                 return <g>{ax.map(a => { const on = selAxis?.id === a.id, v = a.dir === 'v', xa = v ? a.pos : x0 - e1, ya = v ? y0 - e1 : a.pos, xb = v ? a.pos : x1 + e1, yb = v ? y1 + e1 : a.pos, bx = v ? a.pos : x0 - e1 - br, by = v ? y0 - e1 - br : a.pos
                   return <g key={a.id}><line x1={xa} y1={ya} x2={xb} y2={yb} stroke={on ? '#e07000' : red} strokeWidth={on ? 1.8 : 1} strokeDasharray="14 4 2 4" vectorEffect="non-scaling-stroke" opacity={0.8} style={{ pointerEvents: 'none' }} />
                     <line x1={xa} y1={ya} x2={xb} y2={yb} stroke="transparent" strokeWidth={9} vectorEffect="non-scaling-stroke" style={{ cursor: 'move' }} onPointerDown={e => down(e, a)} />
@@ -534,11 +598,11 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
                     <text x={bx} y={by + fsz * 0.35} textAnchor="middle" fontSize={fsz} fontWeight="bold" fill={on ? '#e07000' : red} style={{ pointerEvents: 'none', userSelect: 'none' }}>{a.name}</text></g> })}
                   {vs.length > 1 && <g style={{ pointerEvents: 'none' }}><line x1={vs[0].pos} y1={y0 - hs * 3} x2={vs[vs.length - 1].pos} y2={y0 - hs * 3} stroke={red} strokeWidth={0.8} vectorEffect="non-scaling-stroke" />{vs.map((a, i) => <g key={a.id}><line x1={a.pos} y1={y0 - hs * 4} x2={a.pos} y2={y0 - hs * 2} stroke={red} strokeWidth={1} vectorEffect="non-scaling-stroke" />{i > 0 && <text x={(a.pos + vs[i - 1].pos) / 2} y={y0 - hs * 3.6} textAnchor="middle" fontSize={fsz * 0.85} fill={red}>{mm(a.pos - vs[i - 1].pos)}</text>}</g>)}</g>}
                   {hh.length > 1 && <g style={{ pointerEvents: 'none' }}><line x1={x0 - hs * 3} y1={hh[0].pos} x2={x0 - hs * 3} y2={hh[hh.length - 1].pos} stroke={red} strokeWidth={0.8} vectorEffect="non-scaling-stroke" />{hh.map((a, i) => <g key={a.id}><line x1={x0 - hs * 4} y1={a.pos} x2={x0 - hs * 2} y2={a.pos} stroke={red} strokeWidth={1} vectorEffect="non-scaling-stroke" />{i > 0 && <text transform={`translate(${x0 - hs * 3.6} ${(a.pos + hh[i - 1].pos) / 2}) rotate(-90)`} textAnchor="middle" fontSize={fsz * 0.85} fill={red}>{mm(a.pos - hh[i - 1].pos)}</text>}</g>)}</g>}</g> })()}
-              {M.walls.map(w => <WallPath key={w.id} w={w} sel={selWall?.id === w.id} onDown={onWallDown} />)}
-              {M.walls.map(w => kindOf(w.kind).glass && w.shape.type === 'seg' ? <GlassTicks key={'g' + w.id} w={w} panel={w.panel ?? kindOf(w.kind).panel ?? 1.2} /> : null)}
-              {M.doors.map(d => <DoorGlyph key={d.id} d={d} sel={selDoor?.id === d.id} frame={doorSpec(d.lib, customDoors)?.frame ?? 0.05} onDown={onDoorDown} />)}
-              {(M.dims ?? []).map(d => <DimGlyph key={d.id} d={d} sel={selDim?.id === d.id} fs={fsz} mm={dimMm} onDown={onDimDown} />)}
-              {(M.rooms ?? []).map(r => { const c = centroid(r.poly), a = r.area ?? polyArea(r.poly); return <text key={'t' + r.id} x={c[0]} y={c[1]} textAnchor="middle" fontSize={fsz * 1.1} fill="#111" stroke="#fff" strokeWidth={fsz * 0.25} paintOrder="stroke" style={{ cursor: 'pointer', userSelect: 'none' }} onPointerDown={e => { if (tool === 'select') { e.stopPropagation(); setSel({ t: 'room', id: r.id }) } }}><tspan x={c[0]} dy={-fsz * 0.1} fontWeight="bold">{r.name}</tspan><tspan x={c[0]} dy={fsz * 1.25}>{a.toFixed(1)} m²</tspan>{showLv && <tspan x={c[0]} dy={fsz * 1.2} fontSize={fsz * 0.85} fill="#0b6bcb">▽ {fz(r.z ?? 0)} · trần {fz(r.ceilH ?? M.hWall)}</tspan>}</text> })}
+              {M.walls.filter(w => w.role === 'col' ? lay.cols : lay.walls).map(w => <WallPath key={w.id} w={w} sel={selWall?.id === w.id} onDown={onWallDown} />)}
+              {lay.walls && M.walls.map(w => kindOf(w.kind).glass && w.shape.type === 'seg' ? <GlassTicks key={'g' + w.id} w={w} panel={w.panel ?? kindOf(w.kind).panel ?? 1.2} /> : null)}
+              {lay.doors && M.doors.map(d => <DoorGlyph key={d.id} d={d} sel={selDoor?.id === d.id} frame={doorSpec(d.lib, customDoors)?.frame ?? 0.05} onDown={onDoorDown} />)}
+              {lay.dims && (M.dims ?? []).map(d => <DimGlyph key={d.id} d={d} sel={selDim?.id === d.id} fs={fsz} mm={dimMm} onDown={onDimDown} />)}
+              {lay.rooms && lay.labels && (M.rooms ?? []).map(r => { const c = centroid(r.poly), a = r.area ?? polyArea(r.poly); return <text key={'t' + r.id} x={c[0]} y={c[1]} textAnchor="middle" fontSize={fsz * 1.1} fill="#111" stroke="#fff" strokeWidth={fsz * 0.25} paintOrder="stroke" style={{ cursor: 'pointer', userSelect: 'none' }} onPointerDown={e => { if (tool === 'select' && !lock.rooms) { e.stopPropagation(); setSel({ t: 'room', id: r.id }) } }}><tspan x={c[0]} dy={-fsz * 0.1} fontWeight="bold">{r.name}</tspan><tspan x={c[0]} dy={fsz * 1.25}>{a.toFixed(1)} m²</tspan>{showLv && <tspan x={c[0]} dy={fsz * 1.2} fontSize={fsz * 0.85} fill="#0b6bcb">▽ {fz(r.z ?? 0)} · trần {fz(r.ceilH ?? M.hWall)}</tspan>}</text> })}
               {selRoom && selRoom.poly.map((a, i) => { const b = selRoom.poly[(i + 1) % selRoom.poly.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); return L < 0.3 ? null : <text key={'re' + i} x={(a[0] + b[0]) / 2} y={(a[1] + b[1]) / 2} fontSize={fsz * 0.85} textAnchor="middle" fill="#c0392b" stroke="#fff" strokeWidth={fsz * 0.2} paintOrder="stroke" style={{ pointerEvents: 'none' }}>{fmtLen(L, dimMm)}</text> })}
               {selDim && (() => { const d = selDim, L = Math.hypot(d.b[0] - d.a[0], d.b[1] - d.a[1]) || 1, nx = -(d.b[1] - d.a[1]) / L * d.off, ny = (d.b[0] - d.a[0]) / L * d.off, mo: Pt = [(d.a[0] + d.b[0]) / 2 + nx, (d.a[1] + d.b[1]) / 2 + ny]
                 return <>{(['dimA', 'dimB'] as const).map(k => { const q = k === 'dimA' ? d.a : d.b; return <circle key={k} cx={q[0]} cy={q[1]} r={hs * 1.2} fill="#fff" stroke="#e07000" strokeWidth={1.6} vectorEffect="non-scaling-stroke" style={{ cursor: 'grab' }} onPointerDown={e => onDimHandle(e, d.id, k)} /> })}
@@ -587,8 +651,10 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><button className="btn sm primary" onClick={applyEd}>Áp dụng ↵</button>{ed.k !== 'seg' && <button className="btn sm" onClick={addVertexEd}>＋ Thêm đỉnh tại đây</button>}<button className="btn sm" onClick={() => setEd(null)}>Đóng</button></div></div> })()}
             <div className="muted small" style={{ position: 'absolute', left: 6, bottom: 4, background: 'rgba(255,255,255,.85)', padding: '0 4px' }}>
               {tool === 'axisV' || tool === 'axisH' ? 'Bấm vào vị trí đặt trục (tự hút vào tâm cột / đầu mút) · Esc để dừng' : tool === 'wall' || tool === 'glasskit' ? (shp === 'arc' ? 'Cung: bấm điểm đầu, điểm cuối, rồi điểm nằm trên cung' : shp === 'circle' ? 'Tròn: bấm tâm rồi bấm điểm trên đường tròn' : shp === 'rect' ? 'Chữ nhật: bấm hai góc đối diện' : 'Bấm điểm đầu, rồi các điểm tiếp theo · gõ số mm + Enter để đặt đúng chiều dài · Esc/chuột phải để dừng') : tool === 'dim' ? 'Bấm điểm đầu, điểm cuối, rồi bấm để kéo đường kích thước ra' : tool === 'room' ? 'Bấm vào bên trong một không gian kín' : tool === 'roomPoly' ? (shp === 'line' || shp === 'arc' ? 'Bấm từng góc sàn; bấm lại điểm đầu hoặc Enter để chốt' : shp === 'circle' ? 'Bấm tâm rồi bấm điểm trên đường tròn' : 'Bấm hai góc đối diện') : tool === 'furn' ? 'Bấm để đặt món nội thất' : tool !== 'select' ? 'Bấm sát vào tường để đặt cửa' : 'Cuộn = zoom · kéo nền = dời · bấm tường/cửa để chọn · Del = xoá · Ctrl+Z = hoàn tác'}</div>
-          </div>
+          </div>}
+        </div>
           <div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
+            {layersPanel}
             {selWall ? <div className="card" style={{ display: 'grid', gap: 6 }}>
               <b>{selWall.role === 'col' ? 'Cột' : 'Tường'} {selWall.auto ? '(tự nhận từ bản vẽ)' : selWall.shape.type === 'seg' ? '(thêm tay)' : '(từ DXF)'}</b>
               <label>Loại <select value={selWall.role} onChange={e => setWall(selWall.id, { role: e.target.value as 'wall' | 'col' })}><option value="wall">Tường</option><option value="col">Cột</option></select></label>
@@ -658,7 +724,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
             {!selWall && !selDoor && !selRoom && !selDim && !selFurn && !selAxis && <div className="muted small card">Chọn một đoạn tường, cột, cửa hoặc phòng để sửa.<br />Tường nhập từ DXF kéo được cả khối hoặc từng đỉnh. Tường thêm tay có hai đầu kéo được, sửa được độ dày và độ dài.<br /><br />{M.walls.length} khối tường/cột · {M.doors.length} cửa · {(M.furn ?? []).length} món nội thất</div>}
             {(M.rooms ?? []).length > 0 && <div className="card small" style={{ display: 'grid', gap: 3 }}><b>Danh sách phòng</b>{(M.rooms ?? []).map(r => <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', cursor: 'pointer', fontWeight: selRoom?.id === r.id ? 700 : 400 }} onClick={() => setSel({ t: 'room', id: r.id })}><span>{r.name}</span><span>{(r.area ?? polyArea(r.poly)).toFixed(1)} m²</span></div>)}<div style={{ borderTop: '1px solid #ddd', paddingTop: 3, display: 'flex', justifyContent: 'space-between' }}><b>Tổng</b><b>{(M.rooms ?? []).reduce((n, r) => n + (r.area ?? polyArea(r.poly)), 0).toFixed(1)} m²</b></div></div>}
           </div>
-        </div>}
+        </div>
     </>}
   </div>
 }
