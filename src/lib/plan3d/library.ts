@@ -210,7 +210,7 @@ export function buildDoor(d: Door, spec: DoorSpec | undefined, custom: Finish[],
     if (leaf === 'glassHalf') box(lw - 0.2, lh * 0.35, 0.05, x, y + lh * 0.2, z, glassMat)
     if (glassLeaf) { const f2 = leaf === 'glass' ? 0.05 : 0.03; box(lw, f2, 0.04, x, y + lh / 2 - f2 / 2, z, mFrame); box(lw, f2, 0.04, x, y - lh / 2 + f2 / 2, z, mFrame); box(f2, lh, 0.04, x - lw / 2 + f2 / 2, y, z, mFrame); box(f2, lh, 0.04, x + lw / 2 - f2 / 2, y, z, mFrame); box(lw - 2 * f2, lh - 2 * f2, 0.012, x, y, z, glassMat) }
   }
-  const hnd = (x: number, y: number, z: number) => { if (spec?.handle === false) return; box(0.12, 0.022, 0.025, x, y, z + 0.045, mh); box(0.03, 0.03, 0.05, x + (x < 0 ? 0.05 : -0.05), y, z + 0.025, mh) }
+  const hnd = (x: number, y: number, z: number) => { if (spec?.handle === false) return; for (const sd of [1, -1]) { box(0.15, 0.026, 0.026, x, y, z + sd * 0.062, mh); box(0.05, 0.05, 0.008, x + (x < 0 ? 0.06 : -0.06), y, z + sd * 0.026, mh); box(0.026, 0.026, 0.04, x + (x < 0 ? 0.06 : -0.06), y, z + sd * 0.046, mh) } }
   if (leaf === 'none') return g
   const n = d.kind === 'double' ? 2 : leaf === 'sliding' || leaf === 'fold' ? (spec?.panes ?? 2) : leaf === 'casement' || leaf === 'fixed' ? (spec?.panes ?? 1) : 1
   if (leaf === 'sliding' || leaf === 'fold') { const pw = iw / n; for (let i = 0; i < n; i++) leafBox(pw + 0.02, ih, -iw / 2 + pw * (i + 0.5), y0 + ih / 2, (i % 2 ? 1 : -1) * 0.025) }

@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { wallParts, kindOf, inside, type Model, type Pt } from '../lib/plan3d/model'
+import { doorGapParts, wallParts, kindOf, inside, type Model, type Pt } from '../lib/plan3d/model'
 import { buildFurn } from '../lib/plan3d/furn3d'
 import { furnTypeOf } from '../lib/plan3d/furn'
 import { buildDoor, doorSpec, finishOf, materialFor, type DoorSpec, type Finish } from '../lib/plan3d/library'
@@ -17,15 +17,15 @@ export type Pick3 = { t: 'wall' | 'door' | 'room' | 'furn'; id: string } | null
 export type Lay3 = { walls: boolean; cols: boolean; doors: boolean; furn: boolean; rooms: boolean }
 type Opt3 = { sel: { t: string; id: string } | null; lay: Lay3; fgHide: string[] }
 const LAY_ALL: Lay3 = { walls: true, cols: true, doors: true, furn: true, rooms: true }
-export default function Scene3D({ model, view, custom = [], customDoors = [], ceiling = false, showFurn = true, sel = null, lay = LAY_ALL, lock = {}, fgHide = [], onPick, onMoveSel }: { model: Model; showFurn?: boolean; view: number; custom?: Finish[]; customDoors?: DoorSpec[]; ceiling?: boolean; sel?: { t: string; id: string } | null; lay?: Lay3; lock?: Record<string, boolean>; fgHide?: string[]; onPick?: (s: Pick3) => void; onMoveSel?: (s: NonNullable<Pick3>, dx: number, dy: number) => void }) {
-  const cbs = useRef<{ onPick?: (s: Pick3) => void; onMoveSel?: (s: NonNullable<Pick3>, dx: number, dy: number) => void; lock: Record<string, boolean> }>({ lock: {} })
-  cbs.current = { onPick, onMoveSel, lock }
+export default function Scene3D({ model, view, custom = [], customDoors = [], ceiling = false, showFurn = true, sel = null, lay = LAY_ALL, lock = {}, fgHide = [], pan = false, onPick, onMoveSel }: { pan?: boolean; model: Model; showFurn?: boolean; view: number; custom?: Finish[]; customDoors?: DoorSpec[]; ceiling?: boolean; sel?: { t: string; id: string } | null; lay?: Lay3; lock?: Record<string, boolean>; fgHide?: string[]; onPick?: (s: Pick3) => void; onMoveSel?: (s: NonNullable<Pick3>, dx: number, dy: number) => void }) {
+  const cbs = useRef<{ onPick?: (s: Pick3) => void; onMoveSel?: (s: NonNullable<Pick3>, dx: number, dy: number) => void; lock: Record<string, boolean>; pan?: boolean }>({ lock: {} })
+  cbs.current = { onPick, onMoveSel, lock, pan }
   const cv = useRef<HTMLCanvasElement>(null), api = useRef<{ set: (m: Model, c: Finish[], cd: DoorSpec[], ceil: boolean, sf: boolean, o: Opt3) => void; reset: (k: number) => void } | null>(null)
   useEffect(() => {
     const c = cv.current!; const r = new THREE.WebGLRenderer({ canvas: c, antialias: true }); r.setPixelRatio(Math.min(2, devicePixelRatio))
     const scene = new THREE.Scene(); scene.background = new THREE.Color(0xf3f1ec)
     scene.add(new THREE.HemisphereLight(0xffffff, 0x998f80, 1.15)); const sun = new THREE.DirectionalLight(0xffffff, 1.1); sun.position.set(40, 80, 20); scene.add(sun)
-    const cam = new THREE.PerspectiveCamera(45, 1, 0.1, 2000), ctl = new OrbitControls(cam, c); ctl.enableDamping = true
+    const cam = new THREE.PerspectiveCamera(45, 1, 0.1, 2000), ctl = new OrbitControls(cam, c); ctl.enableDamping = true; ctl.screenSpacePanning = true; ctl.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }; ctl.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }; c.addEventListener('contextmenu', ev => ev.preventDefault())
     let grp = new THREE.Group(); scene.add(grp); let bb = { x: 0, y: 0, w: 10, h: 10 }, raf = 0
     const dispose = (g: THREE.Group) => { g.traverse(o => { const m = o as THREE.Mesh; if (m.geometry) m.geometry.dispose(); const mt = m.material as THREE.Material | THREE.Material[] | undefined; if (mt) (Array.isArray(mt) ? mt : [mt]).forEach(x => x.dispose()) }) }
     const mats: Record<string, THREE.Material> = {}
@@ -58,9 +58,8 @@ export default function Scene3D({ model, view, custom = [], customDoors = [], ce
       for (const d of M.doors) {
         if (!o.lay.doors) break // cánh cửa, khung, kính… theo thư viện
         const m = buildDoor(d, doorSpec(d.lib, cd), cf, d.t ?? 0.2); m.position.set(d.x, d.sill, d.y); m.rotation.y = -d.ang; if (d.flip) m.scale.z = -1; m.userData.sel = { t: 'door', id: d.id }; m.userData.cat = 'doors'; grp.add(m)
-        if (d.auto && d.kind !== 'window' && d.sill + d.h < M.hWall - 0.05) { // lanh-tô trên đầu cửa (nét tường đã bị hở)
-          const lt = new THREE.Mesh(new THREE.BoxGeometry(d.w, M.hWall - d.sill - d.h, (d.t ?? 0.2)), mat('brick')); lt.position.set(d.x, d.sill + d.h + (M.hWall - d.sill - d.h) / 2, d.y); lt.rotation.y = -d.ang; grp.add(lt)
-        }
+        const gp = doorGapParts(d, M) // tường thiếu trên đầu cửa / dưới bệ: tự bù cho khớp cao độ tường
+        for (const q of gp.parts) { const g = new THREE.ExtrudeGeometry(shapeOf(q.poly), { depth: q.z1 - q.z0, bevelEnabled: false }); g.rotateX(-Math.PI / 2); g.translate(0, q.z0, 0); grp.add(new THREE.Mesh(g, mat(gp.wall?.kind ?? 'brick', gp.wall?.finish))); grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 35), edgeMat)) }
       }
       if (sf && o.lay.furn) for (const f of M.furn ?? []) { if (o.fgHide.includes(furnTypeOf(f.kind).group)) continue; const g = buildFurn(f); g.userData.sel = { t: 'furn', id: f.id }; g.userData.cat = 'furn'; const rm = (M.rooms ?? []).find(r => r.z && inside([f.x, f.y], r.poly)); if (rm) g.position.y += rm.z ?? 0; grp.add(g) }
       for (const r of M.rooms ?? []) { // sàn & trần theo vật liệu của phòng
@@ -79,7 +78,7 @@ export default function Scene3D({ model, view, custom = [], customDoors = [], ce
     const setRay = (e: PointerEvent) => { const rc = c.getBoundingClientRect(); ndc.set(((e.clientX - rc.left) / rc.width) * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1); ray.setFromCamera(ndc, cam) }
     const hitOwner = (e: PointerEvent) => { setRay(e); for (const h of ray.intersectObjects(grp.children, true)) { let ob: THREE.Object3D | null = h.object; while (ob && !ob.userData.sel) ob = ob.parent; if (ob && !cbs.current.lock[ob.userData.cat]) return { obj: ob, point: h.point } } return null }
     const onDown3 = (e: PointerEvent) => {
-      if (e.button !== 0) return
+      if (e.button !== 0 || cbs.current.pan || e.shiftKey) return
       const h = hitOwner(e); down = { x: e.clientX, y: e.clientY }
       if (!h) return
       e.stopImmediatePropagation(); const sl = h.obj.userData.sel as NonNullable<Pick3>; cbs.current.onPick?.(sl)
@@ -104,7 +103,7 @@ export default function Scene3D({ model, view, custom = [], customDoors = [], ce
       ctl.target.set(cx, 0, cz); ctl.update() }
     const size = () => { const w = c.clientWidth, h = c.clientHeight; if (!w || !h) return; r.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix() }
     const ro = new ResizeObserver(size); ro.observe(c); size()
-    const loop = () => { ctl.update(); r.render(scene, cam); raf = requestAnimationFrame(loop) }; loop()
+    const loop = () => { ctl.mouseButtons.LEFT = cbs.current.pan ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE; ctl.update(); r.render(scene, cam); raf = requestAnimationFrame(loop) }; loop()
     api.current = { set, reset }
     return () => { c.removeEventListener('pointerdown', onDown3, true); c.removeEventListener('pointermove', onMove3); c.removeEventListener('pointerup', onUp3); cancelAnimationFrame(raf); ro.disconnect(); ctl.dispose(); dispose(grp); r.dispose(); api.current = null }
   }, [])

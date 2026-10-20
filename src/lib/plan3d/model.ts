@@ -290,6 +290,22 @@ export function wallParts(w: Wall, M: Model): Part[] {
   return parts
 }
 
+/** Phần tường tự thêm cho cửa nằm ở chỗ hở (không có tường): lanh-tô trên đầu cửa (đến cao độ tường) và đoạn dưới bệ cửa sổ. Trả về tường gần nhất để lấy vật liệu. */
+export function doorGapParts(d: Door, M: Model): { parts: Part[]; wall?: Wall } {
+  const t = Math.max(d.t ?? 0.2, 0.08), rect = doorRect(d, t), bb = bbox([rect])
+  let wall: Wall | undefined, bd = 1e9; const fps: Pt[][][] = []
+  for (const w of M.walls) {
+    if (w.role === 'col') continue
+    const fp = footprint(w), b = bbox(fp), dx = Math.max(b.x0 - d.x, 0, d.x - b.x1), dy = Math.max(b.y0 - d.y, 0, d.y - b.y1), dist = Math.hypot(dx, dy)
+    if (dist < bd) { bd = dist; wall = w }
+    if (b.x1 >= bb.x0 && b.x0 <= bb.x1 && b.y1 >= bb.y0 && b.y0 <= bb.y1) fps.push(fp)
+  }
+  let gap: Pt[][][]; try { gap = (fps.length ? polygonClipping.difference([rect] as any, ...fps.map(f => f as any)) : [[rect]]) as unknown as Pt[][][] } catch { return { parts: [], wall } }
+  const H = wall ? wallH(wall, M) : M.hWall, top = Math.min(H, d.sill + d.h), parts: Part[] = []
+  for (const poly of gap) { if (polyArea(poly[0]) < 0.003) continue; if (top < H - 1e-3) parts.push({ poly, z0: top, z1: H }); if (d.sill > 1e-3) parts.push({ poly, z0: 0, z1: Math.min(d.sill, H) }) }
+  return { parts, wall }
+}
+
 /** Gợi ý vị trí đặt cửa: điểm gần nhất trên cạnh tường (kèm hướng cạnh) */
 export function snapToWall(M: Model, p: Pt, tol: number, w = 0.9): { x: number; y: number; ang: number; thick: number } | null {
   let best: { x: number; y: number; ang: number; thick: number } | null = null, bd = tol, ends: Pt[] = [], edge: [Pt, Pt] | null = null
