@@ -18,11 +18,11 @@ import { applyXf, buildShape, detectAxes, joinEnds, furnHitsWall, mkMove, mkRot,
 type Box = { x: number; y: number; w: number; h: number }
 type Tool = 'select' | 'wall' | 'glasskit' | 'axisV' | 'axisH' | 'dim' | 'room' | 'roomPoly' | 'door' | 'col' | 'furn'
 type Sel = { t: 'wall' | 'door' | 'room' | 'dim' | 'furn' | 'axis'; id: string } | null
-type SnapKind = '' | 'end' | 'mid' | 'cen' | 'int' | 'per' | 'nea' | 'axis' | 'polar' | 'grid'
-const SNAP_LABEL: Record<string, string> = { end: 'Đầu mút', mid: 'Điểm giữa', cen: 'Tâm', int: 'Giao điểm', per: 'Vuông góc', nea: 'Gần nhất', axis: 'Trục', polar: 'Góc cực / ngang-dọc', grid: 'Lưới' }
+type SnapKind = '' | 'align' | 'end' | 'mid' | 'cen' | 'int' | 'per' | 'nea' | 'axis' | 'polar' | 'grid'
+const SNAP_LABEL: Record<string, string> = { align: 'Dóng hàng', end: 'Đầu mút', mid: 'Điểm giữa', cen: 'Tâm', int: 'Giao điểm', per: 'Vuông góc', nea: 'Gần nhất', axis: 'Trục', polar: 'Góc cực / ngang-dọc', grid: 'Lưới' }
 const LAY0 = { walls: true, cols: true, doors: true, furn: true, rooms: true, labels: true, dims: true, axes: true }
 const LOCK0 = { walls: false, cols: false, doors: false, furn: false, rooms: false, dims: false, axes: false }
-const SM0 = { end: true, mid: true, cen: true, int: true, per: true, nea: true, axis: true, polar: false, grid: false }
+const SM0 = { align: true, end: true, mid: true, cen: true, int: true, per: true, nea: true, axis: true, polar: false, grid: false }
 const KEY = 'plan3d-model-v1'
 const ringPath = (r: Pt[]) => 'M' + r.map(p => p[0].toFixed(3) + ' ' + p[1].toFixed(3)).join('L') + 'Z'
 
@@ -98,7 +98,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const [busy, setBusy] = useState(''), [err, setErr] = useState('')
   const [tool, setTool] = useState<Tool>('select'), [sel, setSel] = useState<Sel>(null)
   const [mode, setMode] = useState<'2d' | '3d'>('2d'), [view3, setView3] = useState(0)
-  const [ortho, setOrtho] = useState(true), [under, setUnder] = useState(true), [libFurn, setLibFurn] = useState('chair'), [dimMm, setDimMm] = useState(true), [newPanel, setNewPanel] = useState(1.2), [shp, setShp] = useState<Shape>('line'), [autoJoin, setAutoJoin] = useState(true), [autoMatch, setAutoMatch] = useState(true), [lay, setLay] = useState<typeof LAY0>(() => { try { return { ...LAY0, ...JSON.parse(localStorage.getItem('plan3d-lay') ?? '{}') } } catch { return LAY0 } }), [lock, setLock] = useState<typeof LOCK0>(() => { try { return { ...LOCK0, ...JSON.parse(localStorage.getItem('plan3d-lock') ?? '{}') } } catch { return LOCK0 } }), [fgHide, setFgHide] = useState<string[]>([]), [showLayers, setShowLayers] = useState(false), [sm, setSm] = useState<typeof SM0>(() => { try { return { ...SM0, ...JSON.parse(localStorage.getItem('plan3d-snap') ?? '{}') } } catch { return SM0 } }), [showLv, setShowLv] = useState(true), [hud, setHud] = useState<{ p: Pt; t: string } | null>(null), [lenBuf, setLenBuf] = useState(''), [ed, setEd] = useState<{ k: 'poly' | 'seg' | 'room'; id: string; ring: number; vi: number; q: Pt } | null>(null), [edv, setEdv] = useState({ len: '', push: '0', thick: '', fix: 'c' }), [floorFin, setFloorFin] = useState(''), [tf, setTf] = useState({ dx: '0', dy: '0', rot: '90', k: '100', n: '1', cx: '1000', cy: '0' })
+  const [ortho, setOrtho] = useState(true), [under, setUnder] = useState(true), [libFurn, setLibFurn] = useState('chair'), [dimMm, setDimMm] = useState(true), [newPanel, setNewPanel] = useState(1.2), [shp, setShp] = useState<Shape>('line'), [autoJoin, setAutoJoin] = useState(true), [autoMatch, setAutoMatch] = useState(true), [lay, setLay] = useState<typeof LAY0>(() => { try { return { ...LAY0, ...JSON.parse(localStorage.getItem('plan3d-lay') ?? '{}') } } catch { return LAY0 } }), [lock, setLock] = useState<typeof LOCK0>(() => { try { return { ...LOCK0, ...JSON.parse(localStorage.getItem('plan3d-lock') ?? '{}') } } catch { return LOCK0 } }), [fgHide, setFgHide] = useState<string[]>([]), [showLayers, setShowLayers] = useState(false), [sm, setSm] = useState<typeof SM0>(() => { try { return { ...SM0, ...JSON.parse(localStorage.getItem('plan3d-snap') ?? '{}') } } catch { return SM0 } }), [showLv, setShowLv] = useState(true), [guides, setGuides] = useState<[Pt, Pt][]>([]), gref = useRef<[Pt, Pt][]>([]), [hud, setHud] = useState<{ p: Pt; t: string } | null>(null), [lenBuf, setLenBuf] = useState(''), [ed, setEd] = useState<{ k: 'poly' | 'seg' | 'room'; id: string; ring: number; vi: number; q: Pt } | null>(null), [edv, setEdv] = useState({ len: '', push: '0', thick: '', fix: 'c' }), [floorFin, setFloorFin] = useState(''), [tf, setTf] = useState({ dx: '0', dy: '0', rot: '90', k: '100', n: '1', cx: '1000', cy: '0' })
   const hist = useRef<Model[]>([]), [nh, setNh] = useState(0), clip = useRef<Sel>(null), pasteN = useRef(0)
   const [vb, setVb] = useState<Box>({ x: 0, y: 0, w: 100, h: 60 }), [size, setSize] = useState({ w: 0, h: 0 })
   const box = useRef<HTMLDivElement>(null), drag = useRef<any>(null)
@@ -159,7 +159,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const saveJson = () => { if (!M) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(M)], { type: 'application/json' })); a.download = 'mat-bang-3d.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000) }
 
   // ---- Bắt điểm (như CAD): đỉnh / trung điểm / góc đồ / mép tường. Cache theo model để kéo mượt.
-  const snapCache = useRef<{ M: Model; v: Pt[]; e: [Pt, Pt][]; mk: Set<string>; ck: Set<string>; lk: string } | null>(null)
+  const snapCache = useRef<{ M: Model; v: Pt[]; e: [Pt, Pt][]; mk: Set<string>; ck: Set<string>; lk: string; xs: number[]; ys: number[] } | null>(null)
   useEffect(() => { try { localStorage.setItem('plan3d-lay', JSON.stringify(lay)); localStorage.setItem('plan3d-lock', JSON.stringify(lock)) } catch { /* bỏ */ } }, [lay, lock])
   const showFurn = lay.furn
   const lay3 = useMemo(() => ({ walls: lay.walls, cols: lay.cols, doors: lay.doors, furn: lay.furn, rooms: lay.rooms }), [lay])
@@ -168,7 +168,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const pk = (q: Pt) => q[0].toFixed(4) + ',' + q[1].toFixed(4)
   const furnCorners = (f: Furn): Pt[] => { const c = Math.cos(f.ang), s = Math.sin(f.ang); return ([[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]] as [number, number][]).map(([a, b]) => [f.x + c * a * f.w / 2 - s * b * f.d / 2, f.y + s * a * f.w / 2 + c * b * f.d / 2] as Pt) }
   const snapSet = (excl?: string) => {
-    if (!M) return { v: [] as Pt[], e: [] as [Pt, Pt][], mk: new Set<string>(), ck: new Set<string>() }
+    if (!M) return { v: [] as Pt[], e: [] as [Pt, Pt][], mk: new Set<string>(), ck: new Set<string>(), xs: [] as number[], ys: [] as number[] }
     if (!excl && snapCache.current?.M === M && snapCache.current.lk === layKey) return snapCache.current
     const v: Pt[] = [], e: [Pt, Pt][] = [], mk = new Set<string>(), ck = new Set<string>()
     for (const w of M.walls) { if (w.id === excl || !(w.role === 'col' ? lay.cols : lay.walls)) continue
@@ -178,16 +178,30 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     for (const r of M.rooms ?? []) { if (r.id === excl || !lay.rooms) continue; for (const q of r.poly) v.push(q) }
     for (const f of M.furn ?? []) { if (f.id === excl || !lay.furn || fgHide.includes(furnTypeOf(f.kind).group)) continue; const c = furnCorners(f); v.push(...c); ck.add(pk(c[4])); for (let i = 0; i < 4; i++) e.push([c[i], c[(i + 1) % 4]]) }
     for (const dr of M.doors) { if (dr.id === excl || !lay.doors) continue; v.push(...doorRect(dr, dr.t ?? 0.2)) }
-    const out = { M, v, e, mk, ck, lk: layKey }; if (!excl) snapCache.current = out; return out
+    const uq = (a: number[]) => { const r = a.map(x => Math.round(x * 1000) / 1000).sort((p, q) => p - q); return r.filter((x, i) => i === 0 || x !== r[i - 1]) }
+    const xs = uq([...v.map(q => q[0]), ...(lay.axes ? (M.axes ?? []).filter(a => a.dir === 'v').map(a => a.pos) : [])]), ys = uq([...v.map(q => q[1]), ...(lay.axes ? (M.axes ?? []).filter(a => a.dir === 'h').map(a => a.pos) : [])])
+    const out = { M, v, e, mk, ck, lk: layKey, xs, ys }; if (!excl) snapCache.current = out; return out
   }
   /** Độ dời để một nhóm điểm của vật đang kéo bắt vào đối tượng khác: ưu tiên đỉnh, rồi gióng thẳng trục, rồi áp mép (giữ Alt để tắt) */
+  const nearestIn = (a: number[], x: number) => { let lo = 0, hi = a.length - 1; if (hi < 0) return null; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (a[m] < x) lo = m; else hi = m } return Math.abs(a[lo] - x) <= Math.abs(a[hi] - x) ? a[lo] : a[hi] }
+  /** Dóng hàng kiểu Canva: cạnh trái/giữa/phải và trên/giữa/dưới của vật đang kéo căn thẳng với đỉnh/cạnh/tâm/trục của vật khác. Trả về độ dời + các đường dóng. */
+  const alignTo = (kx: number[], ky: number[], box: [number, number, number, number], tol: number, set: { v: Pt[]; xs: number[]; ys: number[] }) => {
+    let bx: { d: number; t: number; k: number } | null = null, by: { d: number; t: number; k: number } | null = null
+    for (const k of kx) { const t = nearestIn(set.xs, k); if (t === null) continue; const d = Math.abs(t - k); if (d < tol && (!bx || d < bx.d)) bx = { d, t, k } }
+    for (const k of ky) { const t = nearestIn(set.ys, k); if (t === null) continue; const d = Math.abs(t - k); if (d < tol && (!by || d < by.d)) by = { d, t, k } }
+    const dx = bx ? bx.t - bx.k : 0, dy = by ? by.t - by.k : 0, g: [Pt, Pt][] = [], [x0, y0, x1, y1] = [box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy]
+    if (bx) { let a = y0, b = y1; for (const q of set.v) if (Math.abs(q[0] - bx.t) < 0.002) { a = Math.min(a, q[1]); b = Math.max(b, q[1]) } g.push([[bx.t, a], [bx.t, b]]) }
+    if (by) { let a = x0, b = x1; for (const q of set.v) if (Math.abs(q[1] - by.t) < 0.002) { a = Math.min(a, q[0]); b = Math.max(b, q[0]) } g.push([[a, by.t], [b, by.t]]) }
+    return { dx, dy, g, hit: !!(bx || by) }
+  }
   const snapDelta = (pts: Pt[], excl: string): { d: Pt; mark: Pt | null } => {
     const tol = vb.w / Math.max(300, size.w) * 10, { v, e } = snapSet(excl); let bd = tol, d: Pt | null = null, mark: Pt | null = null
     for (const p of pts) for (const q of v) { const k = Math.hypot(q[0] - p[0], q[1] - p[1]); if (k < bd) { bd = k; d = [q[0] - p[0], q[1] - p[1]]; mark = q } }
-    if (d) return { d, mark }
+    if (d) { gref.current = []; return { d, mark } }
     let dx = 0, dy = 0, bx = tol, by = tol, mk: Pt | null = null
     for (const p of pts) for (const q of v) { const ax = Math.abs(q[0] - p[0]), ay = Math.abs(q[1] - p[1]); if (ax < bx && ay < tol * 6) { bx = ax; dx = q[0] - p[0]; mk = q } if (ay < by && ax < tol * 6) { by = ay; dy = q[1] - p[1]; mk = q } }
-    if (bx < tol || by < tol) return { d: [bx < tol ? dx : 0, by < tol ? dy : 0], mark: mk }
+    if (bx < tol || by < tol) { gref.current = []; return { d: [bx < tol ? dx : 0, by < tol ? dy : 0], mark: mk } }
+    if (sm.align && pts.length) { const st = snapSet(excl), xsA = pts.map(q => q[0]), ysA = pts.map(q => q[1]), x0 = Math.min(...xsA), x1 = Math.max(...xsA), y0 = Math.min(...ysA), y1 = Math.max(...ysA), al = alignTo([x0, (x0 + x1) / 2, x1, ...xsA], [y0, (y0 + y1) / 2, y1, ...ysA], [x0, y0, x1, y1], tol, st); if (al.hit) { gref.current = al.g; return { d: [al.dx, al.dy], mark: null } } }
     let be = tol * 0.7, ed: Pt | null = null, em: Pt | null = null
     for (const p of pts) for (const [a, b] of e) { const ex = b[0] - a[0], ey = b[1] - a[1], L2 = ex * ex + ey * ey; if (L2 < 1e-9) continue; const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * ex + (p[1] - a[1]) * ey) / L2)), qx = a[0] + t * ex, qy = a[1] + t * ey, k = Math.hypot(qx - p[0], qy - p[1]); if (k < be) { be = k; ed = [qx - p[0], qy - p[1]]; em = [qx, qy] } }
     return ed ? { d: ed, mark: em } : { d: [0, 0], mark: null }
@@ -195,7 +209,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const [snapMark, setSnapMark] = useState<Pt | null>(null)
   const toModel = (e: { clientX: number; clientY: number }): Pt => { const r = box.current!.getBoundingClientRect(); return [vb.x + (e.clientX - r.left) / r.width * vb.w, vb.y + (e.clientY - r.top) / r.height * vb.h] }
   /** Bắt điểm kiểu CAD: đầu mút › giao điểm › giữa › tâm › trục › vuông góc › gần nhất › góc cực/ngang-dọc › lưới */
-  const snapInfo = (p: Pt, from?: Pt | null): { p: Pt; kind: SnapKind } => {
+  const snapInfo = (p: Pt, from?: Pt | null): { p: Pt; kind: SnapKind; g?: [Pt, Pt][] } => {
     if (!M) return { p, kind: '' }
     const tol = vb.w / Math.max(300, size.w) * 8, { v, e, mk, ck } = snapSet()
     let bd = tol, bq: Pt | null = null, bk: SnapKind = ''
@@ -207,12 +221,13 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     if (sm.axis && M.axes?.length) { let x: number | null = null, y: number | null = null; for (const a of M.axes) { if (a.dir === 'v' && Math.abs(p[0] - a.pos) < tol && (x === null || Math.abs(p[0] - a.pos) < Math.abs(p[0] - x))) x = a.pos; if (a.dir === 'h' && Math.abs(p[1] - a.pos) < tol && (y === null || Math.abs(p[1] - a.pos) < Math.abs(p[1] - y))) y = a.pos } if (x !== null || y !== null) return { p: [x ?? p[0], y ?? p[1]], kind: 'axis' } }
     if (sm.per && from) { bd = tol; for (const [a, b] of near) { const ex = b[0] - a[0], ey = b[1] - a[1], L2 = ex * ex + ey * ey, t = ((from[0] - a[0]) * ex + (from[1] - a[1]) * ey) / L2; if (t < 0 || t > 1) continue; const q: Pt = [a[0] + t * ex, a[1] + t * ey], k = Math.hypot(q[0] - p[0], q[1] - p[1]); if (k < bd) { bd = k; bq = q } } if (bq) return { p: bq, kind: 'per' } }
     if (sm.nea) { bd = tol * 0.6; for (const [a, b] of e) { const ex = b[0] - a[0], ey = b[1] - a[1], L2 = ex * ex + ey * ey; if (L2 < 1e-9) continue; const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * ex + (p[1] - a[1]) * ey) / L2)), q: Pt = [a[0] + t * ex, a[1] + t * ey], k = Math.hypot(q[0] - p[0], q[1] - p[1]); if (k < bd) { bd = k; bq = q } } if (bq) return { p: bq, kind: 'nea' } }
+    if (sm.align) { const st = snapSet(), al = alignTo([p[0]], [p[1]], [p[0], p[1], p[0], p[1]], tol, st); if (al.hit) return { p: [p[0] + al.dx, p[1] + al.dy], kind: 'align', g: al.g } }
     if (from && sm.polar) { const dx = p[0] - from[0], dy = p[1] - from[1], L = Math.hypot(dx, dy), st = Math.PI / 12, a = Math.atan2(dy, dx), an = Math.round(a / st) * st; if (L > 1e-6 && Math.abs(a - an) < 0.045) return { p: [from[0] + Math.cos(an) * L, from[1] + Math.sin(an) * L], kind: 'polar' } }
     if (from && ortho) { const dx = p[0] - from[0], dy = p[1] - from[1]; if (Math.abs(dy) < Math.abs(dx) * 0.07) return { p: [p[0], from[1]], kind: 'polar' }; if (Math.abs(dx) < Math.abs(dy) * 0.07) return { p: [from[0], p[1]], kind: 'polar' } }
     if (sm.grid) { const g = 0.1; return { p: [Math.round(p[0] / g) * g, Math.round(p[1] / g) * g], kind: 'grid' } }
     return { p, kind: '' }
   }
-  const snapPt = (p: Pt, from?: Pt | null): Pt => snapInfo(p, from).p
+  const snapPt = (p: Pt, from?: Pt | null): Pt => { const r = snapInfo(p, from); gref.current = r.g ?? []; return r.p }
 
   const onWallDown = (e: React.PointerEvent, w: Wall) => {
     if (tool !== 'select' || (w.role === 'col' ? lock.cols : lock.walls)) return
@@ -309,13 +324,16 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     }
     setSel(null); drag.current = { k: 'pan', x: e.clientX, y: e.clientY, vb }; (box.current as HTMLElement).setPointerCapture(e.pointerId)
   }
-  const onMove = (e: React.PointerEvent) => {
+  const onMove = (e: React.PointerEvent) => { onMoveInner(e); const g = gref.current; if (g.length || guides.length) setGuides(g) }
+  const onMoveInner = (e: React.PointerEvent) => {
+    gref.current = []
     const d = drag.current, p = toModel(e); setCursor(p)
     if (!d || !M) return
+    gref.current = []
     if (d.k === 'pan') { const r = box.current!.getBoundingClientRect(), s = d.vb.w / r.width; setVb({ ...d.vb, x: d.vb.x - (e.clientX - d.x) * s, y: d.vb.y - (e.clientY - d.y) * s }); return }
     if (!d.moved) { hist.current.push(M); setNh(hist.current.length); d.moved = true }
     const upd = (f: (w: Wall) => Wall) => setM(cur => cur && { ...cur, walls: cur.walls.map(w => w.id === d.id ? f(d.orig) : w) })
-    if (d.k === 'moveWall') { let dx = p[0] - d.p0[0], dy = p[1] - d.p0[1]; const o = d.orig as Wall, mp = (o.shape.type === 'poly' ? o.shape.rings.flat() : [o.shape.a, o.shape.b]).filter((_, i, a) => a.length <= 40 || i % Math.ceil(a.length / 40) === 0).map(q => [q[0] + dx, q[1] + dy] as Pt), sn = e.altKey ? { d: [0, 0] as Pt, mark: null } : snapDelta(mp, o.id); dx += sn.d[0]; dy += sn.d[1]; setSnapMark(sn.mark); setHud({ p, t: `Δx ${mm(dx)} · Δy ${mm(dy)} mm` }); upd(w => w.shape.type === 'poly' ? { ...w, shape: { type: 'poly', rings: w.shape.rings.map(r => r.map(q => [q[0] + dx, q[1] + dy] as Pt)) } } : { ...w, shape: { ...w.shape, a: [w.shape.a[0] + dx, w.shape.a[1] + dy], b: [w.shape.b[0] + dx, w.shape.b[1] + dy] } }) }
+    if (d.k === 'moveWall') { let dx = p[0] - d.p0[0], dy = p[1] - d.p0[1]; const o = d.orig as Wall, mp = (o.shape.type === 'poly' ? o.shape.rings.flat() : [o.shape.a, o.shape.b, ...footprint(o).flat()]).filter((_, i, a) => a.length <= 40 || i % Math.ceil(a.length / 40) === 0).map(q => [q[0] + dx, q[1] + dy] as Pt), sn = e.altKey ? { d: [0, 0] as Pt, mark: null } : snapDelta(mp, o.id); dx += sn.d[0]; dy += sn.d[1]; setSnapMark(sn.mark); setHud({ p, t: `Δx ${mm(dx)} · Δy ${mm(dy)} mm` }); upd(w => w.shape.type === 'poly' ? { ...w, shape: { type: 'poly', rings: w.shape.rings.map(r => r.map(q => [q[0] + dx, q[1] + dy] as Pt)) } } : { ...w, shape: { ...w.shape, a: [w.shape.a[0] + dx, w.shape.a[1] + dy], b: [w.shape.b[0] + dx, w.shape.b[1] + dy] } }) }
     else if (d.k === 'vertex') { const q = snapPt(p), ov = (d.orig as Wall).shape.type === 'poly' ? ((d.orig as Wall).shape as { rings: Pt[][] }).rings[d.ring][d.vi] : q; setHud({ p: q, t: `Δx ${mm(q[0] - ov[0])} · Δy ${mm(q[1] - ov[1])} mm` }); upd(w => w.shape.type === 'poly' ? { ...w, shape: { type: 'poly', rings: w.shape.rings.map((r, i) => i === d.ring ? r.map((v, j) => j === d.vi ? q : v) : r) } } : w) }
     else if (d.k === 'end') { const o = d.orig as Wall; if (o.shape.type !== 'seg') return; const other = d.which === 'a' ? o.shape.b : o.shape.a; let q = snapPt(p, other); if (!e.altKey && q === p) { const L0 = Math.hypot(q[0] - other[0], q[1] - other[1]) || 1, L1 = Math.round(L0 * 100) / 100; q = [other[0] + (q[0] - other[0]) * L1 / L0, other[1] + (q[1] - other[1]) * L1 / L0] } setHud({ p: q, t: `${mm(Math.hypot(q[0] - other[0], q[1] - other[1]))} mm · ${(((Math.atan2(q[1] - other[1], q[0] - other[0]) * 180 / Math.PI) % 360 + 360) % 360).toFixed(1)}°` }); upd(w => w.shape.type === 'seg' ? { ...w, shape: { ...w.shape, [d.which]: q } } : w) }
     else if (d.k === 'roomV') { const q = snapPt(p), rr = (d.orig as Room); if (roomOverlap(M, rr.poly.map((v, j) => j === d.vi ? q : v), rr.id)) { setHud({ p, t: '⛔ chồng lên sàn khác' }); return } setM(cur => cur && { ...cur, rooms: (cur.rooms ?? []).map(r => r.id === d.id ? { ...r, poly: r.poly.map((v, j) => j === d.vi ? q : v), area: undefined } : r) }) }
@@ -339,7 +357,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     else if (d.k === 'furnSz') { const o = d.orig as Furn, ax: Pt = d.ax === 'w' ? [Math.cos(o.ang), Math.sin(o.ang)] : [-Math.sin(o.ang), Math.cos(o.ang)], sc = (p[0] - o.x) * ax[0] + (p[1] - o.y) * ax[1], cur0 = d.ax === 'w' ? o.w : o.d; let nv = d.sg > 0 ? sc + cur0 / 2 : cur0 / 2 - sc; nv = Math.max(0.1, nv); if (!e.altKey) nv = Math.round(nv * 100) / 100; const sh = d.sg * (nv - cur0) / 2; if (d.sh === undefined) d.sh = !!furnHitsWall(M, o); if (!d.sh && furnHitsWall(M, { ...o, [d.ax]: nv, x: o.x + ax[0] * sh, y: o.y + ax[1] * sh })) { setHud({ p, t: '⛔ đụng tường' }); return } setHud({ p, t: `${d.ax === 'w' ? 'rộng' : 'sâu'} ${mm(nv)} mm` }); setM(cur => cur && { ...cur, furn: (cur.furn ?? []).map(x => x.id === d.id ? { ...x, [d.ax]: nv, x: o.x + ax[0] * sh, y: o.y + ax[1] * sh } : x) }) }
     else if (d.k === 'furnRot') { const o = d.orig as Furn; let a = Math.atan2(p[1] - o.y, p[0] - o.x) + Math.PI / 2; const st = (e.shiftKey ? 15 : 1) * Math.PI / 180; if (!e.altKey) a = Math.round(a / st) * st; if (d.sh === undefined) d.sh = !!furnHitsWall(M, o); if (!d.sh && furnHitsWall(M, { ...o, ang: a })) { setHud({ p, t: '⛔ đụng tường' }); return } setHud({ p, t: `xoay ${(((a * 180 / Math.PI) % 360 + 360) % 360).toFixed(0)}°` }); setM(cur => cur && { ...cur, furn: (cur.furn ?? []).map(x => x.id === d.id ? { ...x, ang: a } : x) }) }
   }
-  const onUp = () => { drag.current = null; setSnapMark(null); setHud(null) }
+  const onUp = () => { drag.current = null; setSnapMark(null); setHud(null); gref.current = []; setGuides([]) }
   const closePoly = () => { if (!M || pts.length < 3) return; const ov = roomOverlap(M, pts); if (ov) { setErr(`Sàn này đè lên «${ov.name}». Sàn chỉ được chạm biên nhau, không chồng lên nhau.`); setPts([]); return } setErr(''); const n = (M.rooms ?? []).length + 1, room: Room = { id: uid('r'), name: 'Sàn ' + n, poly: pts, floor: floorFin || undefined }; commit({ ...M, rooms: [...(M.rooms ?? []), room] }); setPts([]); setSel({ t: 'room', id: room.id }) }
   const onDouble = (e: React.MouseEvent) => {
     setPending(null)
@@ -453,7 +471,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     if (s.t === 'door') { const d = M.doors.find(x => x.id === s.id); if (!d) return; const sn = snapToWall(M, [d.x + dx, d.y + dy], 1.2, d.w); if (sn) commit({ ...M, doors: M.doors.map(x => x.id === d.id ? { ...x, x: sn.x, y: sn.y, ang: sn.ang, t: sn.thick || x.t } : x) }); return }
     let ddx = dx, ddy = dy
     if (s.t === 'furn') { const f = (M.furn ?? []).find(x => x.id === s.id); if (!f) return; const sn = snapDelta(furnCorners({ ...f, x: f.x + dx, y: f.y + dy }), f.id); ddx += sn.d[0]; ddy += sn.d[1]; const nf = { ...f, x: f.x + ddx, y: f.y + ddy }; if (furnHitsWall(M, nf) && !furnHitsWall(M, f)) { setErr('Vị trí đó đâm vào tường/cột – không dời.'); return } }
-    else if (s.t === 'wall') { const w = M.walls.find(x => x.id === s.id); if (!w) return; const mp = (w.shape.type === 'poly' ? w.shape.rings.flat() : [w.shape.a, w.shape.b]).filter((_, i, a) => a.length <= 40 || i % Math.ceil(a.length / 40) === 0).map(q => [q[0] + dx, q[1] + dy] as Pt), sn = snapDelta(mp, w.id); ddx += sn.d[0]; ddy += sn.d[1] }
+    else if (s.t === 'wall') { const w = M.walls.find(x => x.id === s.id); if (!w) return; const mp = (w.shape.type === 'poly' ? w.shape.rings.flat() : [w.shape.a, w.shape.b, ...footprint(w).flat()]).filter((_, i, a) => a.length <= 40 || i % Math.ceil(a.length / 40) === 0).map(q => [q[0] + dx, q[1] + dy] as Pt), sn = snapDelta(mp, w.id); ddx += sn.d[0]; ddy += sn.d[1] }
     else if (s.t === 'room') { const r = (M.rooms ?? []).find(x => x.id === s.id); if (!r) return; const ov = roomOverlap(M, r.poly.map(q => [q[0] + dx, q[1] + dy] as Pt), r.id); if (ov) { setErr(`Sàn sẽ đè lên «${ov.name}» – không dời.`); return } }
     setErr(''); const r = applyXf(M, s, mkMove(ddx, ddy), false); commit(r.M); setSel(s)
   }
@@ -571,7 +589,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
       </div>
       {mode === '2d' && <div className="small" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: '2px 0' }}>
         <b>Bắt điểm:</b>
-        {([['end', '■ Đầu mút'], ['mid', '△ Giữa'], ['cen', '○ Tâm'], ['int', '✕ Giao điểm'], ['per', '⊥ Vuông góc'], ['nea', '◇ Mép / gần nhất'], ['axis', '┼ Trục'], ['polar', '∠ Góc cực 15°'], ['grid', '▦ Lưới 100']] as const).map(([k, l]) => <label key={k} style={{ whiteSpace: 'nowrap' }}><input type="checkbox" checked={sm[k]} onChange={e => setSm({ ...sm, [k]: e.target.checked })} /> {l}</label>)}
+        {([['align', '┆ Dóng hàng / căn mép'], ['end', '■ Đầu mút'], ['mid', '△ Giữa'], ['cen', '○ Tâm'], ['int', '✕ Giao điểm'], ['per', '⊥ Vuông góc'], ['nea', '◇ Mép / gần nhất'], ['axis', '┼ Trục'], ['polar', '∠ Góc cực 15°'], ['grid', '▦ Lưới 100']] as const).map(([k, l]) => <label key={k} style={{ whiteSpace: 'nowrap' }}><input type="checkbox" checked={sm[k]} onChange={e => setSm({ ...sm, [k]: e.target.checked })} /> {l}</label>)}
         <span style={{ borderLeft: '1px solid #ccc', height: 16 }} />
         {(M.axes ?? []).length > 0 && <button className="btn sm" onClick={() => commit({ ...M, axes: [] })}>Xoá hết trục</button>}
         <label><input type="checkbox" checked={showLv} onChange={e => setShowLv(e.target.checked)} /> Hiện cốt sàn / trần</label>
@@ -640,6 +658,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
                 return <g style={{ pointerEvents: 'none' }}>{ring ? <path d={ringPath(ring)} fill="#e07000" fillOpacity={0.15} stroke="#e07000" strokeWidth={2} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" /> : null}
                   {ws ? <path d={ws.flatMap(w => footprint(w)).map(ringPath).join('')} fill="#e07000" fillOpacity={0.3} stroke="#e07000" strokeWidth={2} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" /> : null}
                   {lab && <text x={q[0]} y={q[1] - hs * 2} fontSize={fsz} fill="#e07000" stroke="#fff" strokeWidth={fsz * 0.2} paintOrder="stroke">{lab}</text>}</g> })()}
+              {(() => { const gi = cursor && tool !== 'select' && tool !== 'door' ? snapInfo(cursor, pending ?? pts[pts.length - 1] ?? null).g ?? [] : []; return [...guides, ...gi].map((g, i) => <g key={'gd' + i} style={{ pointerEvents: 'none' }}><line x1={g[0][0]} y1={g[0][1]} x2={g[1][0]} y2={g[1][1]} stroke="#ff2d9b" strokeWidth={1.2} strokeDasharray="5 3" vectorEffect="non-scaling-stroke" /><circle cx={g[0][0]} cy={g[0][1]} r={hs * 0.45} fill="#ff2d9b" /><circle cx={g[1][0]} cy={g[1][1]} r={hs * 0.45} fill="#ff2d9b" /></g>) })()}
               {hud && <text x={hud.p[0] + hs * 2} y={hud.p[1] - hs * 2} fontSize={fsz} fill="#c0392b" fontWeight="bold" stroke="#fff" strokeWidth={fsz * 0.25} paintOrder="stroke" style={{ pointerEvents: 'none' }}>{hud.t}</text>}
               {(() => { const from = pending ?? pts[pts.length - 1] ?? null, info = cursor && tool !== 'select' && tool !== 'door' ? snapInfo(cursor, from) : null, mk = snapMark ?? (info && info.kind !== '' && info.kind !== 'grid' ? info.p : null), kd: SnapKind = snapMark ? 'end' : info?.kind ?? ''
                 if (!mk) return null; const x = mk[0], y = mk[1], r = hs * 1.3, st = { fill: 'none', stroke: '#00a86b', strokeWidth: 2, vectorEffect: 'non-scaling-stroke' as const }
