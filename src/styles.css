@@ -483,7 +483,7 @@ input[data-lang="en"], textarea[data-lang="en"] { font-style: italic }
 .sec-table .c-loc.many .loc-flow { column-width: 92px; column-gap: 4px }
 .sec-table .c-loc.many .loc-tag { display: block; break-inside: avoid; font-size: 11px; line-height: 1.25; padding: 1px 5px; margin: 0 0 2px; border-radius: 6px; white-space: normal }
 .miss-txt { color: var(--bad); background: var(--bad-soft); padding: 0 4px; border-radius: 4px }
-.act-col{display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:104px}
+.act-col{display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:0}
 .act-col .btn{display:flex;align-items:center;gap:8px;justify-content:flex-start;font-size:13px;padding:6px 10px;white-space:nowrap}
 .act-col .btn b{font-size:18px;line-height:1;width:22px;text-align:center}
 .sec-table .c-act .act-col .btn{padding:6px 10px;margin:0}

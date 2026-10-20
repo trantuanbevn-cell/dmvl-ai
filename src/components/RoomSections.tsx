@@ -85,7 +85,7 @@ const HEAD: Record<Lang, string[]> = {
   en: ['No.', 'DRAWING CODE', 'MATERIAL CODE', 'Item', 'Location', 'Render image', 'Specification', 'Origin / Brand', 'Material image', 'Remarks'],
   both: ['STT / No.', 'KÍ HIỆU BẢN VẼ / DRAWING CODE', 'KÍ HIỆU VL / MATERIAL CODE', 'Hạng mục / Item', 'Vị trí / Location', 'Hình ảnh phối cảnh / Render', 'Thông số kỹ thuật / Specification', 'Xuất xứ/ Thương hiệu / Origin / Brand', 'Hình ảnh vật liệu / Material image', 'Ghi chú / Remarks'],
 }
-const HW: (number | string)[] = [38, 84, 112, 116, '11%', 104, '24%', '12%', 112, '13%']
+const HW: (number | string)[] = ['3%', '6.5%', '7.5%', '8%', '13%', '8.5%', '19%', '10%', '9%', '8%']   // tổng = 100% (cột cuối 7.5%) → vừa khung, không phải kéo ngang
 export default function RoomSections({ d, room, lang, filter, sel, onPick, onDetail, onRemove, onAdd, only, entryId }: {
   only?: string; entryId?: string; d: ProjectData; room: Room | null; lang: Lang; filter: 'all' | 'pending' | 'inferred' | 'missing'; sel: string | null
   onPick: (o: Occurrence) => void; onDetail: (id: string) => void; onRemove: (o: Occurrence) => void
@@ -290,7 +290,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
             <div className="sec-title">{sectionTitle(section, lang)} <span className="cnt">{items.length}</span>{(() => { const n = items.filter(e => missingOf(e, lang).length).length; return n ? <span className="cnt miss-cnt" title="Số dòng còn thiếu thông tin">⚠ {n} dòng thiếu</span> : <span className="cnt ok-cnt">✓ đủ thông tin</span> })()}
               {canEdit && <button className="btn sm add-sib" style={{ marginLeft: 'auto' }} title="Thêm vật liệu khác vào mục này (vd màu sơn thứ 2)" onClick={() => { const f = items[0]; onAdd({ section_key: f.section_key, group: f.group_code, category: f.category ?? 'decor', name: f.name_vn, part_vn: f.part_vn, parent_id: f.parent_id, hint: `Thêm vật liệu nhận diện thiếu trong mục “${sectionTitle(section, lang)}”.` }) }}>＋ Thêm vật liệu</button>}</div>
             <table className="sec-table">
-              <thead><tr>{[...HEAD[lang], ''].map((t, i) => <th key={i} style={{ width: cw ? cw[i] + '%' : (i < 10 ? HW[i] : 112) }}>{t}{i < 10 && <span className="col-rs" title="Kéo để đổi độ rộng cột (bấm đúp = về mặc định)" onMouseDown={ev => startResize(ev, i)} onDoubleClick={() => setCw(null)} onClick={ev => ev.stopPropagation()} />}</th>)}</tr></thead>
+              <thead><tr>{[...HEAD[lang], ''].map((t, i) => <th key={i} style={{ width: cw ? cw[i] + '%' : (i < 10 ? HW[i] : '7.5%') }}>{t}{i < 10 && <span className="col-rs" title="Kéo để đổi độ rộng cột (bấm đúp = về mặc định)" onMouseDown={ev => startResize(ev, i)} onDoubleClick={() => setCw(null)} onClick={ev => ev.stopPropagation()} />}</th>)}</tr></thead>
               <tbody>{items.map(e => {
                 const os = occ.filter(o => o.entry_id === e.id)
                 const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
