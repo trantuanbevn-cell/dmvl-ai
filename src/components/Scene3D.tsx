@@ -47,7 +47,7 @@ export default function Scene3D({ model, view, custom = [], customDoors = [], ce
         }
       }
       for (const w of M.walls) { // vách kính: đố chia tấm + thanh ngang chân/đầu
-        const kt = kindOf(w.kind); if (!o.lay.walls || !kt.glass || !kt.frame || w.shape.type !== 'seg') continue
+        const kt = kindOf(w.kind); if (!o.lay.walls || !kt.glass || !kt.frame || w.shape.type !== 'seg' || w.shape.via?.length) continue
         const [a, b] = [w.shape.a, w.shape.b], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.2) continue
         const H = w.h ?? M.hWall, fr = kt.frame, th = Math.max(w.shape.t, fr.w), n = Math.max(1, Math.round(L / Math.max(0.2, w.panel ?? kt.panel ?? 1.2))), fm = new THREE.MeshStandardMaterial({ color: fr.color, roughness: 0.5, metalness: 0.4 })
         const gp = new THREE.Group(); gp.position.set((a[0] + b[0]) / 2, 0, (a[1] + b[1]) / 2); gp.rotation.y = -Math.atan2(b[1] - a[1], b[0] - a[0])
@@ -57,7 +57,7 @@ export default function Scene3D({ model, view, custom = [], customDoors = [], ce
       }
       for (const d of M.doors) {
         if (!o.lay.doors) break // cánh cửa, khung, kính… theo thư viện
-        const m = buildDoor(d, doorSpec(d.lib, cd), cf, d.t ?? 0.2); m.position.set(d.x, d.sill, d.y); m.rotation.y = -d.ang; if (d.flip) m.scale.z = -1; m.userData.sel = { t: 'door', id: d.id }; m.userData.cat = 'doors'; grp.add(m)
+        const m = buildDoor(d, doorSpec(d.lib, cd), cf, d.t ?? 0.2); m.position.set(d.x, d.sill, d.y); m.rotation.y = -d.ang; if (d.flip) m.scale.z = -1; if (d.mir) m.scale.x = -1; m.userData.sel = { t: 'door', id: d.id }; m.userData.cat = 'doors'; grp.add(m)
         const gp = doorGapParts(d, M) // tường thiếu trên đầu cửa / dưới bệ: tự bù cho khớp cao độ tường
         for (const q of gp.parts) { const g = new THREE.ExtrudeGeometry(shapeOf(q.poly), { depth: q.z1 - q.z0, bevelEnabled: false }); g.rotateX(-Math.PI / 2); g.translate(0, q.z0, 0); grp.add(new THREE.Mesh(g, mat(gp.wall?.kind ?? 'brick', gp.wall?.finish))); grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 35), edgeMat)) }
       }

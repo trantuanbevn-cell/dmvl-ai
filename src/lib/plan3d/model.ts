@@ -11,7 +11,7 @@ import { WALL_TYPES, wallTypeOf } from './library'
 export const WALL_KINDS = WALL_TYPES
 export const kindOf = wallTypeOf
 
-export type Wall = { id: string; role: 'wall' | 'col'; kind: string; finish?: string; h?: number; name?: string; /** vách kính: khoảng chia tấm kính (m) */ panel?: number; auto?: boolean; shape: { type: 'poly'; rings: Pt[][] } | { type: 'seg'; a: Pt; b: Pt; t: number; bulge?: number } }
+export type Wall = { id: string; role: 'wall' | 'col'; kind: string; finish?: string; h?: number; name?: string; /** vách kính: khoảng chia tấm kính (m) */ panel?: number; auto?: boolean; shape: { type: 'poly'; rings: Pt[][] } | { type: 'seg'; a: Pt; b: Pt; t: number; bulge?: number; /** đỉnh gấp khúc giữa a và b (tường chữ L, U… là MỘT đối tượng) */ via?: Pt[] } }
 export type DoorKind = 'door' | 'double' | 'window' | 'slide' | 'opening'
 export const DOOR_KINDS: { key: DoorKind; label: string; w: number; h: number; sill: number }[] = [
   { key: 'door', label: 'Cửa đi một cánh', w: 0.9, h: 2.1, sill: 0 },
@@ -21,7 +21,7 @@ export const DOOR_KINDS: { key: DoorKind; label: string; w: number; h: number; s
   { key: 'opening', label: 'Ô trống (không cánh)', w: 1.2, h: 2.4, sill: 0 },
 ]
 /** x,y = tâm cửa trên tường; ang = hướng dọc tường (rad); flip = đảo phía mở */
-export type Door = { id: string; kind: DoorKind; lib?: string; finish?: string; frameFinish?: string; x: number; y: number; ang: number; w: number; h: number; sill: number; flip?: boolean; name?: string; /** nhận tự động từ bản vẽ */ auto?: boolean; /** bề dày tường tại cửa (để dựng lanh-tô trên đầu cửa) */ t?: number }
+export type Door = { id: string; kind: DoorKind; lib?: string; finish?: string; frameFinish?: string; x: number; y: number; ang: number; w: number; h: number; sill: number; flip?: boolean; /** bản lề đổi sang bên kia (đảo trái/phải dọc theo tường) */ mir?: boolean; name?: string; /** nhận tự động từ bản vẽ */ auto?: boolean; /** bề dày tường tại cửa (để dựng lanh-tô trên đầu cửa) */ t?: number }
 export type Dim = { id: string; a: Pt; b: Pt; off: number; /** chữ ghi đè (thay cho số đo) */ txt?: string }
 export type Room = { id: string; name: string; en?: string; poly: Pt[]; area?: number; floor?: string; ceil?: string; /** cốt trần (m, tính từ cốt ±0.00) */ ceilH?: number; /** cốt sàn hoàn thiện (m, so với ±0.00); mặc định 0 */ z?: number }
 /** Trục cột: dir 'v' = đường thẳng đứng x = pos; 'h' = đường nằm ngang y = pos */
@@ -236,7 +236,8 @@ export const wallH = (w: Wall, M: Model) => w.h ?? (w.role === 'col' ? M.hCol : 
 /** Đường tim của tường thêm tay: thẳng, hoặc cung (bulge = độ võng giữa dây cung, m; dương = võng về bên trái chiều a→b) */
 export function centerline(w: Wall): Pt[] {
   if (w.shape.type !== 'seg') return []
-  const { a, b, bulge } = w.shape
+  const { a, b, bulge, via } = w.shape
+  if (via && via.length) return [a, ...via, b]
   if (!bulge || Math.abs(bulge) < 0.01) return [a, b]
   const c = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, sg = bulge, R = (c * c / 4 + sg * sg) / (2 * Math.abs(sg)), ux = (b[0] - a[0]) / c, uy = (b[1] - a[1]) / c
   const nx = -uy, ny = ux, mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, k = Math.sign(sg)
@@ -257,8 +258,11 @@ export function footprint(w: Wall): Pt[][] {
   line[0] = [line[0][0] - d0[0] * e, line[0][1] - d0[1] * e]; line[line.length - 1] = [line[line.length - 1][0] + d1[0] * e, line[line.length - 1][1] + d1[1] * e]
   const L: Pt[] = [], R: Pt[] = []
   for (let i = 0; i < line.length; i++) {
-    const p = line[i], d = i === 0 ? dir(line[0], line[1]) : i === line.length - 1 ? dir(line[i - 1], line[i]) : dir(line[i - 1], line[i + 1])
-    L.push([p[0] - d[1] * e, p[1] + d[0] * e]); R.push([p[0] + d[1] * e, p[1] - d[0] * e])
+    const p = line[i]; let nx: number, ny: number, k = 1
+    if (i === 0) { const d = dir(line[0], line[1]); nx = -d[1]; ny = d[0] }
+    else if (i === line.length - 1) { const d = dir(line[i - 1], line[i]); nx = -d[1]; ny = d[0] }
+    else { const d1 = dir(line[i - 1], line[i]), d2 = dir(line[i], line[i + 1]); let mx = -(d1[1] + d2[1]), my = d1[0] + d2[0]; const ml = Math.hypot(mx, my) || 1; mx /= ml; my /= ml; k = 1 / Math.max(0.3, mx * -d1[1] + my * d1[0]); nx = mx; ny = my }
+    L.push([p[0] + nx * e * k, p[1] + ny * e * k]); R.push([p[0] - nx * e * k, p[1] - ny * e * k])
   }
   void d0; void d1
   return [[...L, ...R.reverse()]]

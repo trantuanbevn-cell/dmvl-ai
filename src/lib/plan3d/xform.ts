@@ -25,7 +25,7 @@ export function applyXf(M: Model, s: SelRef, xf: Xf, copy: boolean): { M: Model;
   const nid = (p: string) => (copy ? uid(p) : s.id)
   if (s.t === 'wall') {
     const w = M.walls.find(x => x.id === s.id); if (!w) return { M, sel: s }
-    const n: Wall = { ...w, id: nid('w'), auto: copy ? false : w.auto, shape: w.shape.type === 'poly' ? { type: 'poly', rings: w.shape.rings.map(r => r.map(xf.p)) } : { ...w.shape, a: xf.p(w.shape.a), b: xf.p(w.shape.b), t: w.shape.t * xf.k, bulge: w.shape.bulge ? w.shape.bulge * xf.k : undefined } }
+    const n: Wall = { ...w, id: nid('w'), auto: copy ? false : w.auto, shape: w.shape.type === 'poly' ? { type: 'poly', rings: w.shape.rings.map(r => r.map(xf.p)) } : { ...w.shape, a: xf.p(w.shape.a), b: xf.p(w.shape.b), via: w.shape.via?.map(xf.p), t: w.shape.t * xf.k, bulge: w.shape.bulge ? w.shape.bulge * xf.k : undefined } }
     return { M: { ...M, walls: copy ? [...M.walls, n] : M.walls.map(x => (x.id === s.id ? n : x)) }, sel: { t: 'wall', id: n.id } }
   }
   if (s.t === 'door') {
@@ -152,9 +152,10 @@ export function joinEnds(M: Model, a: Pt, b: Pt, ext = 0.4): { a: Pt; b: Pt; wa?
 }
 
 /** Tường mới (a→b, dày t) có chồng lên tường cũ không. Chỉ chạm hoặc giao nhau gọn ở đầu mút (nối góc / chữ T) thì được; chồng dài là va chạm. */
-export function newWallOverlap(M: Model, a: Pt, b: Pt, t: number): Wall | null {
+export function newWallOverlap(M: Model, a: Pt, b: Pt, t: number, skipId?: string): Wall | null {
   const fp = footprint({ id: 'x', role: 'wall', kind: '', shape: { type: 'seg', a, b, t } } as unknown as Wall), bb = bboxOf(fp)
   for (const w of M.walls) {
+    if (w.id === skipId) continue
     const c = wallFp(w); if (c.bb[2] < bb[0] || bb[2] < c.bb[0] || c.bb[3] < bb[1] || bb[3] < c.bb[1]) continue
     try {
       const r = polygonClipping.intersection(fp as never, c.rings as never) as unknown as Pt[][][]; let A = 0
