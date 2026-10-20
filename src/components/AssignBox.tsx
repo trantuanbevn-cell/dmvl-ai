@@ -5,7 +5,7 @@ import type { ProjectData } from '../lib/useProject'
 import type { Entry } from '../lib/types'
 
 /** Chọn vật liệu CÓ SẴN trong danh mục để gán cho vùng vừa khoanh trên ảnh phối cảnh. */
-export default function AssignBox({ d, roomId, symLabel, onPick, onNew, onClose }: { d: ProjectData; roomId: string; symLabel: (e: Entry) => string; onPick: (e: Entry, category: string) => void; onNew: () => void; onClose: () => void }) {
+export default function AssignBox({ d, roomId, symLabel, onPick, onNew, onClose }: { d: ProjectData; roomId: string; symLabel: (e: Entry) => string; onPick: (e: Entry, category: string) => void; onNew: (group?: string) => void; onClose: () => void }) {
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('')   // gán vùng này vào hạng mục nào của phòng (sàn, tường…); trống = theo mục gốc của vật liệu
   const [sec, setSec] = useState('')    // lọc theo NHÓM VẬT LIỆU – đúng như tab "Theo vật liệu"
@@ -18,12 +18,14 @@ export default function AssignBox({ d, roomId, symLabel, onPick, onNew, onClose 
     const s = q.trim().toLowerCase()
     return all.filter(x => !sec || x.section.key === sec).map(x => ({ section: x.section, items: x.items.filter(e => (!grp || e.group_code === grp) && (!s || [symLabel(e), e.code, e.name_vn, e.name_en, e.material_vn, e.product_code, e.brand].some(v => String(v ?? '').toLowerCase().includes(s)))) })).filter(x => x.items.length)
   }, [all, q, sec, grp])
+  const newGroup = grp || curSec?.items[0]?.group_code
+  const newLabel = curSec ? `＋ Thêm vật liệu MỚI vào nhóm “${sectionTitle(curSec.section, 'vn')}” (khác các mã trên)` : '＋ Thêm vật liệu MỚI (chưa có trong danh mục)'
   const total = shown.reduce((n, x) => n + x.items.length, 0)
   return (
     <div className="modal-bg center" style={{ zIndex: 85 }} onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" style={{ width: 'min(760px, 96vw)', maxHeight: '88vh' }}>
         <div className="row between"><h3 style={{ margin: 0 }}>Gán vật liệu cho vùng vừa khoanh</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
-        <input autoFocus placeholder="Tìm theo ký hiệu, tên, vật liệu, mã, hãng…" value={q} onChange={e => setQ(e.target.value)} />
+        <div className="row gap" style={{ alignItems: 'center' }}><input autoFocus style={{ flex: 1 }} placeholder="Tìm theo ký hiệu, tên, vật liệu, mã, hãng…" value={q} onChange={e => setQ(e.target.value)} /><button className="btn sm primary" style={{ whiteSpace: 'nowrap' }} title="Vật liệu này khác với các mã đã có → tạo mã mới và gán luôn vào vùng vừa khoanh" onClick={() => onNew(newGroup)}>{newLabel}</button></div>
         <div className="chips">
           <button className={'chip' + (!sec ? ' on' : '')} onClick={() => { setSec(''); setGrp('') }}>Tất cả nhóm</button>
           {all.map(x => <button key={x.section.key} className={'chip' + (sec === x.section.key ? ' on' : '')} onClick={() => { setSec(x.section.key); setGrp('') }}>{sectionTitle(x.section, 'vn')} <span className="cnt">{x.items.length}</span></button>)}
@@ -44,9 +46,9 @@ export default function AssignBox({ d, roomId, symLabel, onPick, onNew, onClose 
                 <span style={{ flex: 1, minWidth: 0 }}><b>{symLabel(e)}</b> {e.name_vn}{inRoom.has(e.id) && <span className="pill" style={{ marginLeft: 6 }}>đã có trong phòng</span>}
                   <div className="small muted" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[e.material_vn, e.brand, e.product_code].filter(Boolean).join(' · ')}</div></span>
               </button>))}</div>)}
-          {!total && <div className="muted small" style={{ padding: 14 }}>Không thấy vật liệu nào khớp.</div>}
+          {!total && <div className="muted small" style={{ padding: 14 }}>Không thấy vật liệu nào khớp. Bấm “＋ Thêm vật liệu MỚI” để tạo.</div>}
         </div>
-        <div className="row between"><span className="small muted">Chọn một vật liệu để gán; phòng sẽ được ghi vào cột “Vị trí” của bảng danh mục.</span><button className="btn sm" onClick={onNew}>＋ Vật liệu chưa có trong danh mục…</button></div>
+        <div className="row between"><span className="small muted">Chọn một vật liệu để gán; phòng sẽ được ghi vào cột “Vị trí” của bảng danh mục.</span><button className="btn sm" onClick={() => onNew(newGroup)}>＋ Vật liệu chưa có trong danh mục…</button></div>
       </div>
     </div>)
 }

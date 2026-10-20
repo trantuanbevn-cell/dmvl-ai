@@ -213,7 +213,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
       </div>
 
       {assignOpen && roomId && <AssignBox d={d} roomId={roomId} symLabel={e => symbolOf(e, lang, undefined, symMap)} onPick={assign} onClose={() => { setAssignOpen(false); setPendBox(null) }}
-        onNew={() => { setAssignOpen(false); setDlg({ group: add.group, category: add.category, name: '', hint: 'Vật liệu mới sẽ được gán luôn vào vùng bạn vừa khoanh.' }) }} />}
+        onNew={g => { setAssignOpen(false); setDlg({ group: g || add.group, category: add.category, name: '', hint: 'Vật liệu mới sẽ được gán luôn vào vùng bạn vừa khoanh.' }) }} />}
       {dlg && room && <AddMaterial d={d} room={room} preset={dlg} onClose={() => { setDlg(null); setPendBox(null) }} onDone={async id => {
         setDlg(null); setSel(id); setSelOcc(null)
         if (pendBox) {   // vật liệu mới tạo từ vùng khoanh: gắn vùng vào vị trí của phòng
