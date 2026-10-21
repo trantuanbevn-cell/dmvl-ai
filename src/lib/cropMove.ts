@@ -4,7 +4,7 @@ import type { Entry, Occurrence } from './types'
 
 export type MoveScope = 'one' | 'room' | 'all'
 /** Bản ghi để hoàn tác: vùng đã đổi mã (trả về mã cũ), dòng "vị trí trống" đã gỡ (thêm lại), dòng đã thêm (xoá đi) */
-export type MoveRec = { label: string; moved: { id: string; entry_id: string; category: string | null }[]; removed: Record<string, unknown>[]; inserted: string[] }
+export type MoveRec = { label: string; moved: { id: string; entry_id: string; category: string | null }[]; removed: Record<string, unknown>[]; inserted: string[]; /** dòng vị trí trống đã được điền vùng khoanh (hoàn tác = xoá lại vùng) */ filled?: string[] }
 
 /** Các vùng bị tác động theo phạm vi: chỉ vùng này / mọi vùng của vật liệu trong phòng này / mọi vùng ở tất cả phòng */
 export const cropsInScope = (occ: Occurrence[], o: Occurrence, scope: MoveScope) =>
@@ -36,6 +36,7 @@ export async function moveCrops(occ: Occurrence[], list: Occurrence[], target: E
 
 export async function undoMove(rec: MoveRec) {
   for (const m of rec.moved) await supabase.from('occurrences').update({ entry_id: m.entry_id, category: m.category }).eq('id', m.id)
+  if (rec.filled?.length) await supabase.from('occurrences').update({ bbox: null, page_id: null, view: null }).in('id', rec.filled)
   if (rec.inserted.length) await supabase.from('occurrences').delete().in('id', rec.inserted)
   if (rec.removed.length) await supabase.from('occurrences').insert(rec.removed)
 }
@@ -47,4 +48,19 @@ export async function dropCrops(occ: Occurrence[], list: Occurrence[]) {
     if (last) await supabase.from('occurrences').update({ page_id: null, bbox: null, view: null }).eq('id', o.id)
     else await supabase.from('occurrences').delete().eq('id', o.id)
   }
+}
+
+/** Gán MỘT vùng khoanh mới (khoanh trên ảnh) cho vật liệu có sẵn – dùng vùng "vị trí trống" của phòng nếu có, không thì thêm dòng mới */
+export async function addCrop(occ: Occurrence[], target: Entry, roomId: string, pageId: string, box: number[]): Promise<MoveRec> {
+  const rec: MoveRec = { label: `Đã gán vùng mới cho ${target.code}`, moved: [], removed: [], inserted: [] }
+  const cat = occ.find(x => x.entry_id === target.id && x.category)?.category ?? target.category ?? 'decor'
+  const free = occ.find(x => x.entry_id === target.id && x.room_id === roomId && !x.bbox)
+  if (free) {
+    const { error } = await supabase.from('occurrences').update({ bbox: box, page_id: pageId, category: cat, origin: 'manual' }).eq('id', free.id)
+    if (error) throw new Error(error.message); rec.filled = [free.id]
+  } else {
+    const { data, error } = await supabase.from('occurrences').insert({ entry_id: target.id, room_id: roomId, page_id: pageId, bbox: box, category: cat, origin: 'manual' }).select('id')
+    if (error) throw new Error(error.message); if (data?.[0]) rec.inserted.push(data[0].id)
+  }
+  return rec
 }

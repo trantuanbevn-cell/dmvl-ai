@@ -1,7 +1,7 @@
 import EnFill from '../../components/EnFill'
 import { intlPrefix } from '../../lib/sections'
 import { syncLibrary } from '../../lib/matLibrary'
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { CATEGORIES, roomTypeLabel } from '../../lib/codes'
@@ -13,6 +13,8 @@ import Crop from '../../components/Crop'
 import EntryPanel from '../../components/EntryPanel'
 import MaterialPopup from '../../components/MaterialPopup'
 import CropActions from '../../components/CropActions'
+import { moveCrops, addCrop, undoMove, type MoveRec } from '../../lib/cropMove'
+import { toast } from '../../lib/toast'
 import { StatusDot } from './MaterialView'
 import Bar from '../../components/Bar'
 import PlanMap from '../../components/PlanMap'
@@ -50,6 +52,8 @@ export default function RoomView({ d }: { d: ProjectData }) {
   const [pendBox, setPendBox] = useState<{ box: number[]; pageId: string } | null>(null)
   const [assignOpen, setAssignOpen] = useState(false)
   const imgRef = useRef<HTMLDivElement>(null)
+  const [brushOn, setBrushOn] = useState(false), [brush, setBrush] = useState<string | null>(null), [lastRec, setLastRec] = useState<MoveRec | null>(null), [brushBusy, setBrushBusy] = useState(false)
+  useEffect(() => { if (!brushOn) return; const k = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { setBrushOn(false); setDraw(false) } }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k) }, [brushOn])
 
   const pages = roomPages(d.pages, roomId).filter(p => p.kind === 'render' || p.kind === 'plan')
   const page = pages[Math.min(pageIdx, pages.length - 1)]
@@ -78,18 +82,30 @@ export default function RoomView({ d }: { d: ProjectData }) {
     const x = Math.min(drag.x0, drag.x1), y = Math.min(drag.y0, drag.y1), w = Math.abs(drag.x1 - drag.x0), h = Math.abs(drag.y1 - drag.y0)
     setDrag(null); setDraw(false)
     if (w < 0.01 || h < 0.01) { setNewMode(false); return }
+    if (brushOn) {
+      if (!brush) { setPendBox({ box: [x, y, w, h], pageId: page.id }); setAssignOpen(true); return }
+      const t = d.entries.find(e => e.id === brush); if (!t || !roomId) return
+      setBrushBusy(true); try { const r = await addCrop(d.occ, t, roomId, page.id, [x, y, w, h]); setLastRec(r); toast(r.label, 'ok'); await d.reload() } catch (er: any) { alert(er.message) } setBrushBusy(false); return
+    }
     if (newMode) { setNewMode(false); setPendBox({ box: [x, y, w, h], pageId: page.id }); setAssignOpen(true); return }
     await supabase.from('occurrences').update({ bbox: [x, y, w, h], page_id: page.id }).eq('id', selOcc)
     d.reload()
   }
   // Gán vật liệu có sẵn cho vùng vừa khoanh: cập nhật dòng "chưa có vị trí" của phòng nếu có, không thì thêm vị trí mới (origin manual – không bị quét lại ghi đè). Bảng theo danh mục tự cập nhật cột Vị trí.
   const assign = async (e: Entry, category: string) => {
+    if (!pendBox && brushOn) { setBrush(e.id); setAssignOpen(false); return }
     if (!pendBox || !roomId) return
     const patch = { bbox: pendBox.box, page_id: pendBox.pageId, category }
     const free = d.occ.find(o => o.room_id === roomId && o.entry_id === e.id && !o.bbox)
     const { error } = free ? await supabase.from('occurrences').update(patch).eq('id', free.id) : await supabase.from('occurrences').insert({ entry_id: e.id, room_id: roomId, origin: 'manual', ...patch })
     if (error) return alert(error.message)
-    setAssignOpen(false); setPendBox(null); await d.reload(); setSel(e.id); setSelOcc(null)
+    setAssignOpen(false); setPendBox(null); await d.reload(); setSel(e.id); setSelOcc(null); if (brushOn) setBrush(e.id)
+  }
+  /** Gán nhanh: bấm ô khoanh = thay vật liệu của ô đó bằng vật liệu đang "cầm"; Alt+bấm = lấy mẫu vật liệu của ô đó để cầm */
+  const brushClick = async (o: Occurrence, alt: boolean) => {
+    if (!brush || alt) { setBrush(o.entry_id); return }
+    const t = d.entries.find(e => e.id === brush); if (!t || o.entry_id === brush) return
+    setBrushBusy(true); try { const r = await moveCrops(d.occ, [o], t, 'one'); setLastRec(r); toast(r.label, 'ok'); await d.reload() } catch (er: any) { alert(er.message) } setBrushBusy(false)
   }
   const approveAll = async () => {
     const all = [...new Set(occ.map(o => o.entry_id))].filter(id => entryById.get(id)?.status === 'pending' && entryById.get(id)?.source === 'image')
@@ -146,6 +162,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
             <div className="row between">
               <div className="page-strip">{pages.map((p, i) => <button key={p.id} className={'ps-tile' + (i === pageIdx ? ' on' : '')} onClick={() => setPageIdx(i)} onDoubleClick={() => can('camplan') && setViewId(p.id)} title={can('camplan') ? 'Kích đúp để phóng to, xem mặt bằng và đặt camera' : undefined}><img src={d.urls[p.thumb_path ?? p.image_path]} alt="" /><span>Tr.{p.page_no}{p.kind === 'plan' ? ' · MB' : ''}</span></button>)}</div>
               <div className="row gap sm-gap">
+                {canEdit && <button className={'btn sm' + (brushOn ? ' primary' : '')} title="Chọn một vật liệu rồi bấm lên ô khoanh sai để thay, hoặc kéo chuột lên vùng còn thiếu để gán thêm" onClick={() => { const on = !brushOn; setBrushOn(on); setDraw(on); setNewMode(false); if (on && !brush && sel) setBrush(sel) }}>{brushOn ? '🖌 Đang gán nhanh (Esc để thoát)' : '🖌 Gán nhanh trên ảnh'}</button>}
                 {canEdit && <button className={'btn sm' + (newMode ? ' primary' : '')} title="Khoanh một vùng trên ảnh rồi chọn vật liệu có sẵn trong danh mục để gán – dùng khi phòng bị thiếu vật liệu" onClick={() => { setNewMode(!newMode); setDraw(!newMode) }}>{newMode ? 'Kéo chuột trên ảnh để khoanh vùng…' : '✚ Khoanh & gán vật liệu'}</button>}
                 {canEdit && selOcc && !newMode && <button className={'btn sm' + (draw ? ' primary' : '')} onClick={() => setDraw(!draw)}>{draw ? 'Kéo chuột trên ảnh để khoanh…' : '✎ Khoanh lại vùng cho mục đang chọn'}</button>}
               </div>
@@ -155,7 +172,10 @@ export default function RoomView({ d }: { d: ProjectData }) {
               if (!pp || (!cam?.plan_page_id && !room?.plan)) return null
               return <details className="card" style={{ margin: '8px 0' }}><summary><b>Vị trí trên mặt bằng</b> – camera, vùng phòng, ghế/bàn đếm được</summary><PlanMap url={d.urls[pp.image_path]} plan={room?.plan} cam={cam} cams={(page.views as any)?.cams} planPage={pp} room={room} /></details>
             })()}
-            <div ref={imgRef} className={'img-wrap' + (draw ? ' drawing' : '')}
+            {brushOn && <div className="brush-bar small">{(() => { const be = brush ? entryById.get(brush) : null; return <>
+              <b>🖌 Vật liệu đang cầm:</b> {be ? <b style={{ color: '#b45309' }}>{symbolOf(be, lang, undefined, symMap)} {be.name_vn}</b> : <i>chưa chọn</i>} · <a style={{ cursor: 'pointer' }} onClick={() => { setPendBox(null); setAssignOpen(true) }}>chọn vật liệu khác…</a>{lastRec && <> · <a style={{ cursor: 'pointer' }} onClick={async () => { await undoMove(lastRec); setLastRec(null); toast('Đã hoàn tác', 'ok'); d.reload() }}>↶ hoàn tác</a></>}
+              <div className="muted">Bấm ô khoanh = thay bằng vật liệu này · Kéo chuột trên vùng trống = gán thêm vùng còn thiếu · Alt+bấm ô = lấy mẫu vật liệu của ô đó · Esc = thoát{brushBusy ? ' · đang lưu…' : ''}</div></> })()}</div>}
+            <div ref={imgRef} className={'img-wrap' + (draw ? ' drawing' : '') + (brushOn ? ' brushing' : '')}
               onMouseDown={e => { if (draw) { const p = rel(e); setDrag({ x0: p.x, y0: p.y, x1: p.x, y1: p.y }) } }}
               onMouseMove={e => { if (draw && drag) { const p = rel(e); setDrag({ ...drag, x1: p.x, y1: p.y }) } }}
               onMouseUp={finishDraw}>
@@ -164,8 +184,8 @@ export default function RoomView({ d }: { d: ProjectData }) {
                 {occ.filter(o => o.page_id === page.id && o.bbox).map(o => {
                   const [x, y, w, h] = clampBox(o.bbox!)
                   const e = entryById.get(o.entry_id)
-                  const on = o.entry_id === sel
-                  return <g key={o.id} onClick={() => !draw && pick(o)} className={'bb' + (on ? ' on' : '') + (e && (e.status === 'approved' || e.lib_id) ? ' done' : '') + (e?.source === 'inferred' ? ' inf' : '')}>
+                  const on = o.entry_id === (brushOn ? brush : sel)
+                  return <g key={o.id} onClick={ev => brushOn ? brushClick(o, ev.altKey) : !draw && pick(o)} className={'bb' + (on ? ' on' : '') + (e && (e.status === 'approved' || e.lib_id) ? ' done' : '') + (e?.source === 'inferred' ? ' inf' : '')}>
                     <rect x={x} y={y} width={w} height={h} vectorEffect="non-scaling-stroke" />
                   </g>
                 })}
@@ -173,7 +193,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
               </svg>
               {occ.filter(o => o.page_id === page.id && o.bbox).map(o => {
                 const [x, y] = clampBox(o.bbox!); const e = entryById.get(o.entry_id)
-                return <span key={o.id} className={'bb-label' + (o.entry_id === sel ? ' on' : '') + (e && (e.status === 'approved' || e.lib_id) ? ' done' : '')} style={{ left: `${x * 100}%`, top: `${y * 100}%` }} onClick={() => !draw && pick(o)}>{e ? symbolOf(e, lang, undefined, symMap) : ''}</span>
+                return <span key={o.id} className={'bb-label' + (o.entry_id === (brushOn ? brush : sel) ? ' on' : '') + (e && (e.status === 'approved' || e.lib_id) ? ' done' : '')} style={{ left: `${x * 100}%`, top: `${y * 100}%` }} onClick={ev => brushOn ? brushClick(o, ev.altKey) : !draw && pick(o)}>{e ? symbolOf(e, lang, undefined, symMap) : ''}</span>
               })}
             </div>
           </div>
