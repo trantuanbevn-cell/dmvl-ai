@@ -173,7 +173,7 @@ export default function EntryPanel({ d, entry, onClose, issues, focusOcc }: { d:
         <Field bad={B('product_name') || ('product_name'.startsWith('qty') && B('qty'))} e={entry} k="product_name" label="Tên sản phẩm (ghi chú nội bộ, không in)" onSaved={saved} />
         <Field bad={B('origin') || ('origin'.startsWith('qty') && B('qty'))} e={entry} k="origin" label="Xuất xứ" onSaved={saved} />
       </div>
-      <Field bad={B('product_url') || ('product_url'.startsWith('qty') && B('qty'))} e={entry} k="product_url" label="Link hãng (nhiều link: mỗi dòng một link; dòng đầu là link chính)" onSaved={saved} />
+      <Field bad={B('product_url') || ('product_url'.startsWith('qty') && B('qty'))} e={entry} k="product_url" area label="Link hãng (nhiều link: mỗi dòng một link; dòng đầu là link chính)" onSaved={saved} />
       <Field bad={B('product_image_url') || ('product_image_url'.startsWith('qty') && B('qty'))} e={entry} k="product_image_url" label="Link ảnh map (ảnh mẫu hãng)" onSaved={saved} />
       {entry.product_url && <div className="row gap sm-gap">{entry.product_url.split(/\s+/).filter(Boolean).map((u, i) => <a key={i} className="small" href={u} target="_blank" rel="noreferrer">{i ? `Link ${i + 1} ↗` : 'Mở trang hãng ↗'}</a>)}{canEdit && <button className="btn sm" onClick={() => setReadLink(true)}>↻ Đọc thông số từ link</button>}</div>}
       {readLink && <ProductReadDialog d={d} entry={entry} onClose={() => setReadLink(false)} />}
