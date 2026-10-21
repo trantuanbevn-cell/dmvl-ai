@@ -51,7 +51,7 @@ const codesOf = (t: string) => {
 const refColor = (t: string) => { const m = /m[aã]̀?u\s+tham\s+kh[aả]o\s*:?\s*([^\n(;,]+)/i.exec(t) ?? /mã màu[^:\n]*:\s*([^\n(;,]+)/i.exec(t); return m ? norm(m[1]).replace(/\s+/g, ' ').trim() : '' }
 
 /** Nhóm hoàn thiện: ở đây chất liệu + màu chính là danh tính vật liệu (đồ rời, đèn, thiết bị… thì tên món đồ mới quyết định) */
-export const FIN = new Set(['WD', 'EWD', 'WPC', 'CT', 'ST', 'ES', 'LVT', 'CPT', 'CTL', 'RUG', 'PT', 'SP', 'WC', 'WP', 'GWB', 'FGWB', 'MGWB', 'ACT', 'BS'])
+export const FIN = new Set(['WD', 'EWD', 'WPC', 'CT', 'ST', 'ES', 'LVT', 'CONC', 'MCM', 'EPX', 'PUF', 'CPT', 'CTL', 'RUG', 'PT', 'SP', 'WC', 'WP', 'GWB', 'FGWB', 'MGWB', 'ACT', 'BS'])
 type Feat = { core: string; gc: string; group: string; name: string; text: string; codes: string[]; brand: string; part: string }
 const featOf = (x: { gc?: string; group: string; name: string; material?: string | null; desc?: string | null; product_code?: string | null; brand?: string | null; part?: string | null }): Feat =>
   ({ core: [x.name, x.material].filter(Boolean).join(' . '), gc: x.gc ?? x.group, group: x.group, name: x.name, text: [x.name, x.material, x.desc].filter(Boolean).join(' . '), codes: (x.product_code ?? '').split('\n').map(c => norm(c).replace(/\s/g, '')).filter(Boolean), brand: norm(x.brand).trim(), part: norm(x.part).trim() })

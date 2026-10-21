@@ -57,6 +57,50 @@ export const GROUPS: Group[] = [
   "std_intl": "ASTM E648; ASTM D2859; ISO 9239-1"
  },
  {
+  "code": "CONC",
+  "vn": "Sàn bê tông mài / bê tông đánh bóng",
+  "en": "Polished / Sealed Concrete",
+  "legacy": "CONC",
+  "csi": "03 35 00 Concrete Finishing",
+  "attrs_vn": "Cấp độ mài (grit), độ bóng, lớp phủ/hardener, màu, cốt liệu lộ, khe co giãn",
+  "attrs_en": "Grind level (grit), gloss, densifier/sealer, colour, aggregate exposure, joints",
+  "std_vn": "—",
+  "std_intl": "—"
+ },
+ {
+  "code": "MCM",
+  "vn": "Xi măng mài (microcement)",
+  "en": "Microcement",
+  "legacy": "MCM",
+  "csi": "09 72 00 / 09 96 00 Coatings",
+  "attrs_vn": "Hệ lớp (lót, 2 lớp phủ, sealer), độ dày, màu, độ bóng, vị trí (sàn/tường)",
+  "attrs_en": "System (primer, 2 coats, sealer), thickness, colour, sheen, location (floor/wall)",
+  "std_vn": "—",
+  "std_intl": "—"
+ },
+ {
+  "code": "EPX",
+  "vn": "Sàn epoxy",
+  "en": "Epoxy Flooring",
+  "legacy": "EPX",
+  "csi": "09 67 00 Fluid-Applied Flooring",
+  "attrs_vn": "Hệ epoxy (tự san phẳng/rải cát), độ dày, màu, chống trượt, chống tĩnh điện",
+  "attrs_en": "Epoxy system (self-levelling/broadcast), thickness, colour, slip resistance, anti-static",
+  "std_vn": "—",
+  "std_intl": "—"
+ },
+ {
+  "code": "PUF",
+  "vn": "Sàn PU / liền mạch",
+  "en": "Polyurethane Flooring",
+  "legacy": "PUF",
+  "csi": "09 67 00 Fluid-Applied Flooring",
+  "attrs_vn": "Hệ PU, độ dày, màu, chống trượt, chịu hoá chất",
+  "attrs_en": "PU system, thickness, colour, slip resistance, chemical resistance",
+  "std_vn": "—",
+  "std_intl": "—"
+ },
+ {
   "code": "CTL",
   "vn": "Thảm tấm (carpet tile)",
   "en": "Carpet Tile",

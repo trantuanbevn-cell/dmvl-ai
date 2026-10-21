@@ -16,6 +16,7 @@ export const SECTIONS: Section[] = [
   { key: 'tile', vn: 'GẠCH', en: 'TILE', band: 'A', groups: ['CT'] },
   { key: 'stone', vn: 'ĐÁ (TỰ NHIÊN – NHÂN TẠO)', en: 'STONE (NATURAL – ENGINEERED)', band: 'A', groups: ['ST', 'ES'] },
   { key: 'floor', vn: 'SÀN GỖ – SÀN NHỰA', en: 'WOOD & RESILIENT FLOORING', band: 'A', groups: ['LVT'] },
+  { key: 'seamless', vn: 'SÀN LIỀN MẠCH (BÊ TÔNG MÀI – EPOXY – MICROCEMENT)', en: 'SEAMLESS FLOORING (POLISHED CONCRETE – EPOXY – MICROCEMENT)', band: 'A', groups: ['CONC', 'MCM', 'EPX', 'PUF'] },
   { key: 'carpet', vn: 'THẢM SÀN', en: 'CARPET', band: 'A', groups: ['CPT', 'CTL', 'RUG'] },
   { key: 'paint', vn: 'SƠN NƯỚC', en: 'PAINT', band: 'A', groups: ['PT', 'SP'] },
   { key: 'wallcov', vn: 'GIẤY DÁN TƯỜNG', en: 'WALLCOVERING', band: 'A', groups: ['WC'] },
@@ -219,6 +220,10 @@ export const PREFIXES: Prefix[] = [
   { prefix: 'EWD', en: 'Engineered Wood', vn: 'Gỗ công nghiệp', includes_en: 'MDF, MFC, plywood, melamine, laminate, acrylic panels', includes_vn: 'MDF, MFC, ván ép, melamine, laminate, acrylic', groups: ['EWD'] },
   { prefix: 'WPC', en: 'Wood Plastic Composite', vn: 'Gỗ nhựa', includes_en: 'WPC, wood-plastic composite, wood-look plastic', includes_vn: 'gỗ nhựa composite, nhựa giả gỗ, lam gỗ nhựa', groups: ['WPC'] },
   { prefix: 'LVT', en: 'Resilient Flooring', vn: 'Sàn nhựa', includes_en: 'luxury vinyl tile, vinyl sheet', includes_vn: 'sàn vinyl, sàn nhựa', groups: ['LVT'] },
+  { prefix: 'CONC', en: 'Polished Concrete', vn: 'Bê tông mài', includes_en: 'polished, ground and sealed concrete floor', includes_vn: 'sàn bê tông mài, bê tông đánh bóng, phủ chống thấm', groups: ['CONC'] },
+  { prefix: 'MCM', en: 'Microcement', vn: 'Xi măng mài (microcement)', includes_en: 'microcement floor and wall finish', includes_vn: 'microcement sàn/tường', groups: ['MCM'] },
+  { prefix: 'EPX', en: 'Epoxy Flooring', vn: 'Sàn epoxy', includes_en: 'self-levelling and broadcast epoxy', includes_vn: 'epoxy tự san phẳng, rải cát', groups: ['EPX'] },
+  { prefix: 'PUF', en: 'PU Flooring', vn: 'Sàn PU', includes_en: 'polyurethane seamless flooring', includes_vn: 'sàn PU liền mạch', groups: ['PUF'] },
   { prefix: 'CPT', en: 'Carpet Broadloom', vn: 'Thảm trải kín', includes_en: 'broadloom carpet (rolls, wall-to-wall)', includes_vn: 'thảm cuộn, thảm trải liền sàn', groups: ['CPT'] },
   { prefix: 'CTL', en: 'Carpet Tile', vn: 'Thảm tấm', includes_en: 'modular carpet tiles', includes_vn: 'thảm tấm 500x500, 600x600', groups: ['CTL'] },
   { prefix: 'RUG', en: 'Area Rug', vn: 'Thảm rời', includes_en: 'loose area rugs, runners', includes_vn: 'thảm trải phòng, thảm trang trí không dán sàn', groups: ['RUG'] },
@@ -253,7 +258,7 @@ export const PREFIXES: Prefix[] = [
 ]
 /** Ký hiệu viết tắt từ cụm tiếng Anh đầy đủ nào (để người xem bản vẽ biết chữ cái nghĩa là gì) */
 export const PREFIX_FULL: Record<string, string> = {
-  CT: 'Ceramic Tile', ST: 'Natural Stone', EST: 'Engineered Stone', WD: 'Natural Wood', EWD: 'Engineered Wood', WPC: 'Wood Plastic Composite', LVT: 'Luxury Vinyl Tile', CPT: 'Carpet Broadloom', CTL: 'Carpet Tile', RUG: 'Area Rug', PNT: 'Paint', SPT: 'Specialty Coating', WC: 'Wall Covering', WP: 'Wall Panelling', GWB: 'Gypsum Wall Board', FGWB: 'Fire-rated Gypsum Wall Board', MGWB: 'Moisture-resistant Gypsum Wall Board',
+  CONC: 'Polished Concrete', MCM: 'Microcement', EPX: 'Epoxy Flooring', PUF: 'Polyurethane Flooring', CT: 'Ceramic Tile', ST: 'Natural Stone', EST: 'Engineered Stone', WD: 'Natural Wood', EWD: 'Engineered Wood', WPC: 'Wood Plastic Composite', LVT: 'Luxury Vinyl Tile', CPT: 'Carpet Broadloom', CTL: 'Carpet Tile', RUG: 'Area Rug', PNT: 'Paint', SPT: 'Specialty Coating', WC: 'Wall Covering', WP: 'Wall Panelling', GWB: 'Gypsum Wall Board', FGWB: 'Fire-rated Gypsum Wall Board', MGWB: 'Moisture-resistant Gypsum Wall Board',
   ACT: 'Acoustic Ceiling Tile', SKT: 'Skirting', MTL: 'Metal', GL: 'Glass', MIR: 'Mirror', FAB: 'Fabric', LTH: 'Leather', DR: 'Door', HW: 'Hardware', MWK: 'Millwork',
   FHW: 'Furniture Hardware', FUR: 'Furniture', LGT: 'Lighting', PLB: 'Plumbing', WRA: 'Washroom Accessories', EQP: 'Equipment', ART: 'Artwork', DEC: 'Decorative',
   WT: 'Window Treatment', SGN: 'Signage', MEP: 'Mechanical, Electrical & Plumbing',
@@ -328,7 +333,7 @@ export const PICK_FAMILIES: { label: string; groups: string[] }[] = [
   { label: 'Gạch', groups: ['CT'] },
   { label: 'Đá', groups: ['ST', 'ES'] },
   { label: 'Gỗ', groups: ['WD', 'EWD', 'WPC'] },
-  { label: 'Sàn nhựa – Thảm', groups: ['LVT', 'CPT', 'CTL', 'RUG'] },
+  { label: 'Sàn nhựa – Thảm', groups: ['LVT', 'CONC', 'MCM', 'EPX', 'PUF', 'CPT', 'CTL', 'RUG'] },
   { label: 'Sơn – Giấy dán tường', groups: ['PT', 'SP', 'WC'] },
   { label: 'Thạch cao – Ốp tường – Trần – Len', groups: ['WP', 'GWB', 'FGWB', 'MGWB', 'ACT', 'BS'] },
   { label: 'Kim loại – Kính – Gương', groups: ['MT', 'GL', 'MR'] },

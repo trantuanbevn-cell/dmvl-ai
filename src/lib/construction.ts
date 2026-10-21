@@ -216,7 +216,7 @@ export const systemOf = (k: System['k']) => SYSTEMS.find(s => s.k === k)!
 export function guessSystem(e: Pick<Entry, 'group_code' | 'category' | 'name_vn' | 'part_vn' | 'desc_vn'>): System['k'] {
   const g = (e.group_code ?? '').toUpperCase(), t = `${e.name_vn ?? ''} ${e.part_vn ?? ''}`.toLowerCase()
   if (['GWB', 'FGWB', 'MGWB', 'ACT'].includes(g) || e.category === 'ceiling' || /\btrần\b/.test(t)) return 'ceiling'
-  if (['CT', 'ST', 'ES', 'LVT', 'CPT', 'CTL', 'RUG'].includes(g) || e.category === 'floor' || /\bsàn\b/.test(t)) return 'floor'
+  if (['CT', 'ST', 'ES', 'LVT', 'CPT', 'CTL', 'RUG', 'CONC', 'MCM', 'EPX', 'PUF'].includes(g) || e.category === 'floor' || /\bsàn\b/.test(t)) return 'floor'
   return 'wall'
 }
 
