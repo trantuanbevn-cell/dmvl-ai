@@ -18,7 +18,7 @@ export default function MaterialPopup({ d, entryId, lang: l0, onClose, onDetail,
   const setStatus = async (status: 'approved' | 'review') => { await supabase.from('entries').update({ status }).eq('id', e.id); if (status === 'approved') syncLibrary(e.project_id, [{ ...e, status }]); d.reload() }
   return (
     <div className="modal-bg center" onMouseDown={onClose}>
-      <div className="modal dup-modal" style={{ width: 'min(1250px, 96vw)', padding: 14 }} onMouseDown={ev => ev.stopPropagation()}>
+      <div className="modal dup-modal" style={{ width: 'min(1560px, 98vw)', maxHeight: '97vh', padding: 14 }} onMouseDown={ev => ev.stopPropagation()}>
         <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
           <div className="row gap sm-gap" style={{ flexWrap: 'wrap' }}>
             <b style={{ fontSize: 16 }}>{symbolOf(e, lang, undefined, symMap)} · {e.name_vn}</b>

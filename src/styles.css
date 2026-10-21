@@ -489,3 +489,5 @@ input[data-lang="en"], textarea[data-lang="en"] { font-style: italic }
 .sec-table .c-act .act-col .btn{padding:6px 10px;margin:0}
 
 .img-wrap.brushing { cursor: copy } .img-wrap.brushing .bb { pointer-events: all; cursor: copy } .brush-bar { background: #fff3e0; border: 1px solid #e0b27a; border-radius: 8px; padding: 6px 10px; margin: 6px 0 }
+
+.sec-table .c-act .btn { white-space: nowrap }
