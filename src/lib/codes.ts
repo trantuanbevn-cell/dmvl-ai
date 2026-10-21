@@ -46,6 +46,50 @@ export const GROUPS: Group[] = [
   "std_intl": "ASTM F1700; ASTM E648 (radiant panel)"
  },
  {
+  "code": "GFRC",
+  "vn": "Bê tông cốt sợi thuỷ tinh (GRC/GFRC) đúc khuôn",
+  "en": "Glass Fibre Reinforced Concrete (GFRC)",
+  "legacy": "GFRC",
+  "csi": "03 49 00 Glass-Fiber-Reinforced Concrete",
+  "attrs_vn": "Hình dạng/khuôn, độ dày vỏ, tỉ lệ sợi, bề mặt (mài/đánh bóng/nhám), màu, lớp sealer, khung đỡ",
+  "attrs_en": "Shape/mould, skin thickness, fibre content, finish (ground/polished/textured), colour, sealer, backing frame",
+  "std_vn": "TCVN 3118 (cường độ bê tông); thử uốn theo EN 1170",
+  "std_intl": "PCI MNL-128; ASTM C1666; EN 1169"
+ },
+ {
+  "code": "UHPC",
+  "vn": "Bê tông siêu hiệu năng cốt sợi (UHPC)",
+  "en": "Ultra-High Performance Concrete (UHPC)",
+  "legacy": "UHPC",
+  "csi": "03 38 00 / 03 40 00 Precast Concrete",
+  "attrs_vn": "Khuôn đúc, độ dày mỏng, loại sợi thép/PVA, màu, bề mặt, chi tiết bồn/quầy liền khối",
+  "attrs_en": "Mould, thin section thickness, steel/PVA fibre, colour, finish, integral basin/counter detail",
+  "std_vn": "—",
+  "std_intl": "ASTM C1856; ASTM C1609"
+ },
+ {
+  "code": "CST",
+  "vn": "Đá đúc / bê tông đúc sẵn (cast stone, precast)",
+  "en": "Cast Stone / Precast Concrete",
+  "legacy": "CST",
+  "csi": "04 72 00 Cast Stone; 03 45 00 Architectural Precast",
+  "attrs_vn": "Khuôn/hình dạng, kích thước, cốt liệu, màu, bề mặt (axit/mài/đánh bóng), cốt thép/sợi, cách liên kết",
+  "attrs_en": "Mould/shape, size, aggregate, colour, finish (acid-etch/ground/polished), reinforcement/fibre, fixing",
+  "std_vn": "TCVN 9340 (bê tông đúc sẵn)",
+  "std_intl": "ASTM C1364; PCI MNL-117"
+ },
+ {
+  "code": "FCB",
+  "vn": "Tấm xi măng sợi (fibre cement)",
+  "en": "Fibre Cement Board",
+  "legacy": "FCB",
+  "csi": "06 16 36 / 09 26 / 07 46 46 Fiber Cement",
+  "attrs_vn": "Kích thước, độ dày, bề mặt (nhẵn/vân), màu/sơn phủ, kiểu liên kết, chịu ẩm",
+  "attrs_en": "Size, thickness, finish (smooth/textured), colour/coating, fixing, moisture resistance",
+  "std_vn": "TCVN 7575-… (tấm xi măng sợi)",
+  "std_intl": "ASTM C1186; EN 12467"
+ },
+ {
   "code": "CPT",
   "vn": "Thảm trải kín (broadloom)",
   "en": "Carpet Broadloom",

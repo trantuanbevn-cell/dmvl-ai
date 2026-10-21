@@ -24,6 +24,7 @@ export const SECTIONS: Section[] = [
   { key: 'ceiling', vn: 'TRẦN THẠCH CAO & TRẦN ĐẶC BIỆT', en: 'GYPSUM & SPECIALTY CEILING', band: 'A', groups: ['GWB', 'FGWB', 'MGWB', 'ACT'] },
   { key: 'skirting', vn: 'LEN CHÂN TƯỜNG – PHÀO CHỈ', en: 'SKIRTING & MOULDING', band: 'A', groups: ['BS'] },
   { key: 'wood', vn: 'GỖ (TỰ NHIÊN – CÔNG NGHIỆP – NHỰA)', en: 'WOOD (NATURAL – ENGINEERED – WPC)', band: 'B', groups: ['WD', 'EWD', 'WPC'] },
+  { key: 'castconc', vn: 'BÊ TÔNG CỐT SỢI – ĐÁ ĐÚC KHUÔN (GRC, UHPC, CAST STONE)', en: 'FIBRE CONCRETE & CAST STONE (GFRC, UHPC, CAST STONE)', band: 'B', groups: ['GFRC', 'UHPC', 'CST', 'FCB'] },
   { key: 'metal', vn: 'KIM LOẠI', en: 'METAL', band: 'B', groups: ['MT'] },
   { key: 'glass', vn: 'KÍNH', en: 'GLASS', band: 'B', groups: ['GL'] },
   { key: 'mirror', vn: 'GƯƠNG', en: 'MIRROR', band: 'B', groups: ['MR'] },
@@ -236,6 +237,10 @@ export const PREFIXES: Prefix[] = [
   { prefix: 'MGWB', en: 'Moisture-resistant Gypsum Board', vn: 'Thạch cao chịu ẩm', includes_en: 'moisture-resistant gypsum board for wet areas', includes_vn: 'tấm thạch cao chịu ẩm cho khu ướt', groups: ['MGWB'] },
   { prefix: 'ACT', en: 'Acoustic Ceiling', vn: 'Trần tiêu âm / đặc biệt', includes_en: 'acoustic and specialty ceilings', includes_vn: 'trần tiêu âm, trần đặc biệt', groups: ['ACT'] },
   { prefix: 'SKT', en: 'Skirting / Base', vn: 'Len chân tường', includes_en: 'skirting, wall base, floor transition strip', includes_vn: 'len chân tường, nẹp chuyển sàn', groups: ['BS'] },
+  { prefix: 'GFRC', en: 'Glass Fibre Reinforced Concrete', vn: 'Bê tông cốt sợi thuỷ tinh (GRC)', includes_en: 'moulded GFRC: curved panels, cast basins, vanity tops, counters, sculpted forms', includes_vn: 'GRC đúc khuôn: tấm cong, bồn tắm, lavabo, mặt bàn quầy, hình khối đặc biệt', groups: ['GFRC'] },
+  { prefix: 'UHPC', en: 'Ultra-High Performance Concrete', vn: 'Bê tông siêu hiệu năng cốt sợi', includes_en: 'thin fibre-reinforced UHPC cast elements, basins, counters', includes_vn: 'UHPC cốt sợi đúc mỏng: bồn, lavabo, bàn quầy liền khối', groups: ['UHPC'] },
+  { prefix: 'CST', en: 'Cast Stone / Precast', vn: 'Đá đúc / bê tông đúc sẵn', includes_en: 'cast stone, precast concrete elements', includes_vn: 'đá đúc khuôn, cấu kiện bê tông đúc sẵn', groups: ['CST'] },
+  { prefix: 'FCB', en: 'Fibre Cement Board', vn: 'Tấm xi măng sợi', includes_en: 'fibre cement cladding and boards', includes_vn: 'tấm xi măng sợi ốp tường, trần', groups: ['FCB'] },
   { prefix: 'MTL', en: 'Metal', vn: 'Kim loại', includes_en: 'stainless steel, brass, aluminium, powder-coated steel', includes_vn: 'inox, đồng thau, nhôm, thép sơn tĩnh điện', groups: ['MT'] },
   { prefix: 'GL', en: 'Glass', vn: 'Kính', includes_en: 'clear, frosted, tempered, laminated glass', includes_vn: 'kính trong, mờ, cường lực, dán an toàn', groups: ['GL'] },
   { prefix: 'MIR', en: 'Mirror', vn: 'Gương', includes_en: 'mirror', includes_vn: 'gương', groups: ['MR'] },
@@ -258,7 +263,7 @@ export const PREFIXES: Prefix[] = [
 ]
 /** Ký hiệu viết tắt từ cụm tiếng Anh đầy đủ nào (để người xem bản vẽ biết chữ cái nghĩa là gì) */
 export const PREFIX_FULL: Record<string, string> = {
-  CONC: 'Polished Concrete', MCM: 'Microcement', EPX: 'Epoxy Flooring', PUF: 'Polyurethane Flooring', CT: 'Ceramic Tile', ST: 'Natural Stone', EST: 'Engineered Stone', WD: 'Natural Wood', EWD: 'Engineered Wood', WPC: 'Wood Plastic Composite', LVT: 'Luxury Vinyl Tile', CPT: 'Carpet Broadloom', CTL: 'Carpet Tile', RUG: 'Area Rug', PNT: 'Paint', SPT: 'Specialty Coating', WC: 'Wall Covering', WP: 'Wall Panelling', GWB: 'Gypsum Wall Board', FGWB: 'Fire-rated Gypsum Wall Board', MGWB: 'Moisture-resistant Gypsum Wall Board',
+  CONC: 'Polished Concrete', MCM: 'Microcement', EPX: 'Epoxy Flooring', PUF: 'Polyurethane Flooring', GFRC: 'Glass Fibre Reinforced Concrete', UHPC: 'Ultra-High Performance Concrete', CST: 'Cast Stone', FCB: 'Fibre Cement Board', CT: 'Ceramic Tile', ST: 'Natural Stone', EST: 'Engineered Stone', WD: 'Natural Wood', EWD: 'Engineered Wood', WPC: 'Wood Plastic Composite', LVT: 'Luxury Vinyl Tile', CPT: 'Carpet Broadloom', CTL: 'Carpet Tile', RUG: 'Area Rug', PNT: 'Paint', SPT: 'Specialty Coating', WC: 'Wall Covering', WP: 'Wall Panelling', GWB: 'Gypsum Wall Board', FGWB: 'Fire-rated Gypsum Wall Board', MGWB: 'Moisture-resistant Gypsum Wall Board',
   ACT: 'Acoustic Ceiling Tile', SKT: 'Skirting', MTL: 'Metal', GL: 'Glass', MIR: 'Mirror', FAB: 'Fabric', LTH: 'Leather', DR: 'Door', HW: 'Hardware', MWK: 'Millwork',
   FHW: 'Furniture Hardware', FUR: 'Furniture', LGT: 'Lighting', PLB: 'Plumbing', WRA: 'Washroom Accessories', EQP: 'Equipment', ART: 'Artwork', DEC: 'Decorative',
   WT: 'Window Treatment', SGN: 'Signage', MEP: 'Mechanical, Electrical & Plumbing',
@@ -331,11 +336,11 @@ export function tx(vn: string | null | undefined, en: string | null | undefined,
 /** Danh sách chọn nhóm (tiền tố) xếp theo họ vật liệu: vật liệu hoàn thiện chính lên đầu, các nhóm cùng họ (gỗ tự nhiên – gỗ công nghiệp, đá tự nhiên – nhân tạo…) nằm cạnh nhau */
 export const PICK_FAMILIES: { label: string; groups: string[] }[] = [
   { label: 'Gạch', groups: ['CT'] },
-  { label: 'Đá', groups: ['ST', 'ES'] },
+  { label: 'Đá', groups: ['ST', 'ES', 'GFRC', 'UHPC', 'CST'] },
   { label: 'Gỗ', groups: ['WD', 'EWD', 'WPC'] },
   { label: 'Sàn nhựa – Thảm', groups: ['LVT', 'CONC', 'MCM', 'EPX', 'PUF', 'CPT', 'CTL', 'RUG'] },
   { label: 'Sơn – Giấy dán tường', groups: ['PT', 'SP', 'WC'] },
-  { label: 'Thạch cao – Ốp tường – Trần – Len', groups: ['WP', 'GWB', 'FGWB', 'MGWB', 'ACT', 'BS'] },
+  { label: 'Thạch cao – Ốp tường – Trần – Len', groups: ['WP', 'FCB', 'GWB', 'FGWB', 'MGWB', 'ACT', 'BS'] },
   { label: 'Kim loại – Kính – Gương', groups: ['MT', 'GL', 'MR'] },
   { label: 'Vải – Da – Rèm', groups: ['FB', 'LE', 'WT'] },
   { label: 'Cửa & phụ kiện cửa', groups: ['DR', 'HW'] },

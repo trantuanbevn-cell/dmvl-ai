@@ -7,7 +7,7 @@ export type LibItem = { prefix: string; en: string; vn: string; cat: string; gro
 
 /** Nhóm có sẵn trong hệ mã công ty (đã gắn với nhóm mã cũ) → xếp vào danh mục */
 const EXISTING_CAT: Record<string, string> = {
-  CT: 'Gạch & đá', ST: 'Gạch & đá', WD: 'Gỗ & tấm', LVT: 'Sàn', CPT: 'Sàn', CONC: 'Sàn', MCM: 'Sàn', EPX: 'Sàn', PUF: 'Sàn', PNT: 'Sơn & phủ', WC: 'Tường', WP: 'Tường', GWB: 'Trần', ACT: 'Trần', SKT: 'Tường',
+  CT: 'Gạch & đá', ST: 'Gạch & đá', WD: 'Gỗ & tấm', LVT: 'Sàn', CPT: 'Sàn', GFRC: 'Gạch & đá', UHPC: 'Gạch & đá', CST: 'Gạch & đá', FCB: 'Tường', CONC: 'Sàn', MCM: 'Sàn', EPX: 'Sàn', PUF: 'Sàn', PNT: 'Sơn & phủ', WC: 'Tường', WP: 'Tường', GWB: 'Trần', ACT: 'Trần', SKT: 'Tường',
   MTL: 'Kim loại', GL: 'Kính & gương', MIR: 'Kính & gương', FAB: 'Vải, da, rèm', LTH: 'Vải, da, rèm', WT: 'Vải, da, rèm', DR: 'Cửa & phụ kiện', HW: 'Cửa & phụ kiện',
   MWK: 'Nội thất', FHW: 'Nội thất', FUR: 'Nội thất', LGT: 'Chiếu sáng', PLB: 'Thiết bị vệ sinh', WRA: 'Thiết bị vệ sinh', EQP: 'Thiết bị', ART: 'Trang trí & artwork', DEC: 'Trang trí & artwork', SGN: 'Trang trí & artwork', MEP: 'MEP & khác',
 }
