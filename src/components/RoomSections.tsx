@@ -281,7 +281,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   if (!secs.length) return <div className="muted small" style={{ padding: 12 }}>Chưa có hạng mục nào{filter !== 'all' ? ' khớp bộ lọc' : ''}.</div>
   return (
     <div className="sec-wrap">
-      {sugE && <SuggestDialog d={d} entry={sugE} onClose={() => setSugE(null)} />}
+      {sugE && <SuggestDialog d={d} entry={sugE} occId={focusOcc && d.occ.find(x => x.id === focusOcc)?.entry_id === sugE.id ? focusOcc : undefined} onClose={() => setSugE(null)} />}
       {secs.map(({ section, items }) => {
         const bandRow = section.band !== lastBand ? section.band : null; lastBand = section.band
         return (

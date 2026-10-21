@@ -44,7 +44,7 @@ function Field({ e, k, label, area, onSaved, type = 'text', bad }: { e: Entry; k
   )
 }
 
-export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectData; entry: Entry; onClose: () => void; issues?: Issue[] }) {
+export default function EntryPanel({ d, entry, onClose, issues, focusOcc }: { d: ProjectData; entry: Entry; onClose: () => void; issues?: Issue[]; focusOcc?: string }) {
   const { canEdit, isAdmin, session, can } = useAuth()
   const [sug, setSug] = useState(false)
   const online = useOnline()
@@ -166,7 +166,7 @@ export default function EntryPanel({ d, entry, onClose, issues }: { d: ProjectDa
 
       <h4>Mã thực tế</h4>
       {canEdit && can('suggest') && <button className="btn primary sm" onClick={() => setSug(true)}>✨ Vật Liệu Đề Xuất</button>}
-      {sug && <SuggestDialog d={d} entry={entry} onClose={() => setSug(false)} />}
+      {sug && <SuggestDialog d={d} entry={entry} occId={focusOcc && d.occ.find(x => x.id === focusOcc)?.entry_id === entry.id ? focusOcc : undefined} onClose={() => setSug(false)} />}
       <div className="grid2">
         <Field bad={B('brand') || ('brand'.startsWith('qty') && B('qty'))} e={entry} k="brand" label="Hãng / thương hiệu" onSaved={saved} />
         <Field bad={B('product_code') || ('product_code'.startsWith('qty') && B('qty'))} e={entry} k="product_code" area label="Mã sản phẩm (nhiều mã: mỗi mã một dòng)" onSaved={saved} />

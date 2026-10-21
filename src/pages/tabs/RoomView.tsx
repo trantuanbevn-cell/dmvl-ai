@@ -222,7 +222,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
             {([['all', 'Tất cả'], ['pending', 'Chờ duyệt'], ['inferred', 'Suy luận (không thấy trong ảnh)'], ['missing', `⚠ Thiếu thông tin${rm.rows ? ' (' + rm.rows + ')' : ''}`]] as const).map(([k, l]) => <button key={k} className={'chip' + (flt === k ? ' on' : '')} onClick={() => setFlt(k)}>{l}</button>)}
           </div>
           <EnFill d={d} lang={lang} />
-          <RoomSections d={d} room={room!} lang={lang} filter={flt} sel={sel} onPick={pick} onDetail={id => { setSel(id); setSelOcc(null); setHidePanel(false) }} onRemove={removeOcc} onAdd={setDlg} />
+          <RoomSections d={d} room={room!} focusOcc={selOcc ?? undefined} lang={lang} filter={flt} sel={sel} onPick={pick} onDetail={id => { setSel(id); setSelOcc(o => (o && d.occ.find(x => x.id === o)?.entry_id === id ? o : null)); setHidePanel(false) }} onRemove={removeOcc} onAdd={setDlg} />
           {room && <RoomSuggest d={d} room={room} onAdd={setDlg} />}
           {canEdit && <div className="row gap add-row">
             <select value={add.category} onChange={e => setAdd({ ...add, category: e.target.value })}>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.vn}</option>)}</select>
@@ -245,7 +245,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
           setPendBox(null); d.reload()
         }
       }} />}
-      {selEntry && !hidePanel && <EntryPanel d={d} entry={selEntry} onClose={() => { setSel(null); setSelOcc(null) }} />}
+      {selEntry && !hidePanel && <EntryPanel d={d} entry={selEntry} focusOcc={selOcc ?? undefined} onClose={() => { setSel(null); setSelOcc(null) }} />}
       {pop && <MaterialPopup d={d} entryId={pop} focusOcc={selOcc ?? undefined} lang={lang} onClose={() => setPop(null)} onDetail={id => { setPop(null); setSel(id); setHidePanel(false) }} actions={canEdit && selOcc && d.occ.some(x => x.id === selOcc) ? <CropActions d={d} occId={selOcc} symLabel={e => symbolOf(e, lang, undefined, symMap)} onChanged={id => { if (id) { setPop(id); setSel(id) } else setPop(null) }} /> : undefined} />}
     </div>
   )
