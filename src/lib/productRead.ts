@@ -6,8 +6,13 @@ import type { Entry } from './types'
 export const normalizeUrl = (s: string) => { const t = s.trim(); if (!t) return ''; return /^https?:\/\//i.test(t) ? t : /^[\w-]+(\.[\w-]+)+(\/|$)/.test(t) ? 'https://' + t : t }
 export const isUrl = (s: string) => { try { const u = new URL(normalizeUrl(s)); return /^https?:$/.test(u.protocol) && u.hostname.includes('.') } catch { return false } }
 
+/** Một sản phẩm có thể có NHIỀU link (mỗi dòng một link trong cột product_url); link đầu tiên là link chính (dùng để đọc thông số) */
+export const urlsOf = (s?: string | null): string[] => (s ?? '').split(/[\n\s]+/).map(x => x.trim()).filter(Boolean)
+export const joinUrls = (a: string[]): string => [...new Set(a.map(x => normalizeUrl(x)).filter(Boolean))].join('\n')
+
 /** Tải và đọc trang sản phẩm (qua edge function fetch-product vì trình duyệt bị chặn CORS) */
-export async function readProductPage(url: string): Promise<Extracted> {
+export async function readProductPage(urlIn: string): Promise<Extracted> {
+  const url = urlsOf(urlIn)[0] ?? urlIn
   const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch(`${FUNCTIONS_URL}/fetch-product`, {
     method: 'POST',

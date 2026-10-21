@@ -25,6 +25,7 @@ export async function mergeEntries(keep: Entry, dup: Entry, all: Entry[]) {
   const patch: Record<string, unknown> = {}
   for (const k of ['name_en', 'part_vn', 'part_en', 'material_vn', 'material_en', 'color_hex', 'desc_vn', 'desc_en', 'brand', 'product_code', 'product_name', 'product_url', 'product_image_url', 'origin', 'note_vn', 'note_en', 'parent_id'] as const)
     if ((keep[k] == null || keep[k] === '') && dup[k]) patch[k] = dup[k]
+  if (keep.product_url && dup.product_url && keep.product_url !== dup.product_url) { const j = [...new Set([...keep.product_url.split(/\s+/), ...dup.product_url.split(/\s+/)].filter(Boolean))].join('\n'); if (j !== keep.product_url) patch.product_url = j }
   if (keep.qty == null && dup.qty != null) { patch.qty = dup.qty; patch.unit = dup.unit; patch.qty_flag = dup.qty_flag; patch.qty_note = dup.qty_note }
   if (keep.parent_id === dup.id) patch.parent_id = null
   if (Object.keys(patch).length) await must(supabase.from('entries').update(patch).eq('id', keep.id))

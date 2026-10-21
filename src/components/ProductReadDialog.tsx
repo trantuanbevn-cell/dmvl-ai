@@ -27,7 +27,7 @@ export default function ProductReadDialog({ d, entry, onClose }: { d: ProjectDat
     <div className="modal-bg center" onMouseDown={onClose}>
       <div className="modal" style={{ width: 'min(720px, 96vw)', maxHeight: '90vh', overflow: 'auto' }} onMouseDown={e => e.stopPropagation()}>
         <div className="row between"><h3 style={{ margin: 0 }}>Thông số đọc từ link · {symOf(d.entries, entry)} {entry.name_vn}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
-        <div className="small muted" style={{ wordBreak: 'break-all' }}>{entry.product_url}</div>
+        <div className="small muted" style={{ wordBreak: 'break-all' }}>{(entry.product_url ?? "").split(/\s+/)[0]}</div>
         {!ex && !err && <p>Đang tải và đọc trang sản phẩm…</p>}
         {err && <p className="warn-text">{err}</p>}
         {ex && !ch.length && <p className="ok-text">Không có gì mới để điền – các ô đã giống thông tin trên trang.</p>}

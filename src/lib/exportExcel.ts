@@ -126,7 +126,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
         row.getCell(p).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAF4EA' } }
         if (!firstData) firstData = r; lastData = r
       }
-      if (e.product_url) { const lc = row.getCell(ci('sample')); lc.value = { text: '🔗 ' + hostOf(e.product_url), hyperlink: e.product_url }; lc.font = { name: 'Arial', size: 8, color: { argb: 'FF1F4E9A' }, underline: true }; lc.alignment = { vertical: 'bottom', horizontal: 'left', wrapText: false, shrinkToFit: true } }  // link sản phẩm nằm ngay dưới hình vật liệu
+      if (e.product_url) { const us = e.product_url.split(/\s+/).filter(Boolean), lc = row.getCell(ci('sample')); lc.value = { text: '🔗 ' + hostOf(us[0]) + (us.length > 1 ? ` (+${us.length - 1} link)` : ''), hyperlink: us[0] }; if (us.length > 1) lc.note = us.join('\n'); lc.font = { name: 'Arial', size: 8, color: { argb: 'FF1F4E9A' }, underline: true }; lc.alignment = { vertical: 'bottom', horizontal: 'left', wrapText: false, shrinkToFit: true } }  // link sản phẩm nằm ngay dưới hình vật liệu
       const wOf = (k: string) => cols[ci(k) - 1].w
       const l2w = !cl.loc2.length
       row.height = Math.max(150, wrapCount(cl.loc, l2w ? wOf('loc') * 2 : wOf('loc')) * 12.5 + 8, wrapCount(cl.loc2, wOf('loc')) * 12.5 + 8, ...(['cat', 'spec', 'brand', 'note'] as const).map(k => wrapCount(cl[k], wOf(k)) * 12.5 + 8))
