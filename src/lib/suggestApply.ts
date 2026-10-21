@@ -42,6 +42,14 @@ export async function applyPicks(entry: Entry, picks: Pick[], mark = true) {
   // đổi sang loại vật liệu khác nhóm mã (vd gỗ → sơn): ký hiệu bản vẽ + thông số cũ không còn đúng → đánh dấu đỏ cho người làm sửa
   const ek = kindOfGroup(entry.group_code), mk = picks[0].m.kind
   patch.spec_stale = ek && mk && ek !== mk ? mk : null
+  // ĐỔI LOẠI vật liệu (gỗ → sơn…): mọi chữ mô tả của vật liệu cũ đều sai → xoá, chỉ giữ cái mẫu thư viện có (tên, màu); không có thì để TRỐNG để người làm điền, không giữ chữ cũ gây nhầm
+  const reset = !!(ek && mk && ek !== mk)
+  if (reset) Object.assign(patch, {
+    name_vn: [picks[0].m.name, picks[0].m.line].filter(Boolean).join(' – ') || picks[0].m.product_code, name_en: null,
+    material_vn: null, material_en: null, desc_vn: null, desc_en: null, perf_vn: '', perf_en: '', standards: '', composition: null,
+    color_hex: /^#[0-9a-f]{3,8}$/i.test(picks[0].m.attrs.color ?? '') ? picks[0].m.attrs.color : null, mat_extra: null,
+  })
+  const dVn = reset ? null : entry.desc_vn, dEn = reset ? null : entry.desc_en
   // xuất xứ: lấy của mẫu thư viện; thư viện chưa có thì bỏ giá trị cũ (do AI đoán theo vật liệu khác) để ô báo thiếu và người làm điền đúng
   patch.origin = picks[0].m.attrs.origin || null
   // kích thước: biến thể đã chọn, hoặc mẫu chỉ có đúng 1 khổ
@@ -49,12 +57,12 @@ export async function applyPicks(entry: Entry, picks: Pick[], mark = true) {
   const sz = picks[0].v?.size || (only.length === 1 ? only[0] : '')
   if (sz) {   // sửa các chỗ cũ ghi khổ khác ("khổ 800x800mm") để mô tả không mâu thuẫn mẫu đã chọn
     const fix = (t: string | null) => t ? t.replace(/(\bkhổ\s*|\bsize\s*)\d+(?:[.,]\d+)?\s*[x×*]\s*\d+(?:[.,]\d+)?(?:\s*(?:mm|cm))?/gi, (_m, p) => p + sz) : t
-    patch.desc_vn = fix(entry.desc_vn); patch.desc_en = fix(entry.desc_en)
+    patch.desc_vn = fix(dVn); patch.desc_en = fix(dEn)
   }
   const vn = picks.map(p => (two ? p.m.brand + ': ' : '') + sizeText(p)).filter(s => s.replace(/^.*: /, '')).join('; ')
   if (vn) {
-    patch.desc_vn = setLine((patch.desc_vn as string | null | undefined) ?? entry.desc_vn, /^Kích thước\s*:.*$/im, 'Kích thước: ' + vn)
-    patch.desc_en = setLine((patch.desc_en as string | null | undefined) ?? entry.desc_en, /^Size\s*:.*$/im, 'Size: ' + vn.replace(/dày/g, 'thickness'))
+    patch.desc_vn = setLine((patch.desc_vn as string | null | undefined) ?? dVn, /^Kích thước\s*:.*$/im, 'Kích thước: ' + vn)
+    patch.desc_en = setLine((patch.desc_en as string | null | undefined) ?? dEn, /^Size\s*:.*$/im, 'Size: ' + vn.replace(/dày/g, 'thickness'))
   }
   return saveEntry(entry, patch)
 }
