@@ -78,9 +78,9 @@ export default function RoomView({ d }: { d: ProjectData }) {
     return { x: (ev.clientX - r.left) / r.width, y: (ev.clientY - r.top) / r.height }
   }
   const finishDraw = async () => {
-    if (!drag || !page || (!selOcc && !newMode)) return
+    if (!drag || !page || (!selOcc && !newMode && !brushOn)) return
     const x = Math.min(drag.x0, drag.x1), y = Math.min(drag.y0, drag.y1), w = Math.abs(drag.x1 - drag.x0), h = Math.abs(drag.y1 - drag.y0)
-    setDrag(null); setDraw(false)
+    setDrag(null); setDraw(brushOn)
     if (w < 0.01 || h < 0.01) { setNewMode(false); return }
     if (brushOn) {
       if (!brush) { setPendBox({ box: [x, y, w, h], pageId: page.id }); setAssignOpen(true); return }
@@ -246,7 +246,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
         }
       }} />}
       {selEntry && !hidePanel && <EntryPanel d={d} entry={selEntry} onClose={() => { setSel(null); setSelOcc(null) }} />}
-      {pop && <MaterialPopup d={d} entryId={pop} lang={lang} onClose={() => setPop(null)} onDetail={id => { setPop(null); setSel(id); setHidePanel(false) }} actions={canEdit && selOcc && d.occ.some(x => x.id === selOcc) ? <CropActions d={d} occId={selOcc} symLabel={e => symbolOf(e, lang, undefined, symMap)} onChanged={id => { if (id) { setPop(id); setSel(id) } else setPop(null) }} /> : undefined} />}
+      {pop && <MaterialPopup d={d} entryId={pop} focusOcc={selOcc ?? undefined} lang={lang} onClose={() => setPop(null)} onDetail={id => { setPop(null); setSel(id); setHidePanel(false) }} actions={canEdit && selOcc && d.occ.some(x => x.id === selOcc) ? <CropActions d={d} occId={selOcc} symLabel={e => symbolOf(e, lang, undefined, symMap)} onChanged={id => { if (id) { setPop(id); setSel(id) } else setPop(null) }} /> : undefined} />}
     </div>
   )
 }

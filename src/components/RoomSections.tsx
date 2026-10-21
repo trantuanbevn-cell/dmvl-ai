@@ -86,8 +86,8 @@ const HEAD: Record<Lang, string[]> = {
   both: ['STT / No.', 'KÍ HIỆU BẢN VẼ / DRAWING CODE', 'KÍ HIỆU VL / MATERIAL CODE', 'Hạng mục / Item', 'Vị trí / Location', 'Hình ảnh phối cảnh / Render', 'Thông số kỹ thuật / Specification', 'Xuất xứ/ Thương hiệu / Origin / Brand', 'Hình ảnh vật liệu / Material image', 'Ghi chú / Remarks'],
 }
 const HW: (number | string)[] = ['3%', '6%', '7%', '7.5%', '12.5%', '8%', '18%', '10%', '9%', '8%']   // tổng = 100% (cột cuối 7.5%) → vừa khung, không phải kéo ngang
-export default function RoomSections({ d, room, lang, filter, sel, onPick, onDetail, onRemove, onAdd, only, entryId }: {
-  only?: string; entryId?: string; d: ProjectData; room: Room | null; lang: Lang; filter: 'all' | 'pending' | 'inferred' | 'missing'; sel: string | null
+export default function RoomSections({ d, room, lang, filter, sel, onPick, onDetail, onRemove, onAdd, only, entryId, focusOcc }: {
+  only?: string; entryId?: string; /** vùng khoanh vừa bấm trên ảnh phối cảnh: ảnh crop hiện ra phải đúng vùng này */ focusOcc?: string; d: ProjectData; room: Room | null; lang: Lang; filter: 'all' | 'pending' | 'inferred' | 'missing'; sel: string | null
   onPick: (o: Occurrence) => void; onDetail: (id: string) => void; onRemove: (o: Occurrence) => void
   onAdd: (p: { section_key?: string | null; copy?: string; group: string; category: string; name: string; part_vn?: string | null; parent_id?: string | null; hint?: string }) => void
 }) {
@@ -298,8 +298,11 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                 const withImg = os.filter(o => o.bbox && (o.page_id || o.view?.img))
                 const best1 = new Map<string, Occurrence>()
                 for (const o of withImg) { const k = o.room_id ?? o.id; const c = best1.get(k); if (!c || (!!o.note && !c.note) || (!!o.note === !!c.note && (o.confidence ?? 0) > (c.confidence ?? 0))) best1.set(k, o) }
+                const fo = focusOcc ? withImg.find(o => o.id === focusOcc) : undefined
+                if (fo) best1.set(fo.room_id ?? fo.id, fo)
                 const shots: Occurrence[] = [...locs.map(l => best1.get(l.room.id)).filter(Boolean) as Occurrence[], ...withImg.filter(o => !o.room_id)]
                 for (const o of withImg) if (o.note && !shots.includes(o)) shots.push(o)
+                if (fo) { const i = shots.indexOf(fo); if (i > 0) { shots.splice(i, 1); shots.unshift(fo) } }
                 // Bảng ngoài chỉ để 3 ảnh đại diện (ảnh có ghi chú → độ tin cậy cao trước); đủ ảnh xem ở khung chi tiết khi bấm vào dòng
                 const shown = [...shots].sort((a, b) => (b.note ? 1 : 0) - (a.note ? 1 : 0) || (b.confidence ?? 0) - (a.confidence ?? 0)).slice(0, 3)
                 const missRooms = locs.filter(l => !shots.some(o => o.room_id === l.room.id))

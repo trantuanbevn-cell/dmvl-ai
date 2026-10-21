@@ -8,7 +8,7 @@ import type { ProjectData } from '../lib/useProject'
 import type { Lang } from '../lib/sections'
 
 /** Bảng vật liệu phóng to ở giữa màn hình: đúng một dòng của "Theo vật liệu" (đủ thông tin, ảnh phối cảnh, vị trí các phòng) – để đối chiếu trực quan vị trí khoanh với vật liệu */
-export default function MaterialPopup({ d, entryId, lang: l0, onClose, onDetail, actions }: { d: ProjectData; entryId: string; lang: Lang; onClose: () => void; onDetail: (id: string) => void; actions?: React.ReactNode }) {
+export default function MaterialPopup({ d, entryId, lang: l0, onClose, onDetail, actions, focusOcc }: { d: ProjectData; entryId: string; lang: Lang; onClose: () => void; onDetail: (id: string) => void; actions?: React.ReactNode; focusOcc?: string }) {
   const { canEdit } = useAuth()
   const [lang, setLang] = useState<Lang>(l0)
   const e = d.entries.find(x => x.id === entryId)
@@ -32,7 +32,7 @@ export default function MaterialPopup({ d, entryId, lang: l0, onClose, onDetail,
           </div>
         </div>
         {actions}
-        <RoomSections d={d} room={null} lang={lang} filter="all" sel={null} entryId={entryId} onPick={() => {}} onDetail={onDetail} onRemove={() => {}} onAdd={() => {}} />
+        <RoomSections d={d} room={null} lang={lang} filter="all" sel={null} entryId={entryId} focusOcc={focusOcc} onPick={() => {}} onDetail={onDetail} onRemove={() => {}} onAdd={() => {}} />
       </div>
     </div>
   )
