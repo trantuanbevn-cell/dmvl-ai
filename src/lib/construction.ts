@@ -5,14 +5,14 @@ import type { Entry } from './types'
 import { saveEntry } from './entryLink'
 import { changeGroup } from './entryGroup'
 
-export type Opt = { k: string; vn: string; en: string; s?: string; vars?: string[]; note?: [string, string] }
+export type Opt = { k: string; vn: string; en: string; s?: string; vars?: string[]; note?: [string, string]; tip?: string; rep?: boolean }
 export type Layer = { k: string; vn: string; en: string; multi?: boolean; when?: (sel: Sel) => boolean; opts: Opt[]; hint?: string }
-export type System = { k: 'wall' | 'ceiling' | 'floor'; vn: string; en: string; layers: Layer[] }
+export type System = { k: 'wall' | 'ceiling' | 'floor' | 'carpet'; vn: string; en: string; layers: Layer[] }
 /** sel[layer] = danh sách khoá đã tích; vars["layer/opt"] = lựa chọn kích thước/độ dày (nếu có) */
 export type BuildState = { sys: System['k']; sel: Record<string, string[]>; vars: Record<string, string>; extra?: string }
 type Sel = Record<string, string[]>
 
-const o = (k: string, vn: string, en: string, vars?: string[], s?: string, note?: [string, string]): Opt => ({ k, vn, en, vars, s, note })
+const o = (k: string, vn: string, en: string, vars?: string[], s?: string, note?: [string, string], tip?: string): Opt => ({ k, vn, en, vars, s, note, tip })
 const has = (sel: Sel, layer: string, key?: string) => key ? !!sel[layer]?.includes(key) : !!sel[layer]?.length
 
 // ───── Hệ sơn (dùng chung cho tường – trần – gỗ/MDF) ─────
@@ -209,13 +209,133 @@ const FLOOR: System = {
   ],
 }
 
-export const SYSTEMS: System[] = [WALL, CEILING, FLOOR]
+
+// ───── Thảm (cuộn / tấm / thanh / rời) – chọn theo loại không gian; họa tiết in theo thiết kế riêng, thông số kỹ thuật chọn ở đây ─────
+// Số liệu mang tính THAM KHẢO theo thông lệ khách sạn – văn phòng (phân cấp sử dụng EN 1307, thử ISO/EN, nhãn CRI Green Label Plus…); chốt theo catalogue nhà cung cấp.
+const CARPET: System = {
+  k: 'carpet', vn: 'Thảm', en: 'Carpet',
+  layers: [
+    { k: 'fmt', vn: 'Dạng thảm', en: 'Carpet format', hint: 'quyết định nhóm mã: cuộn = CPT, tấm/thanh = CTL, rời = RUG', opts: [
+      o('roll', 'Thảm cuộn trải kín (broadloom), khổ 4 m / 3,66 m', 'Broadloom carpet, roll width 4 m / 3.66 m', undefined, 'thảm cuộn', ['Trải liền theo mặt bằng, cắt ghép mối nối; hao hụt cắt khoảng 8–12%', 'Seamed on site; allow approx. 8–12% cutting waste'], 'Hợp phòng lớn, hành lang dài, sảnh tiệc; đẹp, liền mạch, in hoa văn tự do'),
+      o('tile', 'Thảm tấm (carpet tile)', 'Carpet tile', ['500×500 mm', '600×600 mm'], 'thảm tấm', ['Dễ thay từng tấm khi bẩn/hỏng, đi hệ thống sàn nâng/dây điện', 'Single tiles replaceable; suits raised floors / cabling'], 'Hợp văn phòng, nhà ăn, lối đi đông – dễ bảo trì, ít hao hụt'),
+      o('plank', 'Thảm thanh (carpet plank)', 'Carpet plank', ['250×1000 mm', '500×1000 mm'], 'thảm thanh', undefined, 'Hợp văn phòng/khu công cộng muốn lát kiểu ván gỗ'),
+      o('rug', 'Thảm rời / thảm trải theo kích thước (area rug), đế chống trượt', 'Area rug cut to size, non-slip backing', undefined, 'thảm rời', undefined, 'Thảm trang trí đặt lên sàn, không dán'),
+    ] },
+    { k: 'cons', vn: 'Cấu trúc bề mặt sợi', en: 'Pile construction', opts: [
+      o('tcut', 'Tufted, sợi cắt (cut pile)', 'Tufted, cut pile', undefined, 'tufted sợi cắt', undefined, 'Bề mặt mịn, in họa tiết rõ nét; hợp phòng ngủ, hành lang, sảnh tiệc'),
+      o('tloop', 'Tufted, sợi vòng (loop pile)', 'Tufted, loop pile', undefined, 'tufted sợi vòng', undefined, 'Bền nhất, chịu xe đẩy/ghế xoay, ít lộ vết đi – hợp văn phòng, nhà ăn, nơi đông người'),
+      o('tcl', 'Tufted, cắt – vòng kết hợp (cut & loop)', 'Tufted, cut & loop', undefined, 'tufted cắt-vòng', undefined, 'Tạo vân nổi, giấu bụi, hợp hành lang và khu công cộng'),
+      o('axm', 'Dệt Axminster (nhiều màu, hoa văn phức tạp)', 'Woven Axminster (multi-colour, complex pattern)', undefined, 'Axminster', undefined, 'Cao cấp: sảnh tiệc, nhà hàng sang, khách sạn 5 sao; giá cao, thời gian sản xuất lâu'),
+      o('wilton', 'Dệt Wilton', 'Woven Wilton', undefined, 'Wilton', undefined, 'Bền, nét họa tiết hình học; hợp sảnh và hành lang cao cấp'),
+      o('needle', 'Thảm kim dập (needle-punch, không dệt)', 'Needle-punch (non-woven)', undefined, 'thảm kim dập', undefined, 'Kinh tế, hội trường/sự kiện/triển lãm, nơi cần thay nhanh'),
+      o('htuft', 'Hand-tufted (làm thủ công)', 'Hand-tufted', undefined, 'hand-tufted', undefined, 'Thảm rời trang trí theo thiết kế riêng'),
+    ] },
+    { k: 'fiber', vn: 'Chất liệu sợi', en: 'Pile fibre', opts: [
+      o('nylon', 'Sợi nylon 100% (polyamide)', '100% nylon (polyamide) pile', undefined, 'sợi nylon', undefined, 'Lựa chọn thương mại tốt nhất: đàn hồi, bền, phục hồi sợi sau khi giẫm'),
+      o('nyrec', 'Nylon tái chế (ECONYL® hoặc tương đương)', 'Recycled nylon (ECONYL® or equal)', undefined, 'nylon tái chế', undefined, 'Như nylon, thêm tiêu chí xanh/bền vững'),
+      o('wool80', 'Len 80% + nylon 20%', '80% wool / 20% nylon', undefined, 'len 80/20', undefined, 'Chuẩn Axminster cao cấp: đàn hồi, cách nhiệt, hơi khó bảo trì hơn nylon'),
+      o('wool100', 'Len 100%', '100% wool', undefined, 'len 100%', undefined, 'Thảm rời, hand-tufted cao cấp'),
+      o('pp', 'Polypropylene (PP)', 'Polypropylene (PP)', undefined, 'sợi PP', undefined, 'Kinh tế, chống ố tốt, dễ lau; kém đàn hồi, dễ bẹp ở nơi đông người'),
+      o('pet', 'Polyester (PET)', 'Polyester (PET)', undefined, 'sợi PET', undefined, 'Mềm, màu rực; kém đàn hồi hơn nylon'),
+    ] },
+    { k: 'dye', vn: 'Phương pháp tạo màu – họa tiết', en: 'Colouration / pattern', opts: [
+      o('printed', 'In họa tiết theo thiết kế (in kỹ thuật số / in chuyển) trên sợi nylon', 'Printed pattern to design (digital / transfer print)', undefined, 'in họa tiết', ['Màu in theo file thiết kế; duyệt mẫu in (strike-off) trước khi sản xuất hàng loạt', 'Colours printed to design file; strike-off approval before bulk production'], 'Họa tiết theo thiết kế riêng, số lượng vừa phải'),
+      o('solution', 'Nhuộm nguyên liệu (solution-dyed)', 'Solution-dyed yarn', undefined, 'nhuộm nguyên liệu', undefined, 'Bền màu nhất, chịu chất tẩy, ánh sáng – hợp nhà ăn, sảnh, khu vực nắng'),
+      o('yarn', 'Nhuộm sợi (yarn-dyed)', 'Yarn-dyed', undefined, 'nhuộm sợi', undefined, 'Nhiều màu sắc, hợp tufted họa tiết đơn giản'),
+      o('piece', 'Nhuộm cuộn (piece-dyed), màu trơn', 'Piece-dyed, plain colour', undefined, 'nhuộm cuộn', undefined, 'Màu trơn, kinh tế'),
+      o('woven', 'Họa tiết dệt trực tiếp (Axminster / Wilton)', 'Woven pattern (Axminster / Wilton)', undefined, 'họa tiết dệt', undefined, 'Axminster tối đa khoảng 32 màu'),
+    ] },
+    { k: 'pw', vn: 'Khối lượng sợi (pile weight)', en: 'Pile weight', opts: [
+      o('pw1', 'Khối lượng sợi 600–800 g/m²', 'Pile weight 600–800 g/m²', ['600 g/m²', '700 g/m²', '800 g/m²'], 'sợi 600–800 g/m²', undefined, 'Nhẹ: văn phòng, phòng họp, khu ít đi lại'),
+      o('pw2', 'Khối lượng sợi 900–1100 g/m²', 'Pile weight 900–1100 g/m²', ['900 g/m²', '1000 g/m²', '1100 g/m²'], 'sợi 900–1100 g/m²', undefined, 'Trung bình: phòng ngủ khách sạn, nhà hàng, hành lang vừa'),
+      o('pw3', 'Khối lượng sợi 1200–1400 g/m²', 'Pile weight 1200–1400 g/m²', ['1200 g/m² (35.4 oz/yd²)', '1300 g/m²', '1400 g/m²'], 'sợi 1200–1400 g/m²', undefined, 'Nặng: hành lang khách sạn, sảnh, phòng tiệc'),
+      o('pw4', 'Khối lượng sợi 1500–2000 g/m²', 'Pile weight 1500–2000 g/m²', ['1500 g/m²', '1700 g/m²', '2000 g/m²'], 'sợi 1500–2000 g/m²', undefined, 'Cao cấp: sảnh chính, ballroom, Axminster'),
+    ] },
+    { k: 'ph', vn: 'Chiều cao sợi (pile height)', en: 'Pile height', opts: [
+      o('ph1', 'Chiều cao sợi 3–4 mm', 'Pile height 3–4 mm', ['3 mm', '3.5 mm', '4 mm'], 'sợi 3–4 mm', undefined, 'Thấp: xe đẩy, ghế xoay, lối đi đông – văn phòng, nhà ăn'),
+      o('ph2', 'Chiều cao sợi 5–7 mm', 'Pile height 5–7 mm', ['5 mm', '6 mm', '7 ± 0.5 mm'], 'sợi 5–7 mm', undefined, 'Trung bình: hành lang, sảnh, phòng tiệc'),
+      o('ph3', 'Chiều cao sợi 8–10 mm', 'Pile height 8–10 mm', ['8 mm', '9 mm', '10 mm'], 'sợi 8–10 mm', undefined, 'Cao, êm: phòng ngủ, thảm rời; không hợp xe đẩy, ghế xoay'),
+    ] },
+    { k: 'th', vn: 'Tổng chiều dày thảm (cả đế)', en: 'Total thickness', opts: [
+      o('th1', 'Tổng chiều dày 6–7 mm', 'Total thickness 6–7 mm', ['6 mm', '6.5 mm', '7 mm'], undefined, undefined, 'Thảm tấm văn phòng'),
+      o('th2', 'Tổng chiều dày 8–9 mm', 'Total thickness 8–9 mm', ['8 ± 0.5 mm', '8.5 ± 0.5 mm', '9 mm'], undefined, undefined, 'Thảm cuộn khách sạn'),
+      o('th3', 'Tổng chiều dày 10–14 mm (kể cả đế đệm)', 'Total thickness 10–14 mm (incl. cushion backing)', ['10 mm', '12 mm', '14 mm'], undefined, undefined, 'Thảm có đệm liền, phòng ngủ/ballroom'),
+    ] },
+    { k: 'gauge', vn: 'Gauge và mật độ mũi tuft', en: 'Gauge & stitch density', when: s => !has(s, 'cons', 'axm') && !has(s, 'cons', 'wilton') && !has(s, 'cons', 'needle'), opts: [
+      o('g8', 'Gauge 1/8 inch', 'Gauge 1/8 inch', ['26 stitches/10 cm', '30 stitches/10 cm'], 'gauge 1/8', undefined, 'Sợi thô, kinh tế'),
+      o('g10', 'Gauge 1/10 inch', 'Gauge 1/10 inch', ['35 stitches/10 cm', '37 stitches/10 cm', '40 stitches/10 cm'], 'gauge 1/10', undefined, 'Phổ biến thương mại, in họa tiết rõ'),
+      o('g12', 'Gauge 5/64 inch (mật độ cao)', 'Gauge 5/64 inch (high density)', ['42 stitches/10 cm', '46 stitches/10 cm'], 'gauge 5/64', undefined, 'Cao cấp, sợi mịn dày, bền hơn'),
+    ] },
+    { k: 'pback', vn: 'Đế chính (primary backing)', en: 'Primary backing', opts: [
+      o('ppw', 'Đế chính polypropylene dệt (PP)', 'Woven polypropylene (PP) primary backing', undefined, undefined, undefined, 'Thảm cuộn thông dụng'),
+      o('ppn', 'Đế chính polyester / PP không dệt', 'Non-woven polyester / PP primary backing', undefined, undefined, undefined, 'Thảm tấm'),
+    ] },
+    { k: 'sback', vn: 'Đế phụ (secondary backing)', en: 'Secondary backing', opts: [
+      o('action', 'Đế phụ Action back (PP dệt + latex)', 'Action back (woven PP + latex) secondary backing', undefined, undefined, undefined, 'Thảm cuộn thông dụng, dán keo hoặc căng khung'),
+      o('latex', 'Đế phụ latex SBR + vải jute / PP', 'SBR latex with jute / PP secondary backing', undefined, undefined, undefined, 'Thảm cuộn trải trên đệm lót rời'),
+      o('foam', 'Đế đệm PU foam liền (cushion back) 5–8 mm', 'Attached PU foam cushion back, 5–8 mm', ['5 mm', '6 mm', '8 mm'], undefined, ['Êm chân, giảm ồn va đập, không cần lót thảm riêng', 'Comfort underfoot, impact-sound reduction; no separate underlay'], 'Khách sạn, phòng ngủ, phòng tiệc'),
+      o('bitumen', 'Đế bitumen (thảm tấm)', 'Bitumen-backed (tile)', undefined, undefined, undefined, 'Thảm tấm văn phòng/nhà ăn: nặng, ổn định kích thước, chống ẩm tốt'),
+      o('pvcfree', 'Đế PET / không PVC (thảm tấm xanh)', 'PET / PVC-free tile backing', undefined, undefined, undefined, 'Thảm tấm bền vững, tái chế được'),
+      o('nonslip', 'Đế chống trượt (cao su / latex)', 'Non-slip backing (rubber / latex)', undefined, undefined, undefined, 'Thảm rời'),
+    ] },
+    { k: 'use', vn: 'Cấp sử dụng (EN 1307)', en: 'Use class (EN 1307)', hint: 'cấp càng cao càng bền, chịu lưu lượng người đi lại', opts: [
+      o('c31', 'Cấp 31 – thương mại mức vừa', 'Use class 31 – moderate commercial', undefined, 'cấp 31', undefined, 'Phòng ngủ khách sạn, văn phòng nhỏ, phòng họp'),
+      o('c32', 'Cấp 32 – thương mại thông thường', 'Use class 32 – general commercial', undefined, 'cấp 32', undefined, 'Văn phòng, hành lang vừa, nhà hàng nhỏ'),
+      o('c33', 'Cấp 33 – thương mại nặng', 'Use class 33 – heavy commercial', undefined, 'cấp 33', undefined, 'Sảnh, hành lang chính, ballroom, nhà ăn, nơi công cộng đông người (khuyến nghị cho khu công cộng)'),
+      o('c34', 'Cấp 34 – thương mại rất nặng (nếu nhà sản xuất có chứng nhận)', 'Use class 34 – very heavy commercial (if certified by manufacturer)', undefined, 'cấp 34', undefined, 'Lối đi cực đông (sân bay, trung tâm thương mại)'),
+    ] },
+    { k: 'fire', vn: 'Phản ứng với lửa', en: 'Reaction to fire', opts: [
+      o('bfl', 'Bfl-s1 (EN 13501-1)', 'Bfl-s1 (EN 13501-1)', undefined, undefined, ['Đạt phân loại cháy sàn Bfl-s1; hồ sơ thử kèm theo', 'Floor fire classification Bfl-s1; test report submitted'], 'Khuyến nghị cho hành lang, lối thoát nạn, khu công cộng'),
+      o('cfl', 'Cfl-s1 (EN 13501-1)', 'Cfl-s1 (EN 13501-1)', undefined, undefined, undefined, 'Phòng thông thường'),
+      o('gb', 'B-s1,t0 (GB 8624 – nhóm B1, theo catalogue nhà sản xuất)', 'B-s1,t0 (GB 8624 class B1, per manufacturer data)', undefined, undefined, undefined, 'Thảm nhập từ Trung Quốc – cần đối chiếu sang EN/QCVN khi nộp hồ sơ'),
+      o('astm', 'ASTM E648 Class I + ASTM E662 (khói)', 'ASTM E648 Class I + ASTM E662 (smoke)', undefined, undefined, undefined, 'Hồ sơ theo tiêu chuẩn Mỹ (khách sạn quốc tế)'),
+      o('qcvn', 'Nhóm cháy vật liệu hoàn thiện theo QCVN 06:2022/BXD', 'Reaction to fire per QCVN 06:2022/BXD', undefined, undefined, ['Chủ đầu tư/tư vấn PCCC xác nhận nhóm cháy cho khu vực thoát nạn', 'Fire-safety consultant to confirm class for escape routes'], 'Bắt buộc đối chiếu cho công trình tại Việt Nam'),
+    ] },
+    { k: 'anti', vn: 'Tĩnh điện và chống trượt', en: 'Static & slip', multi: true, opts: [
+      o('st2', 'Tĩnh điện ≤ 2 kV (EN 1815 / ISO 6356)', 'Static propensity ≤ 2 kV (EN 1815 / ISO 6356)', undefined, undefined, undefined, 'Văn phòng, phòng máy, y tế, khu nhiều thiết bị điện tử'),
+      o('st3', 'Tĩnh điện ≤ 3 kV (EN 1815 / ISO 6356)', 'Static propensity ≤ 3 kV (EN 1815 / ISO 6356)', undefined, undefined, undefined, 'Khách sạn, nhà hàng, khu thương mại thông thường'),
+      o('en14041', 'Tĩnh điện, trượt và các đặc tính khác theo EN 14041 (nhà sản xuất công bố)', 'Static, slip resistance and other characteristics per EN 14041 (manufacturer declared)', undefined, undefined, undefined, 'Theo bảng thông số của nhà cung cấp'),
+      o('slip', 'Chống trượt: hệ số ma sát ≥ 0,30 (EN 13893) hoặc R9 (DIN 51130)', 'Slip resistance: dynamic friction ≥ 0.30 (EN 13893) or R9 (DIN 51130)', undefined, undefined, undefined, 'Lối đi, sảnh, khu vực có thể ẩm'),
+    ] },
+    { k: 'test', vn: 'Thử nghiệm độ bền', en: 'Durability testing', multi: true, opts: [
+      o('app', 'Giữ vẻ ngoài sau lưu thông (trống Vettermann / hexapod, ISO 10361)', 'Appearance retention (Vettermann drum / hexapod, ISO 10361)', undefined, undefined, undefined, 'Căn cứ xếp cấp EN 1307'),
+      o('castor', 'Phù hợp ghế bánh xe (castor chair, ISO 4918)', 'Suitable for castor chairs (ISO 4918)', undefined, undefined, undefined, 'Văn phòng, phòng họp, nhà ăn'),
+      o('light', 'Độ bền màu với ánh sáng ≥ 5 (ISO 105-B02)', 'Colour fastness to light ≥ 5 (ISO 105-B02)', undefined, undefined, undefined, 'Khu có nắng rọi'),
+    ] },
+    { k: 'iaq', vn: 'Chất lượng không khí – nhãn xanh', en: 'Indoor air quality / eco-label', multi: true, opts: [
+      o('crigl', 'CRI Green Label Plus', 'CRI Green Label Plus', undefined, undefined, undefined, 'Phát thải VOC thấp, nhãn phổ biến khách sạn'),
+      o('floorscore', 'FloorScore®', 'FloorScore®', undefined, undefined, undefined, 'Theo LEED / WELL'),
+      o('gut', 'GUT / Oeko-Tex Standard 100', 'GUT / Oeko-Tex Standard 100', undefined, undefined, undefined, 'Nhãn châu Âu'),
+    ] },
+    { k: 'treat', vn: 'Xử lý bề mặt – tính năng', en: 'Treatments & performance', multi: true, opts: [
+      o('stain', 'Xử lý chống bẩn, chống ố (soil & stain resist, không PFAS nếu có thể)', 'Soil & stain resistant treatment (PFAS-free where available)', undefined, undefined, undefined, 'Nhà ăn, nhà hàng, sảnh'),
+      o('anti', 'Kháng khuẩn / chống nấm mốc', 'Antimicrobial / anti-mould', undefined, undefined, undefined, 'Khu ẩm, y tế'),
+      o('acoustic', 'Cách âm va đập: ΔLw theo thiết kế (ISO 10140-3), kèm đệm', 'Impact-sound improvement ΔLw per design (ISO 10140-3), with underlay', undefined, undefined, undefined, 'Giữa các tầng khách sạn, văn phòng'),
+      o('clean', 'Giặt hút bụi, làm sạch bằng phun hút; bảo hành mài mòn theo nhà sản xuất', 'Vacuum and hot-water-extraction cleanable; wear warranty per manufacturer', undefined, undefined, undefined, 'Quy trình bảo trì'),
+    ] },
+    { k: 'inst', vn: 'Cách lắp đặt', en: 'Installation', opts: [
+      o('glue', 'Dán keo toàn bộ (glue-down) lên nền đã cán phẳng, đạt độ ẩm', 'Fully adhered (glue-down) on levelled, dry substrate', undefined, 'dán keo', undefined, 'Thảm tấm và thảm cuộn có đế đệm liền'),
+      o('stretch', 'Căng khung (stretch-in, thanh gai tackless) trên lớp lót thảm', 'Stretch-in over carpet underlay with tackless strips', ['đệm PU 8–10 mm', 'đệm cao su 6–8 mm', 'đệm felt 8 mm'], 'căng khung', undefined, 'Thảm cuộn cao cấp, phòng ngủ, ballroom'),
+      o('tile', 'Dán thảm tấm bằng keo thảm tấm (tackifier), có thể thay từng tấm', 'Tiles fixed with releasable tackifier', undefined, 'keo thảm tấm', undefined, 'Văn phòng, nhà ăn'),
+      o('loose', 'Đặt rời, có lớp chống trượt', 'Loose-laid with non-slip layer', undefined, 'đặt rời', undefined, 'Thảm rời'),
+    ] },
+    { k: 'extra', vn: 'Phụ kiện – dự phòng', en: 'Accessories & attic stock', multi: true, opts: [
+      o('trans', 'Nẹp chuyển tiếp sang vật liệu sàn khác (inox/đồng/nhôm)', 'Transition strip to adjacent floor finish (SS / brass / aluminium)', undefined, 'nẹp chuyển tiếp'),
+      o('skirt', 'Len chân tường', 'Skirting', ['gỗ', 'nhựa/PVC', 'inox', 'nhôm'], 'len chân tường'),
+      o('attic', 'Dự phòng 5–10% khối lượng để thay thế sau này (attic stock), cùng lô màu', 'Attic stock 5–10% of area for future repairs, same dye lot', undefined, 'dự phòng 5–10%'),
+    ] },
+  ],
+}
+
+for (const l of CARPET.layers) if (['pw', 'ph', 'th'].includes(l.k)) l.opts.forEach(x => { x.rep = true })   // đã chọn số cụ thể thì thay luôn cho khoảng
+export const SYSTEMS: System[] = [WALL, CEILING, FLOOR, CARPET]
 export const systemOf = (k: System['k']) => SYSTEMS.find(s => s.k === k)!
 
 /** Đoán loại hệ (tường / trần / sàn) từ nhóm mã + chữ trong mục */
 export function guessSystem(e: Pick<Entry, 'group_code' | 'category' | 'name_vn' | 'part_vn' | 'desc_vn'>): System['k'] {
   const g = (e.group_code ?? '').toUpperCase(), t = `${e.name_vn ?? ''} ${e.part_vn ?? ''}`.toLowerCase()
   if (['GWB', 'FGWB', 'MGWB', 'ACT'].includes(g) || e.category === 'ceiling' || /\btrần\b/.test(t)) return 'ceiling'
+  if (['CPT', 'CTL', 'RUG'].includes(g) || /\bthảm\b/.test(t)) return 'carpet'
   if (['CT', 'ST', 'ES', 'LVT', 'CPT', 'CTL', 'RUG', 'CONC', 'MCM', 'EPX', 'PUF'].includes(g) || e.category === 'floor' || /\bsàn\b/.test(t)) return 'floor'
   return 'wall'
 }
@@ -234,12 +354,12 @@ export function cleanSel(sys: System, st: BuildState): BuildState {
   return { ...st, sel, vars }
 }
 
-const VAR_EN: [RegExp, string][] = [[/lớp/g, 'coats'], [/bán bóng/g, 'satin'], [/bóng cao/g, 'high gloss'], [/bóng/g, 'gloss'], [/mờ/g, 'matt'], [/hoàn thiện cao cấp/g, 'premium finish'], [/gỗ/g, 'timber'], [/nhựa\/PVC/g, 'plastic/PVC'], [/đá/g, 'stone'], [/nhôm/g, 'aluminum'], [/Sồi/g, 'Oak'], [/Óc chó/g, 'Walnut'], [/Tần bì/g, 'Ash'], [/Gỗ khác theo mẫu/g, 'Other timber per sample'], [/Thép sơn tĩnh điện/g, 'Powder-coated steel'], [/bông dày/g, 'wool thickness'], [/mút/g, 'foam'], [/ron/g, 'joint']]
+const VAR_EN: [RegExp, string][] = [[/đệm PU/g, 'PU underlay'], [/đệm cao su/g, 'rubber underlay'], [/đệm felt/g, 'felt underlay'], [/inox/g, 'stainless steel'], [/lớp/g, 'coats'], [/bán bóng/g, 'satin'], [/bóng cao/g, 'high gloss'], [/bóng/g, 'gloss'], [/mờ/g, 'matt'], [/hoàn thiện cao cấp/g, 'premium finish'], [/gỗ/g, 'timber'], [/nhựa\/PVC/g, 'plastic/PVC'], [/đá/g, 'stone'], [/nhôm/g, 'aluminum'], [/Sồi/g, 'Oak'], [/Óc chó/g, 'Walnut'], [/Tần bì/g, 'Ash'], [/Gỗ khác theo mẫu/g, 'Other timber per sample'], [/Thép sơn tĩnh điện/g, 'Powder-coated steel'], [/bông dày/g, 'wool thickness'], [/mút/g, 'foam'], [/ron/g, 'joint']]
 const viVar = (v: string) => VAR_EN.reduce((a, [r, t]) => a.replace(r, t), v)
 const txt = (l: Layer, op: Opt, st: BuildState, en: boolean) => {
   const v0 = st.vars[`${l.k}/${op.k}`], v = v0 && en ? viVar(v0) : v0
   const base = en ? op.en : op.vn
-  return v ? `${base} – ${v}` : base
+  return v ? (op.rep ? v : `${base} – ${v}`) : base
 }
 
 /** Sinh nội dung: cấu tạo ngắn (cột Cấu tạo) + các dòng thông số kỹ thuật VN/EN – chỉ gồm lớp đã tích */
@@ -254,7 +374,7 @@ export function renderBuild(st0: BuildState) {
     for (const p of picked) {
       const v = st.vars[`${l.k}/${p.k}`]
       const generic = p.k === 'none' || (l.k === 'finish' && p.k === 'paint')   // "không cốt", "sơn" chung chung: để dòng sơn phủ nói rõ
-      if (['base', 'core', 'finish', 'frame', 'top', 'type'].includes(l.k) && !generic && !(l.k === 'type' || (l.k === 'base' && p.k === 'masonry'))) comp.push([p.s ?? p.vn, v].filter(Boolean).join(' '))
+      if (['base', 'core', 'finish', 'frame', 'top', 'type', 'fmt', 'cons', 'fiber'].includes(l.k) && !generic && !(l.k === 'type' || (l.k === 'base' && p.k === 'masonry'))) comp.push([p.s ?? p.vn, v].filter(Boolean).join(' '))
       if (p.note) { vn.push('  ' + p.note[0]); en.push('  ' + p.note[1]) }
     }
   }
@@ -280,6 +400,16 @@ export const PRESETS: Preset[] = [
   { label: 'Sàn gỗ kỹ thuật (engineered)', sys: 'floor', sel: { base: ['screed'], under: ['foam'], finish: ['eng'], extra: ['skirting'] } },
   { label: 'Sàn SPC khóa hèm', sys: 'floor', sel: { base: ['screed'], under: ['foam'], finish: ['spc'], extra: ['skirting'] }, vars: { 'finish/spc': '5 mm' } },
   { label: 'Sàn gạch porcelain – khu ướt có chống thấm', sys: 'floor', sel: { base: ['screed'], wp: ['cem'], under: ['tileglue'], finish: ['tile'] } },
+  // ── Thảm theo loại không gian ──
+  { label: 'Thảm – theo file nhà cung cấp NYS1200 (in nylon cut pile 1200 g/m², sợi 7 mm)', sys: 'carpet', sel: { fmt: ['roll'], cons: ['tcut'], fiber: ['nylon'], dye: ['printed'], pw: ['pw3'], ph: ['ph2'], th: ['th2'], gauge: ['g10'], pback: ['ppw'], sback: ['action'], fire: ['gb'], anti: ['en14041'], iaq: ['crigl'], inst: ['glue'] }, vars: { 'pw/pw3': '1200 g/m² (35.4 oz/yd²)', 'ph/ph2': '7 ± 0.5 mm', 'th/th2': '8.5 ± 0.5 mm', 'gauge/g10': '37 stitches/10 cm' } },
+  { label: 'Thảm hành lang khách sạn – cuộn tufted in họa tiết (cấp 33)', sys: 'carpet', sel: { fmt: ['roll'], cons: ['tcut'], fiber: ['nylon'], dye: ['printed'], pw: ['pw3'], ph: ['ph2'], th: ['th2'], gauge: ['g10'], pback: ['ppw'], sback: ['action'], use: ['c33'], fire: ['bfl', 'qcvn'], anti: ['st3', 'slip'], test: ['app'], iaq: ['crigl'], treat: ['stain'], inst: ['glue'], extra: ['trans', 'skirt', 'attic'] }, vars: { 'pw/pw3': '1200 g/m² (35.4 oz/yd²)', 'ph/ph2': '6 mm', 'gauge/g10': '37 stitches/10 cm' } },
+  { label: 'Thảm phòng ngủ khách sạn / biệt thự – cuộn tufted + đệm (cấp 32)', sys: 'carpet', sel: { fmt: ['roll'], cons: ['tcut'], fiber: ['nylon'], dye: ['printed'], pw: ['pw2'], ph: ['ph2'], th: ['th3'], gauge: ['g10'], pback: ['ppw'], sback: ['foam'], use: ['c32'], fire: ['cfl', 'qcvn'], anti: ['st3'], iaq: ['crigl'], treat: ['acoustic'], inst: ['stretch'], extra: ['trans', 'skirt', 'attic'] }, vars: { 'pw/pw2': '1100 g/m²', 'ph/ph2': '7 ± 0.5 mm', 'th/th3': '10 mm', 'sback/foam': '6 mm', 'inst/stretch': 'đệm PU 8–10 mm' } },
+  { label: 'Thảm sảnh tiệc / ballroom / phòng hội nghị – Axminster len 80/20 (cấp 33)', sys: 'carpet', sel: { fmt: ['roll'], cons: ['axm'], fiber: ['wool80'], dye: ['woven'], pw: ['pw4'], ph: ['ph2'], th: ['th3'], pback: ['ppw'], sback: ['latex'], use: ['c33'], fire: ['bfl', 'qcvn'], anti: ['st3'], test: ['app'], iaq: ['gut'], treat: ['acoustic'], inst: ['stretch'], extra: ['trans', 'skirt', 'attic'] }, vars: { 'pw/pw4': '1700 g/m²', 'ph/ph2': '7 ± 0.5 mm', 'th/th3': '10 mm', 'inst/stretch': 'đệm PU 8–10 mm' } },
+  { label: 'Thảm sảnh – lối đi đông, công cộng, trường học, thư viện – thảm tấm sợi vòng (cấp 33)', sys: 'carpet', sel: { fmt: ['tile'], cons: ['tloop'], fiber: ['nylon'], dye: ['solution'], pw: ['pw2'], ph: ['ph1'], th: ['th1'], gauge: ['g10'], pback: ['ppn'], sback: ['bitumen'], use: ['c33'], fire: ['bfl', 'qcvn'], anti: ['st2', 'slip'], test: ['app', 'castor'], iaq: ['crigl'], treat: ['stain'], inst: ['tile'], extra: ['trans', 'attic'] }, vars: { 'fmt/tile': '500×500 mm', 'pw/pw2': '1000 g/m²', 'ph/ph1': '3.5 mm', 'th/th1': '6.5 mm', 'gauge/g10': '40 stitches/10 cm' } },
+  { label: 'Thảm văn phòng – thảm tấm sợi vòng 500×500 (cấp 32–33)', sys: 'carpet', sel: { fmt: ['tile'], cons: ['tloop'], fiber: ['nylon'], dye: ['solution'], pw: ['pw1'], ph: ['ph1'], th: ['th1'], gauge: ['g10'], pback: ['ppn'], sback: ['pvcfree'], use: ['c33'], fire: ['bfl', 'qcvn'], anti: ['st2'], test: ['app', 'castor'], iaq: ['crigl', 'floorscore'], treat: ['acoustic'], inst: ['tile'], extra: ['trans', 'attic'] }, vars: { 'fmt/tile': '500×500 mm', 'pw/pw1': '700 g/m²', 'ph/ph1': '3 mm', 'th/th1': '6.5 mm', 'gauge/g10': '37 stitches/10 cm' } },
+  { label: 'Thảm văn phòng – thảm thanh (plank) 250×1000', sys: 'carpet', sel: { fmt: ['plank'], cons: ['tloop'], fiber: ['nylon'], dye: ['solution'], pw: ['pw1'], ph: ['ph1'], th: ['th1'], gauge: ['g10'], pback: ['ppn'], sback: ['pvcfree'], use: ['c33'], fire: ['bfl', 'qcvn'], anti: ['st2'], test: ['app', 'castor'], iaq: ['crigl'], inst: ['tile'], extra: ['trans', 'attic'] }, vars: { 'fmt/plank': '250×1000 mm', 'pw/pw1': '800 g/m²', 'ph/ph1': '3 mm', 'th/th1': '6.5 mm' } },
+  { label: 'Thảm nhà ăn / nhà hàng / căng tin – thảm tấm sợi vòng chống ố, đế bitumen', sys: 'carpet', sel: { fmt: ['tile'], cons: ['tloop'], fiber: ['nylon'], dye: ['solution'], pw: ['pw2'], ph: ['ph1'], th: ['th1'], gauge: ['g10'], pback: ['ppn'], sback: ['bitumen'], use: ['c33'], fire: ['bfl', 'qcvn'], anti: ['st3', 'slip'], test: ['app'], iaq: ['crigl'], treat: ['stain', 'clean'], inst: ['tile'], extra: ['trans', 'attic'] }, vars: { 'fmt/tile': '500×500 mm', 'pw/pw2': '900 g/m²', 'ph/ph1': '3.5 mm', 'th/th1': '6.5 mm', 'gauge/g10': '40 stitches/10 cm' } },
+  { label: 'Thảm rời trang trí hand-tufted (theo thiết kế)', sys: 'carpet', sel: { fmt: ['rug'], cons: ['htuft'], fiber: ['wool100'], dye: ['yarn'], ph: ['ph3'], sback: ['nonslip'], inst: ['loose'] }, vars: { 'ph/ph3': '9 mm' } },
 ]
 
 const has2 = (st: BuildState, l: string, k: string) => !!st.sel[l]?.includes(k)
@@ -287,6 +417,7 @@ const has2 = (st: BuildState, l: string, k: string) => !!st.sel[l]?.includes(k)
 export function groupOfBuild(st0: BuildState): string | null {
   const sys = systemOf(st0.sys), st = cleanSel(sys, st0), h = (l: string, k: string) => has2(st, l, k)
   const fin = st.sel.finish ?? [], core = st.sel.core?.[0], base = st.sel.base?.[0]
+  if (st.sys === 'carpet') { const f = (st.sel.fmt ?? [])[0]; return f ? ({ roll: 'CPT', tile: 'CTL', plank: 'CTL', rug: 'RUG' } as Record<string, string>)[f] ?? null : null }
   if (st.sys === 'floor') {
     const f = fin[0]; if (!f) return null
     return ({ tile: 'CT', stone: 'ST', terrazzo: 'ST', engstone: 'ES', solid: 'WD', eng: 'EWD', lam: 'EWD', spc: 'LVT', lvt: 'LVT', carpetT: 'CTL', broadloom: 'CPT' } as Record<string, string>)[f] ?? null
@@ -316,10 +447,10 @@ export function groupOfBuild(st0: BuildState): string | null {
 /** Tên hạng mục + vật liệu sinh từ cấu tạo (chỉ dùng khi nhóm vật liệu bị đổi, để tên cũ không mâu thuẫn) */
 function namesOfBuild(st: BuildState) {
   const sys = systemOf(st.sys), pick = (l: string) => (st.sel[l] ?? []).map(k => sys.layers.find(x => x.k === l)?.opts.find(o => o.k === k)).filter(Boolean) as Opt[]
-  const fin = pick('finish'), top = pick('top'), core = pick('core')
+  const fin = pick(st.sys === 'carpet' ? 'fmt' : 'finish'), top = pick('top'), core = pick('core')
   const short = (o: Opt, en: boolean) => (en ? o.en : o.vn).replace(/\s*\(.*$/, '')
   const fv = fin.map(o => o.k === 'paint' && top[0] ? short(top[0], false) : short(o, false)), fe = fin.map(o => o.k === 'paint' && top[0] ? short(top[0], true) : short(o, true))
-  const head = (en: boolean) => (en ? sys.en.split(' / ')[0] : sys.vn.split(' – ')[0])
+  const head = (en: boolean) => st.sys === 'carpet' ? '' : (en ? sys.en.split(' / ')[0] : sys.vn.split(' – ')[0])
   const c0 = core.filter(o => o.k !== 'none')[0]
   return {
     name_vn: `${head(false)} ${fv.join(', ')}`.trim(), name_en: `${head(true)} – ${fe.join(', ')}`.trim(),

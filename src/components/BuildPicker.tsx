@@ -33,7 +33,7 @@ export default function BuildPicker({ entry, all, onDone, draft }: { entry: Buil
       </div>
       <select style={{ width: '100%', marginBottom: 6 }} value="" onChange={e => e.target.value && preset(Number(e.target.value) - 1)}>
         <option value="">⚡ Mẫu nhanh (vật liệu cơ bản – chọn sẵn các lớp, rồi tích sửa)…</option>
-        {PRESETS.map((p, i) => <option key={i} value={i + 1}>{p.label}</option>)}
+        {PRESETS.map((p, i) => p.sys === st.sys ? <option key={i} value={i + 1}>{p.label}</option> : null)}
       </select>
       {quick && <div className="small" style={{ marginBottom: 6 }}>✓ Đã chọn mẫu nhanh – không cần tích từng lớp. <a style={{ cursor: 'pointer' }} onClick={() => setFine(!fine)}>{fine ? 'ẩn các lớp' : '✎ sửa từng lớp'}</a></div>}
       {(!quick || fine) && layers.map(l => <div key={l.k} style={{ marginBottom: 8 }}>
@@ -42,7 +42,7 @@ export default function BuildPicker({ entry, all, onDone, draft }: { entry: Buil
           const on = (cl.sel[l.k] ?? []).includes(op.k)
           return <div key={op.k} style={{ marginTop: 2 }}>
             <label className="small" style={{ cursor: 'pointer' }}>
-              <input type={l.multi ? 'checkbox' : 'radio'} name={`${l.k}`} checked={on} onChange={() => toggle(l.k, op.k, l.multi)} onClick={() => { if (!l.multi && on) toggle(l.k, op.k) }} /> {op.vn}
+              <input type={l.multi ? 'checkbox' : 'radio'} name={`${l.k}`} checked={on} onChange={() => toggle(l.k, op.k, l.multi)} onClick={() => { if (!l.multi && on) toggle(l.k, op.k) }} /> {op.vn}{op.tip && <span className="muted"> – {op.tip}</span>}
             </label>
             {on && op.vars && <select style={{ marginLeft: 8 }} value={cl.vars[`${l.k}/${op.k}`] ?? ''} onChange={e => setVar(l.k, op.k, e.target.value)}>
               <option value="">— chọn —</option>{op.vars.map(v => <option key={v}>{v}</option>)}

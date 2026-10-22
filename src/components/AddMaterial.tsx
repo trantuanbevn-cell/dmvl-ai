@@ -20,7 +20,7 @@ export default function AddMaterial({ d, room: room0, preset, onClose, onDone }:
   const [busy, setBusy] = useState(false)
   const { can } = useAuth()
   const [bld, setBld] = useState<BuildState | null>(null)
-  const showBuild = can('build') && (['floor', 'wall', 'feature_wall', 'ceiling'].includes(f.category) || /^(PT|SP|WC|WP|GWB|FGWB|MGWB|ACT|CT|ST|ES|LVT|WD|EWD|WPC)$/.test(f.group))
+  const showBuild = can('build') && (['floor', 'wall', 'feature_wall', 'ceiling'].includes(f.category) || /^(PT|SP|WC|WP|GWB|FGWB|MGWB|ACT|CT|ST|ES|LVT|CPT|CTL|RUG|WD|EWD|WPC)$/.test(f.group))
   const [roomSel, setRoomSel] = useState<string>(room0?.id ?? '')
   const room = d.rooms.find(r => r.id === roomSel) ?? null
   const [src, setSrc] = useState<string>(preset.copy ?? '')
