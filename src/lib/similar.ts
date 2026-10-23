@@ -24,8 +24,8 @@ const COLORS: [string, RegExp][] = [
   ['pink', rx(['hồng', 'tím', 'pink', 'purple'])],
 ]
 const NEAR = new Set(['neutral|grey', 'neutral|lightwood', 'brown|lightwood', 'brown|red', 'black|grey', 'brown|yellow', 'lightwood|yellow', 'neutral|yellow'])
-const near = (a: string, b: string) => a === b || NEAR.has([a, b].sort().join('|'))
-const colorsOf = (t: string) => new Set(COLORS.filter(([, r]) => r.test(t)).map(([k]) => k))
+export const near = (a: string, b: string) => a === b || NEAR.has([a, b].sort().join('|'))
+export const colorsOf = (t: string) => new Set(COLORS.filter(([, r]) => r.test(t)).map(([k]) => k))
 const MATS: [string, RegExp][] = [
   ['engineered', rx(['laminate', 'melamine', 'mfc', 'mdf', 'hpl', 'cpl', 'gỗ công nghiệp', 'ván công nghiệp'])],
   ['veneer', rx(['veneer', 'gỗ tự nhiên', 'gỗ thịt', 'solid wood'])],
@@ -40,8 +40,8 @@ const MATS: [string, RegExp][] = [
   ['gypsum', rx(['thạch cao', 'gypsum'])],
   ['acrylic', rx(['acrylic', 'mica', 'solid surface'])],
 ]
-const matsOf = (t: string) => new Set(MATS.filter(([, r]) => r.test(t)).map(([k]) => k))
-const overlap = <T,>(a: Set<T>, b: Set<T>) => [...a].some(x => b.has(x))
+export const matsOf = (t: string) => new Set(MATS.filter(([, r]) => r.test(t)).map(([k]) => k))
+export const overlap = <T,>(a: Set<T>, b: Set<T>) => [...a].some(x => b.has(x))
 /** Mã màu / mã SP nêu trong chữ: 93YY 89/012, 20YY 53/124, GTGMTM, 3060M36140 … */
 const codesOf = (t: string) => {
   const out = new Set<string>()
