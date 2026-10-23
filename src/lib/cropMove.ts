@@ -64,3 +64,33 @@ export async function addCrop(occ: Occurrence[], target: Entry, roomId: string, 
   }
   return rec
 }
+
+/** Kéo CẢ MỘT PHÒNG (vị trí + toàn bộ hình khoanh của mã nguồn trong phòng đó) sang vật liệu khác: mã nguồn bỏ phòng này, mã đích nhận phòng + hình.
+ *  copy = true → mã nguồn vẫn giữ nguyên, mã đích được thêm bản sao. Có bản ghi để hoàn tác. Không xoá mã vật liệu nào. */
+export async function moveRoom(occ: Occurrence[], srcId: string, roomId: string, target: Entry, copy = false): Promise<MoveRec> {
+  const list = occ.filter(x => x.entry_id === srcId && x.room_id === roomId)
+  const reals = list.filter(x => x.bbox), blanks = list.filter(x => !x.bbox)
+  const rec: MoveRec = { label: `${copy ? 'Đã sao chép' : 'Đã chuyển'} phòng sang ${target.code}`, moved: [], removed: [], inserted: [] }
+  const cat = occ.find(x => x.entry_id === target.id && x.category)?.category ?? target.category ?? list[0]?.category ?? 'decor'
+  const targetHas = occ.some(x => x.entry_id === target.id && x.room_id === roomId)
+  if (copy) {
+    for (const o of reals) {
+      const { data, error } = await supabase.from('occurrences').insert({ entry_id: target.id, room_id: roomId, page_id: o.page_id, bbox: o.bbox, view: o.view, qty: null, confidence: o.confidence, category: cat, origin: 'manual' }).select('id')
+      if (error) throw new Error(error.message); if (data?.[0]) rec.inserted.push(data[0].id)
+    }
+    if (!reals.length && !targetHas) {
+      const { data, error } = await supabase.from('occurrences').insert({ entry_id: target.id, room_id: roomId, origin: 'manual', category: cat }).select('id')
+      if (error) throw new Error(error.message); if (data?.[0]) rec.inserted.push(data[0].id)
+    }
+    return rec
+  }
+  if (reals.length) {
+    const r = await moveCrops(occ, reals, target, 'room')
+    rec.moved.push(...r.moved); rec.removed.push(...r.removed)
+  }
+  for (const b of blanks) {
+    if (targetHas || reals.length) { const { error } = await supabase.from('occurrences').delete().eq('id', b.id); if (!error) rec.removed.push(b as unknown as Record<string, unknown>) }
+    else { const { error } = await supabase.from('occurrences').update({ entry_id: target.id, category: cat, origin: 'manual' }).eq('id', b.id); if (error) throw new Error(error.message); rec.moved.push({ id: b.id, entry_id: b.entry_id, category: b.category }) }
+  }
+  return rec
+}
