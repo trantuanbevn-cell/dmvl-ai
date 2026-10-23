@@ -1,5 +1,5 @@
 import { CATEGORIES } from './codes'
-import { groupBySection, sectionTitle, bandTitle, exportSymbols, symbolOf, tx, planSheets, PREFIXES, prefixLabel, type ExportOpts } from './sections'
+import { vlLines, groupBySection, sectionTitle, bandTitle, exportSymbols, symbolOf, tx, planSheets, PREFIXES, prefixLabel, type ExportOpts } from './sections'
 import { signedUrls } from './supabase'
 import { matMontage, extraPaths } from './matImages'
 import { viewCanvas, regionCanvas } from './crop'
@@ -63,7 +63,7 @@ export async function buildScheduleHtml(d: ExportData, o: ExportOpts, print: boo
       const { occ, img, map } = pre.get(e.id) ?? { occ: d.occ.filter(o => o.entry_id === e.id), img: '', map: '' }
       const locs = locationsOf(e.id, d.occ, d.rooms, d.pages)
       const cl = entryCells(e, L, [...new Set(occ.map(o => o.category ?? e.category).filter(Boolean) as string[])], locs, finishLines(e, d.entries, y => symbolOf(y, L, sym.legacy, sym.en)), allRoomsCount(locs, d.rooms))
-      rows += `<tr class="${!print && e.source === 'inferred' ? 'inf' : ''}"><td>${stt}</td><td class="code">${esc(symbolOf(e, L, sym.legacy, sym.en))}</td><td class="code">${esc(e.product_code ?? '').replace(/\n/g, '<br>')}</td><td>${html1(cl.cat)}</td><td>${cl.loc2.length ? `<div style="display:flex;gap:8px"><div style="flex:1">${html1(cl.loc)}</div><div style="flex:1">${html1(cl.loc2)}</div></div>` : html1(cl.loc)}</td><td class="im">${img || `<small style="color:#7F6000;font-style:italic">${esc(h('(không thể hiện trong phối cảnh)', '(not shown in render)'))}</small>`}</td>
+      rows += `<tr class="${!print && e.source === 'inferred' ? 'inf' : ''}"><td>${stt}</td><td class="code">${esc(symbolOf(e, L, sym.legacy, sym.en))}</td><td class="code">${esc(vlLines(e.product_code, symbolOf(e, L, sym.legacy, sym.en)).join('\n')).replace(/\n/g, '<br>')}</td><td>${html1(cl.cat)}</td><td>${cl.loc2.length ? `<div style="display:flex;gap:8px"><div style="flex:1">${html1(cl.loc)}</div><div style="flex:1">${html1(cl.loc2)}</div></div>` : html1(cl.loc)}</td><td class="im">${img || `<small style="color:#7F6000;font-style:italic">${esc(h('(không thể hiện trong phối cảnh)', '(not shown in render)'))}</small>`}</td>
         <td>${html1(cl.spec)}</td>
         <td>${html1(cl.brand)}</td><td class="im">${map}${e.product_url ? e.product_url.split(/\s+/).filter(Boolean).map(u => `<div class="lk"><a href="${esc(u)}">🔗 ${esc(hostOf(u))}</a></div>`).join('') : ''}</td>
         <td>${html1(cl.note)}</td>${o.quote ? `<td>${esc(e.qty ?? '')}</td><td>${esc(e.unit ?? '')}</td><td></td><td></td>` : ''}</tr>`

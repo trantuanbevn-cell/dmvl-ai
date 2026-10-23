@@ -277,6 +277,18 @@ const intlCode = (e: Entry) => { const m = /^[A-Z]+-(\d+)/.exec(e.code); return 
 export function symbolOf(e: Entry, _lang?: Lang, _legacy?: Map<string, string>, en?: Map<string, string>): string {
   return en?.get(e.id) ?? intlCode(e)
 }
+/** Cột KÍ HIỆU VL hiển thị: dòng mã có CÙNG tiền tố với ký hiệu bản vẽ của chính hạng mục (vd EWD-… cạnh EWD-09) thì luôn lấy đúng số của ký hiệu bản vẽ,
+ *  nên thêm / bớt / xoá / đổi vật liệu thì hai cột tự nhảy số cùng nhau. Mã khác tiền tố (mã hãng, vật liệu thành phần…) giữ nguyên. Chỉ đổi cách hiển thị/xuất, không ghi vào dữ liệu. */
+export function vlLines(raw: string | null | undefined, sym: string): string[] {
+  const pf = sym.split('-')[0].toUpperCase(), out: string[] = []
+  for (const l0 of (raw ?? '').split('\n')) {
+    const l = l0.trim(), m = /^([A-Za-z]{2,6})-\d{1,3}[A-Za-z]?$/.exec(l)
+    const v = m && sym && m[1].toUpperCase() === pf ? sym : l
+    if (v && out.includes(v)) continue
+    out.push(v)
+  }
+  return out
+}
 /** Bản đồ ký hiệu cho cả danh sách (các nhóm cùng tiền tố – vd gỗ tự nhiên + melamine – dùng chung một dãy số, không trùng) */
 export const symbolMap = (entries: Entry[]) => exportSymbols(entries.filter(e => e.status !== 'rejected'), true).en
 const symCache = new WeakMap<Entry[], Map<string, string>>()
