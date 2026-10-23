@@ -15,7 +15,36 @@ const ENTRY_FIELDS: [string, string, SpellLang, boolean][] = [
 /** Xác nhận một mục KHÔNG phải lỗi: ẩn mục này và coi các từ bị nghi trong đó là đúng (toàn công ty) – từ nay dùng lại ở đâu cũng không báo */
 export async function confirmNotError(it: SpellItem, projectId: string) {
   await addIgnore('spell', it.key, projectId)
-  await addIgnores('word', it.flags.map(f => f.word).filter(w => !w.startsWith('⚠') && w.length > 1).map(w => w.toLowerCase()), null)
+  // cả từ bị phần mềm TỰ SỬA (vd Martindale → Martingale) mà người dùng xác nhận là đúng → coi là từ đúng, các mục khác cũng không bị tự sửa/báo nữa
+  const ok = [...it.flags.map(f => f.word), ...it.fixes.filter(f => f.kind === 'spell').map(f => f.from)]
+  await addIgnores('word', ok.filter(w => !w.startsWith('⚠') && w.length > 1 && !/\s/.test(w)).map(w => w.toLowerCase()), null)
+}
+
+const WORD_RE = /[\p{L}\p{M}]+(?:'[\p{L}]+)?/gu
+const esc = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/** Các từ người dùng đã đổi: ghép từng từ trước/sau (cùng số từ), hoặc một từ thay một từ giữa hai đoạn giống nhau */
+export function wordPairs(before: string, after: string): [string, string][] {
+  const a = before.match(WORD_RE) ?? [], b = after.match(WORD_RE) ?? []
+  const out: [string, string][] = []
+  if (a.length === b.length) a.forEach((w, i) => { if (w !== b[i]) out.push([w, b[i]]) })
+  else {
+    let p = 0; while (p < a.length && p < b.length && a[p] === b[p]) p++
+    let q = 0; while (q < a.length - p && q < b.length - p && a[a.length - 1 - q] === b[b.length - 1 - q]) q++
+    if (a.length - p - q === 1 && b.length - p - q === 1) out.push([a[p], b[p]])
+  }
+  return out.filter(([f]) => f.length > 1)
+}
+/** Người dùng đã sửa `src` thành `finalText` → mọi mục khác (cùng ngôn ngữ) chứa đúng từ sai đó, hoặc có nguyên văn giống hệt, được sửa y như vậy */
+export function planPropagate(src: SpellItem, finalText: string, items: SpellItem[]): { item: SpellItem; text: string }[] {
+  const pairs = wordPairs(src.before, finalText), out: { item: SpellItem; text: string }[] = []
+  for (const it of items) {
+    if (it.key === src.key || it.lang !== src.lang) continue
+    let t = it.before
+    if (it.before === src.before) t = finalText
+    else for (const [f, to] of pairs) t = t.replace(new RegExp(`(?<![\\p{L}\\p{M}])${esc(f)}(?![\\p{L}\\p{M}])`, 'gu'), to)
+    if (t !== it.before) out.push({ item: it, text: t })
+  }
+  return out
 }
 
 export function spellScan(d: ProjectData): SpellItem[] {

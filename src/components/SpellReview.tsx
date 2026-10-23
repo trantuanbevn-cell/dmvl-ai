@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ProjectData } from '../lib/useProject'
-import { applySpell, confirmNotError, type SpellItem } from '../lib/spellScan'
+import { applySpell, confirmNotError, planPropagate, type SpellItem } from '../lib/spellScan'
 import { addUserWord } from '../lib/spell'
 import { toast } from '../lib/toast'
 import { MarkedBefore } from './MarkedText'
@@ -14,7 +14,13 @@ export default function SpellReview({ d, items, onClose, onOpenEntry }: { d: Pro
   const auto = list.filter(i => i.after !== i.before)
   const val = (i: SpellItem) => edit[i.key] ?? i.after
   const done = async (i: SpellItem, text: string) => { await applySpell(d, i, text); setGone(g => [...g, i.key]) }
-  const save = async (i: SpellItem) => { setBusy(true); try { if (val(i) === i.before) { await confirmNotError(i, d.project!.id); setGone(g => [...g, i.key]) } else { await done(i, val(i)); d.reload() } } catch (e) { toast(String(e)) } setBusy(false) }
+  /** Bản sửa vừa lưu áp dụng luôn cho mọi mục khác có đúng từ sai đó (không phải tích từng cái) */
+  const spread = async (src: SpellItem, txt: string) => {
+    const plan = planPropagate(src, txt, list.filter(x => x.key !== src.key))
+    for (const p of plan) await done(p.item, p.text)
+    if (plan.length) toast(`Đã sửa theo ${plan.length} mục khác có cùng lỗi`, 'ok')
+  }
+  const save = async (i: SpellItem) => { setBusy(true); try { if (val(i) === i.before) { await confirmNotError(i, d.project!.id); setGone(g => [...g, i.key]) } else { const txt = val(i); await done(i, txt); await spread(i, txt); d.reload() } } catch (e) { toast(String(e)) } setBusy(false) }
   const all = async () => {
     setBusy(true)
     try { for (const i of auto) await done(i, val(i)); toast(`Đã sửa ${auto.length} mục`, 'ok'); await d.reload() } catch (e) { toast(String(e)) }

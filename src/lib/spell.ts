@@ -22,7 +22,7 @@ const DOMAIN = `décor decor inox melamine laminate mdf mfc hdf hpl pu led gypsu
   headboard nightstand armchair banquette bolster cushion drapery sheer blackout curtain valance tieback anodized anodised brushed powdercoated galvanised
   sanitary lavatory basin faucet shower bidet cistern urinal vanity countertop backsplash splashback tempered laminated frosted opaque translucent
   hinge handle pull knob latch deadbolt cabinet wardrobe closet drawer shelving shelf bracket cornice coving architrave plinth threshold
-  mitred mitered grey colour colours coloured colourless cementitious flohydric seater seaters inchem niken crom crôm inox sus polymer polymeric bevelled chamfered rebated rebate toughened epoxy bullnose tongue groove flush recessed concealed hairline satin sandblasted bush-hammered honed flamed lappato tumbled vietnam vietnamese hanoi danang indonesia malaysia thailand italy italian china chinese korea korean japan japanese germany german spain spanish`.split(/\s+/)
+  mitred mitered grey colour colours coloured colourless cementitious flohydric seater seaters inchem niken crom crôm inox sus polymer polymeric bevelled chamfered rebated rebate toughened epoxy bullnose tongue groove flush recessed concealed hairline satin sandblasted bush-hammered honed flamed lappato tumbled martindale wyzenbeek useable perchloroethylene oeko greenguard vietnam vietnamese hanoi danang indonesia malaysia thailand italy italian china chinese korea korean japan japanese germany german spain spanish`.split(/\s+/)
 export function loadEnglish(): Promise<void> {
   if (en) return Promise.resolve()
   return (enLoading ??= (async () => {
@@ -108,7 +108,7 @@ function spellWords(text: string, lang: SpellLang, fixes: Fix[], flags: Flag[]) 
     const skip = inUrl || w.length < 2 || isUpperWord(w) || /[\d_/@#.]/.test(prev) || /[\d_/@#]/.test(next) || (next === '.' && /\p{L}/u.test(text[i + w.length + 1] ?? '')) || known(w)
     if (!skip) {
       const lineStart = /^\s*(?:[-•*·–]\s*)?$/.test(text.slice(0, i).split('\n').pop() ?? '') || /[.!?]\s+$/.test(text.slice(0, i))
-      const proper = w[0] !== w[0].toLowerCase() && !lineStart && w.slice(1) === w.slice(1).toLowerCase()   // Tên riêng/hãng giữa câu
+      const proper = w[0] !== w[0].toLowerCase() && (!lineStart || next === ':') && w.slice(1) === w.slice(1).toLowerCase()   // Tên riêng/hãng giữa câu, hoặc nhãn thông số đầu dòng dạng “Martindale: 80000”
       if (lang === 'vi') {
         const r = checkVi(w)
         if (r.ok) { if (r.fixed !== w) { fixes.push({ from: w, to: r.fixed, kind: 'tone' }); rep = r.fixed } }
