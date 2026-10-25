@@ -10,6 +10,7 @@ import { LinesCanvas } from './PlanView'
 import Scene3D, { type Pick3 } from './Scene3D'
 import LibraryBrowser from './LibraryBrowser'
 import SectionView from './SectionView'
+import RoomIsoView from './RoomIsoView'
 import type { Sec } from '../lib/plan3d/section'
 import { catalogMatFor } from '../lib/plan3d/sectionCatalog'
 import { DoorElevSection, DoorPlanSection, WallLayerSection } from './Sections'
@@ -157,7 +158,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   useEffect(() => { try { localStorage.setItem('plan3d-custom-finishes', JSON.stringify(custom)) } catch { setErr('Ảnh vật liệu quá nặng, không lưu thêm được trong trình duyệt.') } }, [custom])
   useEffect(() => { try { localStorage.setItem('plan3d-custom-doors', JSON.stringify(customDoors)) } catch { /* bỏ */ } }, [customDoors])
   const [autoTick, setAutoTick] = useState(0), [autoRoom, setAutoRoom] = useState(() => { try { return localStorage.getItem('plan3d-autofloor') !== '0' } catch { return true } }), Mr = useRef<Model | null>(null), lastAuto = useRef<{ w: unknown; d: unknown } | null>(null), lastBub = useRef<{ id: string; t: number } | null>(null), chainRef = useRef<string | null>(null), [dpA, setDpA] = useState<{ p: Pt; ang: number } | null>(null), [libDoor, setLibDoor] = useState('dr-flush09'), [libCol, setLibCol] = useState('cl-r40'), [newKind, setNewKind] = useState('brick'), [gKind, setGKind] = useState('glassal'), [gDoor, setGDoor] = useState('dg-glass12'), [gPos, setGPos] = useState<'mid' | 'start' | 'end'>('mid'), [showLib, setShowLib] = useState(false), [ceiling, setCeiling] = useState(false)
-  const [secOpen, setSecOpen] = useState(false), [secId, setSecId] = useState('')
+  const [secOpen, setSecOpen] = useState(false), [secId, setSecId] = useState(''), [isoOpen, setIsoOpen] = useState(false), [isoId, setIsoId] = useState('')
   const [pending, setPending] = useState<Pt | null>(null), [cursor, setCursor] = useState<Pt | null>(null), [pts, setPts] = useState<Pt[]>([])
 
   const commit = useCallback((n: Model, push = true) => { setAutoTick(t => t + 1); setM(cur => { if (push && cur) { hist.current.push(cur); if (hist.current.length > 60) hist.current.shift(); setNh(hist.current.length) } return n }) }, [])
@@ -718,6 +719,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
         <div className="mp-tabs"><button className={'mp-tab' + (mode === '2d' ? ' on' : '')} onClick={() => setMode('2d')}>Mặt bằng 2D</button><button className={'mp-tab' + (mode === '3d' ? ' on' : '')} onClick={() => setMode('3d')}>Xem 3D</button></div>
         <button className="btn sm" disabled={!nh} onClick={undo}>↩ Hoàn tác</button>
+        {(M.rooms?.length ?? 0) > 0 && <button className="btn sm" title="Crop không gian isometric của phòng đang chọn (hoặc phòng đầu tiên)" onClick={() => { setIsoId(sel?.t === 'room' ? sel.id : M.rooms![0].id); setIsoOpen(true) }}>🧊 Crop phòng</button>}
         {(M.sections?.length ?? 0) > 0 && <button className="btn sm" title="Xem các mặt cắt đã vẽ" onClick={() => { if (!M.sections?.some(x => x.id === secId)) setSecId(M.sections![0].id); setSecOpen(true) }}>✂ Mặt cắt ({M.sections!.length})</button>}
         {mode === '2d' ? <>
           <button className="btn sm" onClick={() => fit(M, size)}>⤢ Vừa khung</button>
@@ -739,6 +741,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
         <span className="muted">Phím tắt: V chọn · L tường · A cung · C tròn · R chữ nhật · F sàn · D cửa · K vách kính · G/H trục · M dời · Q xoay · E co giãn · N sao chép</span>
       </div>}
       {secOpen && M.sections && M.sections.length > 0 && <SectionView model={M} sections={M.sections} activeId={secId} onPick={setSecId} onChange={s2 => commit({ ...M, sections: s2 })} onClose={() => setSecOpen(false)} mat={secMat} matNote={proj?.d ? '' : '(Đang dùng độc lập – chưa nối danh mục nên chỉ có vật liệu thư viện.)'} />}
+      {isoOpen && <RoomIsoView model={M} roomId={isoId} onPick={setIsoId} onClose={() => setIsoOpen(false)} mat={secMat} />}
       {showLib && <LibraryBrowser custom={custom} customDoors={customDoors} doorSel={libDoor} wallSel={selWall?.kind ?? newKind} colSel={libCol}
         hint={selWall ? 'Đang chọn 1 tường: bấm loại tường / vật liệu để áp lên tường đó' : selRoom ? 'Đang chọn 1 phòng: bấm vật liệu Sàn / Trần để áp lên phòng' : selDoor ? 'Đang chọn 1 cửa: bấm mẫu cửa hoặc vật liệu để áp lên cửa' : 'Bấm mẫu cửa/cột để đặt; chọn một tường/phòng/cửa trước để áp vật liệu'}
         onDoor={id => { const sp = doorSpec(id, customDoors); setLibDoor(id); if (selDoor && sp) setDoor(selDoor.id, { lib: sp.id, kind: sp.kind, w: sp.w, h: sp.h, sill: sp.sill, finish: undefined, frameFinish: undefined }); else setTool('door') }}
