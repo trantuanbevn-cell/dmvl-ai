@@ -8,6 +8,7 @@ import { FURN_LAYER } from '../dxf'
 
 export type Pt = [number, number]
 import { WALL_TYPES, wallTypeOf } from './library'
+import type { Sec } from './section'
 export const WALL_KINDS = WALL_TYPES
 export const kindOf = wallTypeOf
 
@@ -30,7 +31,7 @@ export type Axis = { id: string; dir: 'v' | 'h'; pos: number; name: string; auto
 export type Furn = { id: string; kind: string; name?: string; x: number; y: number; w: number; d: number; ang: number; h: number; finish?: string; flip?: boolean; auto?: boolean; /** cao độ đáy (m) so với sàn – tủ trên, gương… */ z?: number }
 /** chữ trong bản vẽ (tên phòng…) để tự đặt tên phòng */
 export type Label = { t: string; x: number; y: number; h: number; pri?: boolean }
-export type Model = { v: 1; walls: Wall[]; doors: Door[]; furn?: Furn[]; labels?: Label[]; dims?: Dim[]; rooms?: Room[]; axes?: Axis[]; /** khoảng cách bong bóng trục tới mép bản vẽ (m) theo dãy: v = trục dọc (phía trên), h = trục ngang (bên trái) */ axOff?: { v?: number; h?: number }; /** tâm các sàn tự tạo mà người dùng đã xoá – không tự tạo lại */ noAuto?: Pt[]; /** khoảng cách hàng kích thước giữa các trục tới mép bản vẽ (m) */ dimOff?: { v?: number; h?: number }; /** tên trục: true = tự gõ tay (không tự đánh theo thứ tự) */ axMan?: { v?: boolean; h?: boolean }; /** tên trục đầu dãy khi tự đánh (mặc định 1 / A) */ axStart?: { v?: string; h?: string }; /** tự đánh ngược chiều (phải→trái / dưới→trên) */ axRev?: { v?: boolean; h?: boolean }; hWall: number; hCol: number; mPt: number; w: number; h: number }
+export type Model = { v: 1; /** các đường cắt mặt cắt vẽ trên mặt bằng */ sections?: Sec[]; walls: Wall[]; doors: Door[]; furn?: Furn[]; labels?: Label[]; dims?: Dim[]; rooms?: Room[]; axes?: Axis[]; /** khoảng cách bong bóng trục tới mép bản vẽ (m) theo dãy: v = trục dọc (phía trên), h = trục ngang (bên trái) */ axOff?: { v?: number; h?: number }; /** tâm các sàn tự tạo mà người dùng đã xoá – không tự tạo lại */ noAuto?: Pt[]; /** khoảng cách hàng kích thước giữa các trục tới mép bản vẽ (m) */ dimOff?: { v?: number; h?: number }; /** tên trục: true = tự gõ tay (không tự đánh theo thứ tự) */ axMan?: { v?: boolean; h?: boolean }; /** tên trục đầu dãy khi tự đánh (mặc định 1 / A) */ axStart?: { v?: string; h?: string }; /** tự đánh ngược chiều (phải→trái / dưới→trên) */ axRev?: { v?: boolean; h?: boolean }; hWall: number; hCol: number; mPt: number; w: number; h: number }
 
 let seq = 0
 export const uid = (p: string) => p + Date.now().toString(36) + (seq++).toString(36)

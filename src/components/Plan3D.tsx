@@ -9,6 +9,9 @@ import type { VecPage } from '../lib/vector'
 import { LinesCanvas } from './PlanView'
 import Scene3D, { type Pick3 } from './Scene3D'
 import LibraryBrowser from './LibraryBrowser'
+import SectionView from './SectionView'
+import type { Sec } from '../lib/plan3d/section'
+import { catalogMatFor } from '../lib/plan3d/sectionCatalog'
 import { DoorElevSection, DoorPlanSection, WallLayerSection } from './Sections'
 import { COL_LIB, DOOR_LIB, FINISHES, WALL_TYPES, doorSpec, finishOf, type DoorLeaf, type DoorSpec, type Finish } from '../lib/plan3d/library'
 import { WALL_KINDS, autoRooms, centerline, centroid, doorRect, floodRoom, centerDoor, footprint, inside, kindOf, modelFromVec, polyArea, snapToWall, uid, wallThickAt, type Dim, type Door, type Furn, type Model, type Pt, type Room, type Wall } from '../lib/plan3d/model'
@@ -16,7 +19,7 @@ import { FURN_GROUPS, FURN_TYPES, furnTypeOf } from '../lib/plan3d/furn'
 import { applyXf, buildShape, detectAxes, fitWallsToDoor, joinEnds, furnHitsWall, mkMove, mkRot, mkScale, newWallOverlap, roomOverlap, selCenter, syncAxisNames, trimToFree, shapePoly, type Shape } from '../lib/plan3d/xform'
 
 type Box = { x: number; y: number; w: number; h: number }
-type Tool = 'select' | 'wall' | 'glasskit' | 'axisV' | 'axisH' | 'dim' | 'room' | 'roomPoly' | 'door' | 'col' | 'furn'
+type Tool = 'select' | 'wall' | 'glasskit' | 'axisV' | 'axisH' | 'dim' | 'room' | 'roomPoly' | 'door' | 'col' | 'furn' | 'section'
 type Sel = { t: 'wall' | 'door' | 'room' | 'dim' | 'furn' | 'axis'; id: string } | null
 type SnapKind = '' | 'align' | 'end' | 'mid' | 'cen' | 'int' | 'per' | 'nea' | 'axis' | 'polar' | 'grid'
 const SNAP_LABEL: Record<string, string> = { align: 'Dóng hàng', end: 'Đầu mút', mid: 'Điểm giữa', cen: 'Tâm', int: 'Giao điểm', per: 'Vuông góc', nea: 'Gần nhất', axis: 'Trục', polar: 'Góc cực / ngang-dọc', grid: 'Lưới' }
@@ -154,6 +157,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   useEffect(() => { try { localStorage.setItem('plan3d-custom-finishes', JSON.stringify(custom)) } catch { setErr('Ảnh vật liệu quá nặng, không lưu thêm được trong trình duyệt.') } }, [custom])
   useEffect(() => { try { localStorage.setItem('plan3d-custom-doors', JSON.stringify(customDoors)) } catch { /* bỏ */ } }, [customDoors])
   const [autoTick, setAutoTick] = useState(0), [autoRoom, setAutoRoom] = useState(() => { try { return localStorage.getItem('plan3d-autofloor') !== '0' } catch { return true } }), Mr = useRef<Model | null>(null), lastAuto = useRef<{ w: unknown; d: unknown } | null>(null), lastBub = useRef<{ id: string; t: number } | null>(null), chainRef = useRef<string | null>(null), [dpA, setDpA] = useState<{ p: Pt; ang: number } | null>(null), [libDoor, setLibDoor] = useState('dr-flush09'), [libCol, setLibCol] = useState('cl-r40'), [newKind, setNewKind] = useState('brick'), [gKind, setGKind] = useState('glassal'), [gDoor, setGDoor] = useState('dg-glass12'), [gPos, setGPos] = useState<'mid' | 'start' | 'end'>('mid'), [showLib, setShowLib] = useState(false), [ceiling, setCeiling] = useState(false)
+  const [secOpen, setSecOpen] = useState(false), [secId, setSecId] = useState('')
   const [pending, setPending] = useState<Pt | null>(null), [cursor, setCursor] = useState<Pt | null>(null), [pts, setPts] = useState<Pt[]>([])
 
   const commit = useCallback((n: Model, push = true) => { setAutoTick(t => t + 1); setM(cur => { if (push && cur) { hist.current.push(cur); if (hist.current.length > 60) hist.current.shift(); setNh(hist.current.length) } return n }) }, [])
@@ -371,6 +375,14 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
       addLine(pending, q); return
     }
     if (tool === 'axisV' || tool === 'axisH') { const q = snapPt(p); addAxis(tool === 'axisV' ? 'v' : 'h', tool === 'axisV' ? q[0] : q[1]); return }
+    if (tool === 'section') {
+      const q = snapPt(p, pts[0] ?? null)
+      if (!pts.length) { setPts([q]); return }
+      if (Math.hypot(q[0] - pts[0][0], q[1] - pts[0][1]) < 0.3) return
+      const used = (M.sections ?? []).map(x => x.name), nm = 'ABCDEFGHJKLMNPQRSTUVWXYZ'.split('').map(c => c + '-' + c).find(n => !used.includes(n)) ?? 'S' + ((M.sections ?? []).length + 1)
+      const sc: Sec = { id: uid('s'), name: nm, a: pts[0], b: q }
+      commit({ ...M, sections: [...(M.sections ?? []), sc] }); setPts([]); setSecId(sc.id); setSecOpen(true); setTool('select'); return
+    }
     if (tool === 'dim') {
       const q = pts.length < 2 ? snapPt(p, pts[0]) : p, n = [...pts, q]
       if (n.length < 3) { setPts(n); return }
@@ -613,6 +625,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const num = (v: string, d: number) => { const n = parseFloat(v.replace(',', '.')); return isFinite(n) ? n : d }
   const segLen = selWall?.shape.type === 'seg' ? Math.hypot(selWall.shape.b[0] - selWall.shape.a[0], selWall.shape.b[1] - selWall.shape.a[1]) : 0
 
+  const secMat = useMemo(() => proj?.d ? catalogMatFor(proj.d) : undefined, [proj?.d?.entries, proj?.d?.occ, proj?.d?.rooms]) // eslint-disable-line
   const go = (t: Tool, sh?: Shape) => { setTool(t); setPending(null); setPts([]); setLenBuf(''); setErr(''); if (sh) setShp(sh) }
   const focTf = (id: string) => { if (!sel) { setErr('Hãy chọn một đối tượng trước, rồi bấm lệnh này.'); return } setErr(''); setTimeout(() => { const el = document.getElementById(id) as HTMLInputElement | null; el?.focus(); el?.select() }, 30) }
   const GH = (t: string) => <div style={{ fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: 0.5, margin: '6px 0 0', textAlign: 'center', borderTop: '1px solid #e5e5e5', paddingTop: 4 }}>{t}</div>
@@ -634,6 +647,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
       <PalBtn on={tool === 'furn'} ic="🛋" label="Nội thất" title="Đặt đồ rời, thiết bị vệ sinh, tủ liền tường" onClick={() => go('furn')} />
       {GH('GHI CHÚ')}
       <PalBtn on={tool === 'dim'} ic="📏" label="Kích thước" title="Ghi kích thước" onClick={() => go('dim')} />
+      <PalBtn on={tool === 'section'} ic="✂" label="Mặt cắt" title="Vẽ đường cắt trên mặt bằng (bấm 2 điểm) → tự tạo mặt cắt không gian" onClick={() => go('section')} />
     </>}
     {GH('SỬA')}
     <PalBtn on={false} ic="✥" label="Dời (M)" title="Dời chính xác: nhập X/Y (mm)" onClick={() => focTf('tf-dx')} />
@@ -647,7 +661,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
       <PalBtn on={false} ic="⚡" label="Nhận trục" title="Tự nhận hệ trục từ tâm cột" onClick={runDetectAxes} />
     </>}
   </>
-  const TOOL_NAME: Record<string, string> = { select: 'Chọn / kéo', wall: 'Vẽ tường', glasskit: 'Bộ vách kính + cửa', col: 'Đặt cột', roomPoly: 'Vẽ sàn / đo diện tích', room: 'Phòng (bấm vào trong)', door: 'Đặt cửa', furn: 'Đặt nội thất', dim: 'Ghi kích thước', axisV: 'Trục dọc', axisH: 'Trục ngang' }
+  const TOOL_NAME: Record<string, string> = { select: 'Chọn / kéo', wall: 'Vẽ tường', glasskit: 'Bộ vách kính + cửa', col: 'Đặt cột', roomPoly: 'Vẽ sàn / đo diện tích', room: 'Phòng (bấm vào trong)', door: 'Đặt cửa', furn: 'Đặt nội thất', dim: 'Ghi kích thước', section: 'Vẽ đường cắt mặt cắt', axisV: 'Trục dọc', axisH: 'Trục ngang' }
   const optBar = <div className="small" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', background: '#faf6ef', border: '1px solid #eadfcb', borderRadius: 6, padding: '4px 8px', minHeight: 30 }}>
     <b style={{ color: '#a85a00' }}>{mode === '3d' ? 'Xem 3D – chọn & sửa' : TOOL_NAME[tool]}</b>
     {mode === '2d' && <>
@@ -704,6 +718,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
         <div className="mp-tabs"><button className={'mp-tab' + (mode === '2d' ? ' on' : '')} onClick={() => setMode('2d')}>Mặt bằng 2D</button><button className={'mp-tab' + (mode === '3d' ? ' on' : '')} onClick={() => setMode('3d')}>Xem 3D</button></div>
         <button className="btn sm" disabled={!nh} onClick={undo}>↩ Hoàn tác</button>
+        {(M.sections?.length ?? 0) > 0 && <button className="btn sm" title="Xem các mặt cắt đã vẽ" onClick={() => { if (!M.sections?.some(x => x.id === secId)) setSecId(M.sections![0].id); setSecOpen(true) }}>✂ Mặt cắt ({M.sections!.length})</button>}
         {mode === '2d' ? <>
           <button className="btn sm" onClick={() => fit(M, size)}>⤢ Vừa khung</button>
           <label className="small"><input type="checkbox" checked={ortho} onChange={e => setOrtho(e.target.checked)} /> Bắt ngang/dọc</label>
@@ -723,6 +738,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
         <label><input type="checkbox" checked={showLv} onChange={e => setShowLv(e.target.checked)} /> Hiện cốt sàn / trần</label>
         <span className="muted">Phím tắt: V chọn · L tường · A cung · C tròn · R chữ nhật · F sàn · D cửa · K vách kính · G/H trục · M dời · Q xoay · E co giãn · N sao chép</span>
       </div>}
+      {secOpen && M.sections && M.sections.length > 0 && <SectionView model={M} sections={M.sections} activeId={secId} onPick={setSecId} onChange={s2 => commit({ ...M, sections: s2 })} onClose={() => setSecOpen(false)} mat={secMat} matNote={proj?.d ? '' : '(Đang dùng độc lập – chưa nối danh mục nên chỉ có vật liệu thư viện.)'} />}
       {showLib && <LibraryBrowser custom={custom} customDoors={customDoors} doorSel={libDoor} wallSel={selWall?.kind ?? newKind} colSel={libCol}
         hint={selWall ? 'Đang chọn 1 tường: bấm loại tường / vật liệu để áp lên tường đó' : selRoom ? 'Đang chọn 1 phòng: bấm vật liệu Sàn / Trần để áp lên phòng' : selDoor ? 'Đang chọn 1 cửa: bấm mẫu cửa hoặc vật liệu để áp lên cửa' : 'Bấm mẫu cửa/cột để đặt; chọn một tường/phòng/cửa trước để áp vật liệu'}
         onDoor={id => { const sp = doorSpec(id, customDoors); setLibDoor(id); if (selDoor && sp) setDoor(selDoor.id, { lib: sp.id, kind: sp.kind, w: sp.w, h: sp.h, sill: sp.sill, finish: undefined, frameFinish: undefined }); else setTool('door') }}
@@ -780,6 +796,15 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
                 {([['w', 1], ['w', -1], ['d', 1], ['d', -1]] as const).map(([ax, sg]) => { const u: Pt = ax === 'w' ? [c, sn] : [-sn, c], h = (ax === 'w' ? f.w : f.d) / 2; return <Arrow key={ax + sg} x={f.x + u[0] * sg * h} y={f.y + u[1] * sg * h} ang={Math.atan2(u[1], u[0]) + (sg < 0 ? Math.PI : 0)} s={hs} title={ax === 'w' ? 'Kéo để đổi bề rộng' : 'Kéo để đổi chiều sâu'} onDown={e => onArrow(e, 'furnSz', f.id, f, { ax, sg })} /> })}
                 <line x1={f.x + sn * f.d / 2} y1={f.y - c * f.d / 2} x2={rp[0]} y2={rp[1]} stroke="#e07000" strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
                 <circle cx={rp[0]} cy={rp[1]} r={hs * 1.2} fill="#fff" stroke="#e07000" strokeWidth={1.6} vectorEffect="non-scaling-stroke" style={{ cursor: 'alias' }} onPointerDown={e => onArrow(e, 'furnRot', f.id, f)}><title>Kéo để xoay (Shift = bước 15°)</title></circle></> })()}
+              {(M.sections ?? []).map(sc => { const dx = sc.b[0] - sc.a[0], dy = sc.b[1] - sc.a[1], L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, g = sc.flip ? -1 : 1, vx = uy * g, vy = -ux * g, k = hs * 3.2
+                const arrow = (p: Pt) => <g key={p.join()}><line x1={p[0]} y1={p[1]} x2={p[0] + vx * k * 1.6} y2={p[1] + vy * k * 1.6} stroke="#c0392b" strokeWidth={2} vectorEffect="non-scaling-stroke" /><path d={`M${p[0] + vx * k * 1.9} ${p[1] + vy * k * 1.9}l${-vx * k * 0.5 - vy * k * 0.3} ${-vy * k * 0.5 + vx * k * 0.3}l${vy * k * 0.6} ${-vx * k * 0.6}z`} fill="#c0392b" /></g>
+                return <g key={sc.id} style={{ cursor: 'pointer' }} onPointerDown={e => { if (tool !== 'select') return; e.stopPropagation(); setSecId(sc.id); setSecOpen(true) }}>
+                  <line x1={sc.a[0]} y1={sc.a[1]} x2={sc.b[0]} y2={sc.b[1]} stroke="#c0392b" strokeWidth={2} strokeDasharray="14 4 3 4" vectorEffect="non-scaling-stroke" />
+                  <line x1={sc.a[0]} y1={sc.a[1]} x2={sc.b[0]} y2={sc.b[1]} stroke="transparent" strokeWidth={12} vectorEffect="non-scaling-stroke" />
+                  {arrow(sc.a)}{arrow(sc.b)}
+                  {[sc.a, sc.b].map((p, i) => <g key={i}><circle cx={p[0] + vx * k * 3.2} cy={p[1] + vy * k * 3.2} r={k * 0.9} fill="#fff" stroke="#c0392b" strokeWidth={1.5} vectorEffect="non-scaling-stroke" /><text x={p[0] + vx * k * 3.2} y={p[1] + vy * k * 3.2 + k * 0.35} fontSize={k * 1.1} textAnchor="middle" fill="#c0392b" fontWeight={700}>{sc.name.split('-')[0]}</text></g>)}
+                </g> })}
+              {tool === 'section' && pts.length > 0 && cursor && (() => { const a = pts[0], b = snapPt(cursor, a); return <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="#c0392b" strokeWidth={2} strokeDasharray="14 4 3 4" vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} /> })()}
               {tool === 'dim' && pts.length > 0 && cursor && (() => { const a = pts[0], b = pts.length > 1 ? pts[1] : snapPt(cursor, a), L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, off = pts.length > 1 ? ((cursor[0] - a[0]) * -(b[1] - a[1]) + (cursor[1] - a[1]) * (b[0] - a[0])) / L : 0; return <DimGlyph d={{ id: 'tmp', a, b, off }} sel fs={fsz} mm={dimMm} onDown={() => undefined} /> })()}
               {tool === 'roomPoly' && pts.length > 0 && <path d={'M' + pts.map(q => q[0] + ' ' + q[1]).join('L') + (cursor ? 'L' + snapPt(cursor, pts[pts.length - 1]).join(' ') : '')} fill="#e07000" fillOpacity={0.15} stroke="#e07000" strokeWidth={2} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />}
               {tool === 'roomPoly' && pts.length >= 3 && <text x={centroid(pts)[0]} y={centroid(pts)[1]} fontSize={fsz} textAnchor="middle" fill="#e07000" stroke="#fff" strokeWidth={fsz * 0.2} paintOrder="stroke" style={{ pointerEvents: 'none' }}>{polyArea(pts).toFixed(2)} m²</text>}
@@ -815,7 +840,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
                 {ed.k === 'seg' && <label className="small">Độ dày <input style={{ width: 70 }} value={edv.thick} onChange={e => setEdv({ ...edv, thick: e.target.value })} onFocus={e => e.target.select()} /> mm</label>}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><button className="btn sm primary" onClick={applyEd}>Áp dụng ↵</button>{ed.k !== 'seg' && <button className="btn sm" onClick={addVertexEd}>＋ Thêm đỉnh tại đây</button>}<button className="btn sm" onClick={() => setEd(null)}>Đóng</button></div></div> })()}
             <div className="muted small" style={{ position: 'absolute', left: 6, bottom: 4, background: 'rgba(255,255,255,.85)', padding: '0 4px' }}>
-              {tool === 'axisV' || tool === 'axisH' ? 'Bấm vào vị trí đặt trục (tự hút vào tâm cột / đầu mút) · Esc để dừng' : tool === 'wall' || tool === 'glasskit' ? (shp === 'arc' ? 'Cung: bấm điểm đầu, điểm cuối, rồi điểm nằm trên cung' : shp === 'circle' ? 'Tròn: bấm tâm rồi bấm điểm trên đường tròn' : shp === 'rect' ? 'Chữ nhật: bấm hai góc đối diện' : 'Bấm điểm đầu, rồi các điểm tiếp theo · gõ số mm + Enter để đặt đúng chiều dài · Esc/chuột phải để dừng') : tool === 'dim' ? 'Bấm điểm đầu, điểm cuối, rồi bấm để kéo đường kích thước ra' : tool === 'room' ? 'Bấm vào bên trong một không gian kín' : tool === 'roomPoly' ? (shp === 'line' || shp === 'arc' ? 'Bấm từng góc sàn; bấm lại điểm đầu hoặc Enter để chốt' : shp === 'circle' ? 'Bấm tâm rồi bấm điểm trên đường tròn' : 'Bấm hai góc đối diện') : tool === 'furn' ? 'Bấm để đặt món nội thất' : tool !== 'select' ? 'Bấm sát vào tường để đặt cửa' : 'Cuộn = zoom · kéo nền = dời · bấm tường/cửa để chọn · Del = xoá · Ctrl+Z = hoàn tác'}</div>
+              {tool === 'section' ? 'Mặt cắt: bấm điểm đầu, điểm cuối của đường cắt (mũi tên đỏ chỉ hướng nhìn; đảo hướng trong cửa sổ mặt cắt) · Esc để dừng' : tool === 'axisV' || tool === 'axisH' ? 'Bấm vào vị trí đặt trục (tự hút vào tâm cột / đầu mút) · Esc để dừng' : tool === 'wall' || tool === 'glasskit' ? (shp === 'arc' ? 'Cung: bấm điểm đầu, điểm cuối, rồi điểm nằm trên cung' : shp === 'circle' ? 'Tròn: bấm tâm rồi bấm điểm trên đường tròn' : shp === 'rect' ? 'Chữ nhật: bấm hai góc đối diện' : 'Bấm điểm đầu, rồi các điểm tiếp theo · gõ số mm + Enter để đặt đúng chiều dài · Esc/chuột phải để dừng') : tool === 'dim' ? 'Bấm điểm đầu, điểm cuối, rồi bấm để kéo đường kích thước ra' : tool === 'room' ? 'Bấm vào bên trong một không gian kín' : tool === 'roomPoly' ? (shp === 'line' || shp === 'arc' ? 'Bấm từng góc sàn; bấm lại điểm đầu hoặc Enter để chốt' : shp === 'circle' ? 'Bấm tâm rồi bấm điểm trên đường tròn' : 'Bấm hai góc đối diện') : tool === 'furn' ? 'Bấm để đặt món nội thất' : tool !== 'select' ? 'Bấm sát vào tường để đặt cửa' : 'Cuộn = zoom · kéo nền = dời · bấm tường/cửa để chọn · Del = xoá · Ctrl+Z = hoàn tác'}</div>
           </div>}
         </div>
           <div style={{ display: 'grid', gap: 8, fontSize: 13 }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && (e.target as HTMLElement).tagName === 'INPUT' && (e.target as HTMLInputElement).type !== 'checkbox') { e.preventDefault(); (e.target as HTMLInputElement).blur() } }}>
