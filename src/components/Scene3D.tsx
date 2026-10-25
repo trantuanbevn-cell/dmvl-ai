@@ -15,9 +15,9 @@ function shapeOf(rings: Pt[][]) {
 }
 export type Pick3 = { t: 'wall' | 'door' | 'room' | 'furn'; id: string } | null
 export type Lay3 = { walls: boolean; cols: boolean; doors: boolean; furn: boolean; rooms: boolean }
-type Opt3 = { sel: { t: string; id: string } | null; lay: Lay3; fgHide: string[] }
+type Opt3 = { sel: { t: string; id: string } | null; lay: Lay3; fgHide: string[]; flat?: boolean }
 const LAY_ALL: Lay3 = { walls: true, cols: true, doors: true, furn: true, rooms: true }
-export default function Scene3D({ model, view, custom = [], customDoors = [], ceiling = false, showFurn = true, sel = null, lay = LAY_ALL, lock = {}, fgHide = [], pan = false, onPick, onMoveSel }: { pan?: boolean; model: Model; showFurn?: boolean; view: number; custom?: Finish[]; customDoors?: DoorSpec[]; ceiling?: boolean; sel?: { t: string; id: string } | null; lay?: Lay3; lock?: Record<string, boolean>; fgHide?: string[]; onPick?: (s: Pick3) => void; onMoveSel?: (s: NonNullable<Pick3>, dx: number, dy: number) => void }) {
+export default function Scene3D({ model, view, custom = [], customDoors = [], ceiling = false, showFurn = true, sel = null, lay = LAY_ALL, lock = {}, fgHide = [], flat = false, pan = false, onPick, onMoveSel }: { pan?: boolean; model: Model; showFurn?: boolean; view: number; custom?: Finish[]; customDoors?: DoorSpec[]; ceiling?: boolean; sel?: { t: string; id: string } | null; lay?: Lay3; lock?: Record<string, boolean>; fgHide?: string[]; flat?: boolean; onPick?: (s: Pick3) => void; onMoveSel?: (s: NonNullable<Pick3>, dx: number, dy: number) => void }) {
   const cbs = useRef<{ onPick?: (s: Pick3) => void; onMoveSel?: (s: NonNullable<Pick3>, dx: number, dy: number) => void; lock: Record<string, boolean>; pan?: boolean }>({ lock: {} })
   cbs.current = { onPick, onMoveSel, lock, pan }
   const cv = useRef<HTMLCanvasElement>(null), api = useRef<{ set: (m: Model, c: Finish[], cd: DoorSpec[], ceil: boolean, sf: boolean, o: Opt3) => void; reset: (k: number) => void } | null>(null)
@@ -71,6 +71,8 @@ export default function Scene3D({ model, view, custom = [], customDoors = [], ce
       }
       if (x1 > x0) { bb = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
         const fl = new THREE.Mesh(new THREE.PlaneGeometry(bb.w + 4, bb.h + 4), new THREE.MeshStandardMaterial({ color: 0xd9d4c8, roughness: 1 })); fl.rotation.x = -Math.PI / 2; fl.position.set(bb.x + bb.w / 2, -0.02, bb.y + bb.h / 2); grp.add(fl) }
+      scene.background = new THREE.Color(o.flat ? 0xf4efe6 : 0xf3f1ec)
+      if (o.flat) grp.traverse(ob => { const m = ob as THREE.Mesh; if (!m.isMesh) return; for (const mt of (Array.isArray(m.material) ? m.material : [m.material])) { const sm = mt as THREE.MeshStandardMaterial; if (!sm.map) continue; const im = sm.map.image as CanvasImageSource & { width?: number; height?: number; complete?: boolean } | undefined; if (!im || !(im.width ?? 0)) continue; try { const cv = document.createElement('canvas'); cv.width = cv.height = 1; const g = cv.getContext('2d')!; g.drawImage(im, 0, 0, 1, 1); const d = g.getImageData(0, 0, 1, 1).data; sm.map = null; sm.color = new THREE.Color(d[0] / 255, d[1] / 255, d[2] / 255).convertSRGBToLinear(); sm.roughness = 1; sm.metalness = 0; sm.needsUpdate = true } catch { /* ảnh ngoài miền: giữ nguyên */ } } })
       if (o.sel) { let tg: THREE.Object3D | null = null; grp.traverse(ob => { if (!tg && ob.userData.sel && ob.userData.sel.t === o.sel!.t && ob.userData.sel.id === o.sel!.id) tg = ob }); if (tg) { const bx = new THREE.Box3().setFromObject(tg); if (!bx.isEmpty()) { const h = new THREE.Box3Helper(bx, new THREE.Color(0xe07000)); h.raycast = () => undefined; (h.material as THREE.LineBasicMaterial).depthTest = false; h.renderOrder = 10; grp.add(h) } } }
     }
     // ── chọn & kéo đối tượng trong 3D ──
@@ -108,7 +110,7 @@ export default function Scene3D({ model, view, custom = [], customDoors = [], ce
     return () => { c.removeEventListener('pointerdown', onDown3, true); c.removeEventListener('pointermove', onMove3); c.removeEventListener('pointerup', onUp3); cancelAnimationFrame(raf); ro.disconnect(); ctl.dispose(); dispose(grp); r.dispose(); api.current = null }
   }, [])
   const first = useRef(true)
-  useEffect(() => { const t = setTimeout(() => { api.current?.set(model, custom, customDoors, ceiling, showFurn, { sel, lay, fgHide }); if (first.current) { first.current = false; api.current?.reset(0) } }, 120); return () => clearTimeout(t) }, [model, custom, customDoors, ceiling, showFurn, sel, lay, fgHide])
+  useEffect(() => { const t = setTimeout(() => { api.current?.set(model, custom, customDoors, ceiling, showFurn, { sel, lay, fgHide, flat }); if (first.current) { first.current = false; api.current?.reset(0) } }, 120); return () => clearTimeout(t) }, [model, custom, customDoors, ceiling, showFurn, sel, lay, fgHide, flat])
   useEffect(() => { api.current?.reset(view) }, [view])
   return <canvas ref={cv} style={{ width: '100%', height: '72vh', display: 'block', border: '1px solid #ddd', borderRadius: 6, background: '#f3f1ec', touchAction: 'none' }} />
 }

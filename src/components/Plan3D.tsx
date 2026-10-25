@@ -30,10 +30,10 @@ const SM0 = { align: true, end: true, mid: true, cen: true, int: true, per: true
 const KEY = 'plan3d-model-v1'
 const ringPath = (r: Pt[]) => 'M' + r.map(p => p[0].toFixed(3) + ' ' + p[1].toFixed(3)).join('L') + 'Z'
 
-const WallPath = memo(function WallPath({ w, sel, onDown }: { w: Wall; sel: boolean; onDown: (e: React.PointerEvent, w: Wall) => void }) {
+const WallPath = memo(function WallPath({ w, sel, il, onDown }: { w: Wall; sel: boolean; il?: boolean; onDown: (e: React.PointerEvent, w: Wall) => void }) {
   const d = useMemo(() => footprint(w).map(ringPath).join(''), [w])
   const k = kindOf(w.kind)
-  return <path d={d} fill={k.glass ? '#8fd8ee' : w.role === 'col' ? '#6a6a6a' : '#b1b1b1'} fillOpacity={k.glass ? 0.7 : 0.95} fillRule="evenodd" stroke={sel ? '#e07000' : k.glass ? '#1b87a8' : '#3a3a3a'} strokeWidth={sel ? 2.4 : 1} vectorEffect="non-scaling-stroke" onPointerDown={e => onDown(e, w)} style={{ cursor: 'pointer' }} />
+  return <path d={d} fill={k.glass ? '#8fd8ee' : il ? (w.role === 'col' ? '#2b2723' : '#4a443c') : w.role === 'col' ? '#6a6a6a' : '#b1b1b1'} fillOpacity={k.glass ? 0.7 : 0.95} fillRule="evenodd" stroke={sel ? '#e07000' : k.glass ? '#1b87a8' : il ? '#2b2723' : '#3a3a3a'} strokeWidth={sel ? 2.4 : 1} vectorEffect="non-scaling-stroke" onPointerDown={e => onDown(e, w)} style={{ cursor: 'pointer' }} />
 })
 
 function PalBtn({ on, ic, label, title, onClick }: { on: boolean; ic: string; label: string; title: string; onClick: () => void }) {
@@ -123,11 +123,11 @@ function GlassTicks({ w, panel }: { w: Wall; panel: number }) {
   let d = ''; for (let i = 0; i <= n; i++) { const x = a[0] + ux * L * i / n, y = a[1] + uy * L * i / n; d += `M${x - uy * h} ${y + ux * h}L${x + uy * h} ${y - ux * h}` }
   return <path d={d} stroke="#0b6a85" strokeWidth={1.2} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
 }
-function FurnGlyph({ f, sel, onDown }: { f: Furn; sel: boolean; onDown: (e: React.PointerEvent, f: Furn) => void }) {
+function FurnGlyph({ f, sel, il, onDown }: { f: Furn; sel: boolean; il?: boolean; onDown: (e: React.PointerEvent, f: Furn) => void }) {
   const t = furnTypeOf(f.kind), bk = t.back ? Math.min(t.backT ?? 0.1, f.d * 0.5) : 0
   return <g transform={`translate(${f.x} ${f.y}) rotate(${f.ang * 180 / Math.PI})`} onPointerDown={e => onDown(e, f)} style={{ cursor: 'move' }}>
-    {t.shape === 'round' ? <ellipse rx={f.w / 2} ry={f.d / 2} fill={t.color} fillOpacity={0.5} stroke={sel ? '#e07000' : '#7a5c3a'} strokeWidth={sel ? 2.2 : 1} vectorEffect="non-scaling-stroke" />
-      : <rect x={-f.w / 2} y={-f.d / 2} width={f.w} height={f.d} fill={t.color} fillOpacity={0.5} stroke={sel ? '#e07000' : '#7a5c3a'} strokeWidth={sel ? 2.2 : 1} vectorEffect="non-scaling-stroke" />}
+    {t.shape === 'round' ? <ellipse rx={f.w / 2} ry={f.d / 2} fill={t.color} fillOpacity={il ? 1 : 0.5} stroke={sel ? '#e07000' : il ? '#6b5b45' : '#7a5c3a'} strokeWidth={sel ? 2.2 : 1} vectorEffect="non-scaling-stroke" />
+      : <rect x={-f.w / 2} y={-f.d / 2} width={f.w} height={f.d} fill={t.color} fillOpacity={il ? 1 : 0.5} stroke={sel ? '#e07000' : il ? '#6b5b45' : '#7a5c3a'} strokeWidth={sel ? 2.2 : 1} vectorEffect="non-scaling-stroke" />}
     {bk > 0 && <rect x={-f.w / 2} y={f.flip ? f.d / 2 - bk : -f.d / 2} width={f.w} height={bk} fill="#5a4630" fillOpacity={0.75} style={{ pointerEvents: 'none' }} />}
   </g>
 }
@@ -158,7 +158,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   useEffect(() => { try { localStorage.setItem('plan3d-custom-finishes', JSON.stringify(custom)) } catch { setErr('Ảnh vật liệu quá nặng, không lưu thêm được trong trình duyệt.') } }, [custom])
   useEffect(() => { try { localStorage.setItem('plan3d-custom-doors', JSON.stringify(customDoors)) } catch { /* bỏ */ } }, [customDoors])
   const [autoTick, setAutoTick] = useState(0), [autoRoom, setAutoRoom] = useState(() => { try { return localStorage.getItem('plan3d-autofloor') !== '0' } catch { return true } }), Mr = useRef<Model | null>(null), lastAuto = useRef<{ w: unknown; d: unknown } | null>(null), lastBub = useRef<{ id: string; t: number } | null>(null), chainRef = useRef<string | null>(null), [dpA, setDpA] = useState<{ p: Pt; ang: number } | null>(null), [libDoor, setLibDoor] = useState('dr-flush09'), [libCol, setLibCol] = useState('cl-r40'), [newKind, setNewKind] = useState('brick'), [gKind, setGKind] = useState('glassal'), [gDoor, setGDoor] = useState('dg-glass12'), [gPos, setGPos] = useState<'mid' | 'start' | 'end'>('mid'), [showLib, setShowLib] = useState(false), [ceiling, setCeiling] = useState(false)
-  const [secOpen, setSecOpen] = useState(false), [secId, setSecId] = useState(''), [isoOpen, setIsoOpen] = useState(false), [isoId, setIsoId] = useState('')
+  const [secOpen, setSecOpen] = useState(false), [secId, setSecId] = useState(''), [isoOpen, setIsoOpen] = useState(false), [illus, setIllus] = useState(() => { try { return localStorage.getItem('plan3d-illus') === '1' } catch { return false } }), [isoId, setIsoId] = useState('')
   const [pending, setPending] = useState<Pt | null>(null), [cursor, setCursor] = useState<Pt | null>(null), [pts, setPts] = useState<Pt[]>([])
 
   const commit = useCallback((n: Model, push = true) => { setAutoTick(t => t + 1); setM(cur => { if (push && cur) { hist.current.push(cur); if (hist.current.length > 60) hist.current.shift(); setNh(hist.current.length) } return n }) }, [])
@@ -627,6 +627,8 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const segLen = selWall?.shape.type === 'seg' ? Math.hypot(selWall.shape.b[0] - selWall.shape.a[0], selWall.shape.b[1] - selWall.shape.a[1]) : 0
 
   const secMat = useMemo(() => proj?.d ? catalogMatFor(proj.d) : undefined, [proj?.d?.entries, proj?.d?.occ, proj?.d?.rooms]) // eslint-disable-line
+  const tIllus = (v: boolean) => { setIllus(v); try { localStorage.setItem('plan3d-illus', v ? '1' : '0') } catch { /* */ } }
+  const roomCol = (r: Room, i: number) => secMat?.('floor', r.name)?.color ?? finishOf(r.floor, custom)?.color ?? `hsl(${(i * 47) % 360} 55% 78%)`
   const go = (t: Tool, sh?: Shape) => { setTool(t); setPending(null); setPts([]); setLenBuf(''); setErr(''); if (sh) setShp(sh) }
   const focTf = (id: string) => { if (!sel) { setErr('Hãy chọn một đối tượng trước, rồi bấm lệnh này.'); return } setErr(''); setTimeout(() => { const el = document.getElementById(id) as HTMLInputElement | null; el?.focus(); el?.select() }, 30) }
   const GH = (t: string) => <div style={{ fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: 0.5, margin: '6px 0 0', textAlign: 'center', borderTop: '1px solid #e5e5e5', paddingTop: 4 }}>{t}</div>
@@ -724,9 +726,11 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
         {mode === '2d' ? <>
           <button className="btn sm" onClick={() => fit(M, size)}>⤢ Vừa khung</button>
           <label className="small"><input type="checkbox" checked={ortho} onChange={e => setOrtho(e.target.checked)} /> Bắt ngang/dọc</label>
+          <label className="small" title="Sàn tô theo màu vật liệu (danh mục / thư viện), tường đậm, nội thất màu đặc, nền giấy be – kiểu bản vẽ minh hoạ"><input type="checkbox" checked={illus} onChange={e => tIllus(e.target.checked)} /> 🎨 Kiểu màu minh hoạ</label>
           <label className="small" title="Khi tường + cửa khép thành vùng kín chưa có sàn, tự tạo sàn (tên, diện tích) để điền thông tin sau"><input type="checkbox" checked={autoRoom} onChange={e => { setAutoRoom(e.target.checked); try { localStorage.setItem('plan3d-autofloor', e.target.checked ? '1' : '0') } catch { /* bỏ */ } }} /> Tự tạo sàn khi khép kín</label>
         </> : <>
           <button className="btn sm" onClick={() => setView3(v => (v === 0 ? 2 : 0))}>Góc nhìn chéo</button><button className="btn sm" onClick={() => setView3(1)}>Từ trên xuống</button><button className="btn sm" style={pan3 ? { background: '#ffe3b8', borderColor: '#e07000' } : undefined} title="Bật: kéo chuột trái = dịch màn hình. Luôn dùng được: giữ Shift + kéo, hoặc kéo chuột phải / chuột giữa" onClick={() => setPan3(v => !v)}>✋ Kéo dịch{pan3 ? ' (đang bật)' : ''}</button>
+          <label className="small" title="Bỏ hoạ tiết, giữ màu vật liệu, nền giấy be – kiểu minh hoạ phẳng"><input type="checkbox" checked={illus} onChange={e => tIllus(e.target.checked)} /> 🎨 Màu phẳng</label>
           <label className="small"><input type="checkbox" checked={ceiling} onChange={e => setCeiling(e.target.checked)} /> Hiện trần</label><span className="muted small">Bấm vật thể để chọn · kéo vật thể để dời · kéo nền = xoay · cuộn = zoom</span></>}
         <button className={'btn sm' + (showLayers ? ' primary' : '')} onClick={() => setShowLayers(v => !v)}>🗂 Lớp hiển thị</button>
         <button className={'btn sm' + (showLib ? ' primary' : '')} onClick={() => setShowLib(v => !v)}>📚 Thư viện</button>
@@ -753,13 +757,13 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
       <div style={{ display: 'grid', gridTemplateColumns: '88px minmax(0,1fr) 250px', gap: 10, alignItems: 'start' }}>
         <div style={{ display: 'grid', gap: 4, alignContent: 'start' }}>{palette}</div>
         <div style={{ display: 'grid', gap: 6, minWidth: 0 }}>{optBar}
-      {mode === '3d' ? <Scene3D model={M} view={view3} custom={custom} customDoors={customDoors} ceiling={ceiling} showFurn={showFurn} sel={sel} lay={lay3} lock={lock} fgHide={fgHide} pan={pan3} onPick={s => { setSel(s); setTool('select') }} onMoveSel={moveSel} /> :
-          <div ref={box} style={{ position: 'relative', height: '72vh', border: '1px solid #ddd', background: '#fff', overflow: 'hidden', touchAction: 'none', userSelect: 'none', cursor: tool === 'select' ? 'default' : 'crosshair' }}
+      {mode === '3d' ? <Scene3D flat={illus} model={M} view={view3} custom={custom} customDoors={customDoors} ceiling={ceiling} showFurn={showFurn} sel={sel} lay={lay3} lock={lock} fgHide={fgHide} pan={pan3} onPick={s => { setSel(s); setTool('select') }} onMoveSel={moveSel} /> :
+          <div ref={box} style={{ position: 'relative', height: '72vh', border: '1px solid #ddd', background: illus ? '#f4efe6' : '#fff', overflow: 'hidden', touchAction: 'none', userSelect: 'none', cursor: tool === 'select' ? 'default' : 'crosshair' }}
             onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onDoubleClick={onDouble} onContextMenu={e => { e.preventDefault(); setPending(null); setPts([]) }}>
             {under && base?.draw?.length ? <div style={{ position: 'absolute', inset: 0, opacity: 0.6, pointerEvents: 'none' }}><LinesCanvas base={base} vb={vbPt} size={size} /></div> : null}
             <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-              {lay.rooms && (M.rooms ?? []).map((r, i) => <path key={r.id} d={ringPath(r.poly)} fill={`hsl(${(i * 47) % 360} 70% 70%)`} fillOpacity={selRoom?.id === r.id ? 0.55 : 0.35} stroke={selRoom?.id === r.id ? '#e07000' : 'none'} strokeWidth={2} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />)}
-              {showFurn && (M.furn ?? []).filter(f => !fgHide.includes(furnTypeOf(f.kind).group)).map(f => <FurnGlyph key={f.id} f={f} sel={selFurn?.id === f.id} onDown={onFurnDown} />)}
+              {lay.rooms && (M.rooms ?? []).map((r, i) => <path key={r.id} d={ringPath(r.poly)} fill={illus ? roomCol(r, i) : `hsl(${(i * 47) % 360} 70% 70%)`} fillOpacity={illus ? 1 : selRoom?.id === r.id ? 0.55 : 0.35} stroke={selRoom?.id === r.id ? '#e07000' : 'none'} strokeWidth={2} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />)}
+              {showFurn && (M.furn ?? []).filter(f => !fgHide.includes(furnTypeOf(f.kind).group)).map(f => <FurnGlyph key={f.id} f={f} sel={selFurn?.id === f.id} il={illus} onDown={onFurnDown} />)}
               {lay.axes && (M.axes ?? []).length > 0 && (() => { const ax = M.axes ?? [], [x0, y0, x1, y1] = wb, e1 = hs * 7, br = hs * 3.4, red = '#c0392b'
                 const vs = ax.filter(a => a.dir === 'v').sort((a, b) => a.pos - b.pos), hh = ax.filter(a => a.dir === 'h').sort((a, b) => a.pos - b.pos), dv = M.dimOff?.v ?? hs * 3, dh = M.dimOff?.h ?? hs * 3
                 const dimDown = (e: React.PointerEvent, dir: 'v' | 'h') => { if (tool !== 'select' || lock.axes) return; e.stopPropagation(); drag.current = { k: 'axisDim', dir, moved: false }; (box.current as HTMLElement).setPointerCapture(e.pointerId) }
@@ -772,7 +776,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
                   {vs.length > 1 && <g><line x1={vs[0].pos} y1={y0 - dv} x2={vs[vs.length - 1].pos} y2={y0 - dv} stroke="transparent" strokeWidth={9} vectorEffect="non-scaling-stroke" style={{ cursor: 'ns-resize' }} onPointerDown={e => dimDown(e, 'v')}><title>Kéo để đẩy hàng kích thước xa/gần</title></line><g style={{ pointerEvents: 'none' }}><line x1={vs[0].pos} y1={y0 - dv} x2={vs[vs.length - 1].pos} y2={y0 - dv} stroke={red} strokeWidth={0.8} vectorEffect="non-scaling-stroke" />{vs.map((a, i) => <g key={a.id}><line x1={a.pos} y1={y0 - dv - hs} x2={a.pos} y2={y0 - dv + hs} stroke={red} strokeWidth={1} vectorEffect="non-scaling-stroke" />{i > 0 && <text x={(a.pos + vs[i - 1].pos) / 2} y={y0 - dv - hs * 0.6} textAnchor="middle" fontSize={fsz * 0.85} fill={red}>{mm(a.pos - vs[i - 1].pos)}</text>}</g>)}</g></g>}
                   {hh.length > 1 && <g><line x1={x0 - dh} y1={hh[0].pos} x2={x0 - dh} y2={hh[hh.length - 1].pos} stroke="transparent" strokeWidth={9} vectorEffect="non-scaling-stroke" style={{ cursor: 'ew-resize' }} onPointerDown={e => dimDown(e, 'h')}><title>Kéo để đẩy hàng kích thước xa/gần</title></line><g style={{ pointerEvents: 'none' }}><line x1={x0 - dh} y1={hh[0].pos} x2={x0 - dh} y2={hh[hh.length - 1].pos} stroke={red} strokeWidth={0.8} vectorEffect="non-scaling-stroke" />{hh.map((a, i) => <g key={a.id}><line x1={x0 - dh - hs} y1={a.pos} x2={x0 - dh + hs} y2={a.pos} stroke={red} strokeWidth={1} vectorEffect="non-scaling-stroke" />{i > 0 && <text transform={`translate(${x0 - dh - hs * 0.6} ${(a.pos + hh[i - 1].pos) / 2}) rotate(-90)`} textAnchor="middle" fontSize={fsz * 0.85} fill={red}>{mm(a.pos - hh[i - 1].pos)}</text>}</g>)}</g></g>}
                 </g> })()}
-              {M.walls.filter(w => w.role === 'col' ? lay.cols : lay.walls).map(w => <WallPath key={w.id} w={w} sel={selWall?.id === w.id} onDown={onWallDown} />)}
+              {M.walls.filter(w => w.role === 'col' ? lay.cols : lay.walls).map(w => <WallPath key={w.id} w={w} sel={selWall?.id === w.id} il={illus} onDown={onWallDown} />)}
               {lay.walls && M.walls.map(w => kindOf(w.kind).glass && w.shape.type === 'seg' ? <GlassTicks key={'g' + w.id} w={w} panel={w.panel ?? kindOf(w.kind).panel ?? 1.2} /> : null)}
               {lay.doors && M.doors.map(d => <DoorGlyph key={d.id} d={d} sel={selDoor?.id === d.id} spec={doorSpec(d.lib, customDoors)} onDown={onDoorDown} />)}
               {lay.dims && (M.dims ?? []).map(d => <DimGlyph key={d.id} d={d} sel={selDim?.id === d.id} fs={fsz} mm={dimMm} onDown={onDimDown} />)}
