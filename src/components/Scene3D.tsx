@@ -17,7 +17,7 @@ export type Pick3 = { t: 'wall' | 'door' | 'room' | 'furn'; id: string } | null
 export type Lay3 = { walls: boolean; cols: boolean; doors: boolean; furn: boolean; rooms: boolean }
 type Opt3 = { sel: { t: string; id: string } | null; lay: Lay3; fgHide: string[]; flat?: boolean }
 const LAY_ALL: Lay3 = { walls: true, cols: true, doors: true, furn: true, rooms: true }
-export default function Scene3D({ model, view, custom = [], customDoors = [], ceiling = false, showFurn = true, sel = null, lay = LAY_ALL, lock = {}, fgHide = [], flat = false, pan = false, onPick, onMoveSel }: { pan?: boolean; model: Model; showFurn?: boolean; view: number; custom?: Finish[]; customDoors?: DoorSpec[]; ceiling?: boolean; sel?: { t: string; id: string } | null; lay?: Lay3; lock?: Record<string, boolean>; fgHide?: string[]; flat?: boolean; onPick?: (s: Pick3) => void; onMoveSel?: (s: NonNullable<Pick3>, dx: number, dy: number) => void }) {
+export default function Scene3D({ model, view, custom = [], customDoors = [], ceiling = false, showFurn = true, sel = null, lay = LAY_ALL, lock = {}, fgHide = [], flat = false, fill = false, pan = false, onPick, onMoveSel }: { fill?: boolean; pan?: boolean; model: Model; showFurn?: boolean; view: number; custom?: Finish[]; customDoors?: DoorSpec[]; ceiling?: boolean; sel?: { t: string; id: string } | null; lay?: Lay3; lock?: Record<string, boolean>; fgHide?: string[]; flat?: boolean; onPick?: (s: Pick3) => void; onMoveSel?: (s: NonNullable<Pick3>, dx: number, dy: number) => void }) {
   const cbs = useRef<{ onPick?: (s: Pick3) => void; onMoveSel?: (s: NonNullable<Pick3>, dx: number, dy: number) => void; lock: Record<string, boolean>; pan?: boolean }>({ lock: {} })
   cbs.current = { onPick, onMoveSel, lock, pan }
   const cv = useRef<HTMLCanvasElement>(null), api = useRef<{ set: (m: Model, c: Finish[], cd: DoorSpec[], ceil: boolean, sf: boolean, o: Opt3) => void; reset: (k: number) => void } | null>(null)
@@ -112,5 +112,5 @@ export default function Scene3D({ model, view, custom = [], customDoors = [], ce
   const first = useRef(true)
   useEffect(() => { const t = setTimeout(() => { api.current?.set(model, custom, customDoors, ceiling, showFurn, { sel, lay, fgHide, flat }); if (first.current) { first.current = false; api.current?.reset(0) } }, 120); return () => clearTimeout(t) }, [model, custom, customDoors, ceiling, showFurn, sel, lay, fgHide, flat])
   useEffect(() => { api.current?.reset(view) }, [view])
-  return <canvas ref={cv} style={{ width: '100%', height: '72vh', display: 'block', border: '1px solid #ddd', borderRadius: 6, background: '#f3f1ec', touchAction: 'none' }} />
+  return <canvas ref={cv} style={{ width: '100%', height: fill ? '100%' : '72vh', display: 'block', border: '1px solid #ddd', borderRadius: 6, background: '#f3f1ec', touchAction: 'none' }} />
 }

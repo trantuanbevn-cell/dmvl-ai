@@ -143,7 +143,7 @@ function DimGlyph({ d, sel, fs, mm = false, onDown }: { d: Dim; sel: boolean; fs
 }
 
 /** proj: khi nhúng trong một dự án → chọn tầng, nhập DXF của tầng đó, và tự lưu mô hình lên dự án (file riêng trong kho, không đụng dữ liệu danh mục) */
-export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floors: FloorPlan[]; d?: ProjectData }; autoFloor?: string } = {}) {
+export default function Plan3D({ proj, autoFloor, full, onClose }: { proj?: { id: string; floors: FloorPlan[]; d?: ProjectData }; autoFloor?: string; /** phủ kín màn hình (trình chỉnh sửa) */ full?: boolean; onClose?: () => void } = {}) {
   const [M, setM] = useState<Model | null>(() => { if (proj) return null; try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) as Model : null } catch { return null } })
   const [base, setBase] = useState<VecPage | null>(null)
   const [busy, setBusy] = useState(''), [err, setErr] = useState('')
@@ -158,7 +158,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   useEffect(() => { try { localStorage.setItem('plan3d-custom-finishes', JSON.stringify(custom)) } catch { setErr('Ảnh vật liệu quá nặng, không lưu thêm được trong trình duyệt.') } }, [custom])
   useEffect(() => { try { localStorage.setItem('plan3d-custom-doors', JSON.stringify(customDoors)) } catch { /* bỏ */ } }, [customDoors])
   const [autoTick, setAutoTick] = useState(0), [autoRoom, setAutoRoom] = useState(() => { try { return localStorage.getItem('plan3d-autofloor') !== '0' } catch { return true } }), Mr = useRef<Model | null>(null), lastAuto = useRef<{ w: unknown; d: unknown } | null>(null), lastBub = useRef<{ id: string; t: number } | null>(null), chainRef = useRef<string | null>(null), [dpA, setDpA] = useState<{ p: Pt; ang: number } | null>(null), [libDoor, setLibDoor] = useState('dr-flush09'), [libCol, setLibCol] = useState('cl-r40'), [newKind, setNewKind] = useState('brick'), [gKind, setGKind] = useState('glassal'), [gDoor, setGDoor] = useState('dg-glass12'), [gPos, setGPos] = useState<'mid' | 'start' | 'end'>('mid'), [showLib, setShowLib] = useState(false), [ceiling, setCeiling] = useState(false)
-  const [secOpen, setSecOpen] = useState(false), [secId, setSecId] = useState(''), [isoOpen, setIsoOpen] = useState(false), [illus, setIllus] = useState(() => { try { return localStorage.getItem('plan3d-illus') === '1' } catch { return false } }), [isoId, setIsoId] = useState('')
+  const [secOpen, setSecOpen] = useState(false), [secId, setSecId] = useState(''), [isoOpen, setIsoOpen] = useState(false), [snapOpen, setSnapOpen] = useState(false), [illus, setIllus] = useState(() => { try { return localStorage.getItem('plan3d-illus') !== '0' } catch { return false } }), [isoId, setIsoId] = useState('')
   const [pending, setPending] = useState<Pt | null>(null), [cursor, setCursor] = useState<Pt | null>(null), [pts, setPts] = useState<Pt[]>([])
 
   const commit = useCallback((n: Model, push = true) => { setAutoTick(t => t + 1); setM(cur => { if (push && cur) { hist.current.push(cur); if (hist.current.length > 60) hist.current.shift(); setNh(hist.current.length) } return n }) }, [])
@@ -167,6 +167,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
 
   const fit = useCallback((m: Model, sz: { w: number; h: number }) => { const a = sz.h / Math.max(1, sz.w), w = m.w * 1.02, h = Math.max(m.h * 1.02, w * a); setVb({ x: 0, y: 0, w: h / a, h }) }, [])
   useEffect(() => { const e = box.current; if (!e) return; const ro = new ResizeObserver(() => setSize({ w: e.clientWidth, h: e.clientHeight })); ro.observe(e); setSize({ w: e.clientWidth, h: e.clientHeight }); return () => ro.disconnect() }, [mode, M !== null])
+  useEffect(() => { if (!M || mode !== '2d') return; const t = setTimeout(() => { const e = box.current; if (e && e.clientWidth) fit(M, { w: e.clientWidth, h: e.clientHeight }) }, 250); return () => clearTimeout(t) }, [full, mode, M !== null]) // eslint-disable-line
   const fitted = useRef(false)
   useEffect(() => { if (M && size.w && !fitted.current) { fitted.current = true; fit(M, size) } }, [M, size, fit])
   // giữ đúng tỉ lệ khung khi cửa sổ đổi cỡ
@@ -195,8 +196,9 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
     } catch (e) { setErr((e as Error).message) } finally { setBusy('') }
   }
   // tự lưu mô hình của tầng đang mở lên dự án (file riêng)
+  const saveCloud = async (fid: string, m: Model) => { const { error } = await supabase.storage.from(BUCKET).upload(jsonPath(fid), new Blob([JSON.stringify(m)], { type: 'application/json' }), { upsert: true, contentType: 'application/json' }); if (!error) await supabase.storage.from(BUCKET).upload(`${proj?.id}/plan3d/${fid}.rooms.json`, new Blob([JSON.stringify({ w: m.w, h: m.h, rooms: (m.rooms ?? []).filter(r => r.name).map(r => ({ name: r.name, en: r.en, poly: r.poly })) })], { type: 'application/json' }), { upsert: true, contentType: 'application/json' }); setSaved(error ? 'Lưu lên dự án lỗi: ' + error.message : 'Đã lưu vào dự án ' + new Date().toLocaleTimeString()) }
   useEffect(() => { if (!proj || !M || !cloud.current || cloud.current !== floorId) return
-    const fid = floorId, t = setTimeout(async () => { const { error } = await supabase.storage.from(BUCKET).upload(jsonPath(fid), new Blob([JSON.stringify(M)], { type: 'application/json' }), { upsert: true, contentType: 'application/json' }); if (!error) await supabase.storage.from(BUCKET).upload(`${proj?.id}/plan3d/${fid}.rooms.json`, new Blob([JSON.stringify({ w: M.w, h: M.h, rooms: (M.rooms ?? []).filter(r => r.name).map(r => ({ name: r.name, en: r.en, poly: r.poly })) })], { type: 'application/json' }), { upsert: true, contentType: 'application/json' }); setSaved(error ? 'Lưu lên dự án lỗi: ' + error.message : 'Đã lưu vào dự án ' + new Date().toLocaleTimeString()) }, 2500); return () => clearTimeout(t) }, [M, floorId]) // eslint-disable-line
+    const fid = floorId, t = setTimeout(() => { void saveCloud(fid, M) }, 2500); return () => clearTimeout(t) }, [M, floorId]) // eslint-disable-line
   // tự mở tầng vừa tải lên (hoặc tầng DXF đầu tiên) – không cần bấm gì thêm
   useEffect(() => { if (!proj) return; const want = autoFloor && proj.floors.some(f => f.id === autoFloor) ? autoFloor : !floorId ? floorsDxf[0]?.id : ''; if (want && want !== floorId) openFloor(want) }, [autoFloor, proj?.floors.length]) // eslint-disable-line
   const load = async (f: File) => { cloud.current = ''; await loadBuf(await f.arrayBuffer()) }
@@ -629,6 +631,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
   const secMat = useMemo(() => proj?.d ? catalogMatFor(proj.d) : undefined, [proj?.d?.entries, proj?.d?.occ, proj?.d?.rooms]) // eslint-disable-line
   const tIllus = (v: boolean) => { setIllus(v); try { localStorage.setItem('plan3d-illus', v ? '1' : '0') } catch { /* */ } }
   const roomCol = (r: Room, i: number) => secMat?.('floor', r.name)?.color ?? finishOf(r.floor, custom)?.color ?? `hsl(${(i * 47) % 360} 55% 78%)`
+  const closeEd = async () => { if (proj && M && cloud.current && cloud.current === floorId) await saveCloud(floorId, M); onClose?.() }
   const go = (t: Tool, sh?: Shape) => { setTool(t); setPending(null); setPts([]); setLenBuf(''); setErr(''); if (sh) setShp(sh) }
   const focTf = (id: string) => { if (!sel) { setErr('Hãy chọn một đối tượng trước, rồi bấm lệnh này.'); return } setErr(''); setTimeout(() => { const el = document.getElementById(id) as HTMLInputElement | null; el?.focus(); el?.select() }, 30) }
   const GH = (t: string) => <div style={{ fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: 0.5, margin: '6px 0 0', textAlign: 'center', borderTop: '1px solid #e5e5e5', paddingTop: 4 }}>{t}</div>
@@ -699,9 +702,9 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
       <button className="btn sm" onClick={() => setLock({ walls: true, cols: true, doors: true, furn: false, rooms: true, dims: true, axes: true })}>Khoá hết, chỉ sửa đồ rời</button>
       <button className="btn sm" onClick={() => setLock(LOCK0)}>Mở khoá hết</button></div>
     <div className="muted">Ẩn = không vẽ, không bắt điểm, ẩn cả trong 3D. Khoá = vẫn thấy nhưng không chọn / kéo nhầm.</div></div> : null
-  return <div className="card" style={{ display: 'grid', gap: 10 }}>
+  return <div className={full ? '' : 'card'} style={full ? { position: 'fixed', inset: 0, zIndex: 60, background: '#faf8f4', padding: 8, display: 'flex', flexDirection: 'column', gap: 6, overflow: 'hidden' } : { display: 'grid', gap: 10 }}>
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-      <b>Soạn mặt bằng &amp; dựng 3D</b><span className="muted small">– thử nghiệm: nhập DXF, sửa tường · cột · cửa, xem 3D</span>
+      {full ? <button className="btn sm primary" onClick={closeEd}>← Xong · về danh sách tầng</button> : <><b>Soạn mặt bằng &amp; dựng 3D</b><span className="muted small">– thử nghiệm: nhập DXF, sửa tường · cột · cửa, xem 3D</span></>}
       {proj && <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><b className="small">Tầng:</b>
         <select value={floorId} onChange={e => e.target.value && openFloor(e.target.value)} style={{ maxWidth: 170 }}><option value="">(chọn tầng…)</option>{proj.floors.map(f => <option key={f.id} value={f.id}>{f.floor_label}{/\.dxf$/i.test(f.pdf_path) ? '' : ' (PDF)'}</option>)}</select>
         {floorId && <button className="btn sm" title="Bỏ bản đã lưu, dựng lại từ DXF của tầng" onClick={() => confirm('Dựng lại từ DXF sẽ thay bản 3D đã lưu của tầng này. Tiếp tục?') && openFloor(floorId, true)}>↻ Dựng lại từ DXF</button>}
@@ -734,9 +737,10 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
           <label className="small"><input type="checkbox" checked={ceiling} onChange={e => setCeiling(e.target.checked)} /> Hiện trần</label><span className="muted small">Bấm vật thể để chọn · kéo vật thể để dời · kéo nền = xoay · cuộn = zoom</span></>}
         <button className={'btn sm' + (showLayers ? ' primary' : '')} onClick={() => setShowLayers(v => !v)}>🗂 Lớp hiển thị</button>
         <button className={'btn sm' + (showLib ? ' primary' : '')} onClick={() => setShowLib(v => !v)}>📚 Thư viện</button>
+        {full && mode === '2d' && <button className={'btn sm' + (snapOpen ? ' primary' : '')} title="Bật/tắt từng kiểu bắt điểm, trục, cốt, phím tắt" onClick={() => setSnapOpen(v => !v)}>🧲 Bắt điểm</button>}
         <span className="small muted" style={{ marginLeft: 'auto' }}>Cao tường mặc định <input style={{ width: 52 }} defaultValue={M.hWall} key={'hw' + M.hWall} onBlur={e => commit({ ...M, hWall: num(e.target.value, M.hWall) })} /> m · cột <input style={{ width: 52 }} defaultValue={M.hCol} key={'hc' + M.hCol} onBlur={e => commit({ ...M, hCol: num(e.target.value, M.hCol) })} /> m</span>
       </div>
-      {mode === '2d' && <div className="small" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: '2px 0' }}>
+      {mode === '2d' && (!full || snapOpen) && <div className="small" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: '2px 0' }}>
         <b>Bắt điểm:</b>
         {([['align', '┆ Dóng hàng / căn mép'], ['end', '■ Đầu mút'], ['mid', '△ Giữa'], ['cen', '○ Tâm'], ['int', '✕ Giao điểm'], ['per', '⊥ Vuông góc'], ['nea', '◇ Mép / gần nhất'], ['axis', '┼ Trục'], ['polar', '∠ Góc cực 15°'], ['grid', '▦ Lưới 100']] as const).map(([k, l]) => <label key={k} style={{ whiteSpace: 'nowrap' }}><input type="checkbox" checked={sm[k]} onChange={e => setSm({ ...sm, [k]: e.target.checked })} /> {l}</label>)}
         <span style={{ borderLeft: '1px solid #ccc', height: 16 }} />
@@ -754,16 +758,17 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
         onFinish={f => { if (selRoom) { if (f.group === 'Trần') setRoom(selRoom.id, { ceil: f.id }); else setRoom(selRoom.id, { floor: f.id }) } else if (selWall) setWall(selWall.id, { finish: f.id }); else if (selDoor) setDoor(selDoor.id, f.group === 'Cửa / khung' || f.group === 'Của tôi' ? { finish: f.id } : {}) }}
         onAddImage={async (file, name, sz, group) => { const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file) }); const c = document.createElement('canvas'), k = Math.min(1, 384 / Math.max(img.width, img.height)); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height); setCustom(cs => [{ id: 'my-' + uid(''), group, name, color: '#cccccc', pattern: 'image', size: sz, img: c.toDataURL('image/jpeg', 0.82) }, ...cs]) }}
         onRemoveCustom={id => setCustom(cs => cs.filter(c => c.id !== id))} />}
-      <div style={{ display: 'grid', gridTemplateColumns: '88px minmax(0,1fr) 250px', gap: 10, alignItems: 'start' }}>
-        <div style={{ display: 'grid', gap: 4, alignContent: 'start' }}>{palette}</div>
-        <div style={{ display: 'grid', gap: 6, minWidth: 0 }}>{optBar}
-      {mode === '3d' ? <Scene3D flat={illus} model={M} view={view3} custom={custom} customDoors={customDoors} ceiling={ceiling} showFurn={showFurn} sel={sel} lay={lay3} lock={lock} fgHide={fgHide} pan={pan3} onPick={s => { setSel(s); setTool('select') }} onMoveSel={moveSel} /> :
-          <div ref={box} style={{ position: 'relative', height: '72vh', border: '1px solid #ddd', background: illus ? '#f4efe6' : '#fff', overflow: 'hidden', touchAction: 'none', userSelect: 'none', cursor: tool === 'select' ? 'default' : 'crosshair' }}
+      <div style={full ? { display: 'grid', gridTemplateColumns: '84px minmax(0,1fr) 270px', gap: 8, alignItems: 'stretch', flex: 1, minHeight: 0 } : { display: 'grid', gridTemplateColumns: '88px minmax(0,1fr) 250px', gap: 10, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gap: 4, alignContent: 'start', ...(full ? { overflowY: 'auto', minHeight: 0 } : {}) }}>{palette}</div>
+        <div style={{ display: 'grid', gap: 6, minWidth: 0, ...(full ? { gridTemplateRows: 'auto minmax(0,1fr)', minHeight: 0 } : {}) }}>{optBar}
+      {mode === '3d' ? <Scene3D fill={!!full} flat={illus} model={M} view={view3} custom={custom} customDoors={customDoors} ceiling={ceiling} showFurn={showFurn} sel={sel} lay={lay3} lock={lock} fgHide={fgHide} pan={pan3} onPick={s => { setSel(s); setTool('select') }} onMoveSel={moveSel} /> :
+          <div ref={box} style={{ position: 'relative', height: full ? '100%' : '72vh', border: '1px solid #ddd', background: illus ? '#f4efe6' : '#fff', overflow: 'hidden', touchAction: 'none', userSelect: 'none', cursor: tool === 'select' ? 'default' : 'crosshair' }}
             onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onDoubleClick={onDouble} onContextMenu={e => { e.preventDefault(); setPending(null); setPts([]) }}>
             {under && base?.draw?.length ? <div style={{ position: 'absolute', inset: 0, opacity: 0.6, pointerEvents: 'none' }}><LinesCanvas base={base} vb={vbPt} size={size} /></div> : null}
             <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+              <defs><filter id="pshadow" x="-5%" y="-5%" width="112%" height="112%"><feDropShadow dx="0.07" dy="0.1" stdDeviation="0.07" floodColor="#2b2018" floodOpacity="0.42" /></filter></defs>
               {lay.rooms && (M.rooms ?? []).map((r, i) => <path key={r.id} d={ringPath(r.poly)} fill={illus ? roomCol(r, i) : `hsl(${(i * 47) % 360} 70% 70%)`} fillOpacity={illus ? 1 : selRoom?.id === r.id ? 0.55 : 0.35} stroke={selRoom?.id === r.id ? '#e07000' : 'none'} strokeWidth={2} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />)}
-              {showFurn && (M.furn ?? []).filter(f => !fgHide.includes(furnTypeOf(f.kind).group)).map(f => <FurnGlyph key={f.id} f={f} sel={selFurn?.id === f.id} il={illus} onDown={onFurnDown} />)}
+              <g filter={illus ? 'url(#pshadow)' : undefined}>{showFurn && (M.furn ?? []).filter(f => !fgHide.includes(furnTypeOf(f.kind).group)).map(f => <FurnGlyph key={f.id} f={f} sel={selFurn?.id === f.id} il={illus} onDown={onFurnDown} />)}</g>
               {lay.axes && (M.axes ?? []).length > 0 && (() => { const ax = M.axes ?? [], [x0, y0, x1, y1] = wb, e1 = hs * 7, br = hs * 3.4, red = '#c0392b'
                 const vs = ax.filter(a => a.dir === 'v').sort((a, b) => a.pos - b.pos), hh = ax.filter(a => a.dir === 'h').sort((a, b) => a.pos - b.pos), dv = M.dimOff?.v ?? hs * 3, dh = M.dimOff?.h ?? hs * 3
                 const dimDown = (e: React.PointerEvent, dir: 'v' | 'h') => { if (tool !== 'select' || lock.axes) return; e.stopPropagation(); drag.current = { k: 'axisDim', dir, moved: false }; (box.current as HTMLElement).setPointerCapture(e.pointerId) }
@@ -776,7 +781,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
                   {vs.length > 1 && <g><line x1={vs[0].pos} y1={y0 - dv} x2={vs[vs.length - 1].pos} y2={y0 - dv} stroke="transparent" strokeWidth={9} vectorEffect="non-scaling-stroke" style={{ cursor: 'ns-resize' }} onPointerDown={e => dimDown(e, 'v')}><title>Kéo để đẩy hàng kích thước xa/gần</title></line><g style={{ pointerEvents: 'none' }}><line x1={vs[0].pos} y1={y0 - dv} x2={vs[vs.length - 1].pos} y2={y0 - dv} stroke={red} strokeWidth={0.8} vectorEffect="non-scaling-stroke" />{vs.map((a, i) => <g key={a.id}><line x1={a.pos} y1={y0 - dv - hs} x2={a.pos} y2={y0 - dv + hs} stroke={red} strokeWidth={1} vectorEffect="non-scaling-stroke" />{i > 0 && <text x={(a.pos + vs[i - 1].pos) / 2} y={y0 - dv - hs * 0.6} textAnchor="middle" fontSize={fsz * 0.85} fill={red}>{mm(a.pos - vs[i - 1].pos)}</text>}</g>)}</g></g>}
                   {hh.length > 1 && <g><line x1={x0 - dh} y1={hh[0].pos} x2={x0 - dh} y2={hh[hh.length - 1].pos} stroke="transparent" strokeWidth={9} vectorEffect="non-scaling-stroke" style={{ cursor: 'ew-resize' }} onPointerDown={e => dimDown(e, 'h')}><title>Kéo để đẩy hàng kích thước xa/gần</title></line><g style={{ pointerEvents: 'none' }}><line x1={x0 - dh} y1={hh[0].pos} x2={x0 - dh} y2={hh[hh.length - 1].pos} stroke={red} strokeWidth={0.8} vectorEffect="non-scaling-stroke" />{hh.map((a, i) => <g key={a.id}><line x1={x0 - dh - hs} y1={a.pos} x2={x0 - dh + hs} y2={a.pos} stroke={red} strokeWidth={1} vectorEffect="non-scaling-stroke" />{i > 0 && <text transform={`translate(${x0 - dh - hs * 0.6} ${(a.pos + hh[i - 1].pos) / 2}) rotate(-90)`} textAnchor="middle" fontSize={fsz * 0.85} fill={red}>{mm(a.pos - hh[i - 1].pos)}</text>}</g>)}</g></g>}
                 </g> })()}
-              {M.walls.filter(w => w.role === 'col' ? lay.cols : lay.walls).map(w => <WallPath key={w.id} w={w} sel={selWall?.id === w.id} il={illus} onDown={onWallDown} />)}
+              <g filter={illus ? 'url(#pshadow)' : undefined}>{M.walls.filter(w => w.role === 'col' ? lay.cols : lay.walls).map(w => <WallPath key={w.id} w={w} sel={selWall?.id === w.id} il={illus} onDown={onWallDown} />)}</g>
               {lay.walls && M.walls.map(w => kindOf(w.kind).glass && w.shape.type === 'seg' ? <GlassTicks key={'g' + w.id} w={w} panel={w.panel ?? kindOf(w.kind).panel ?? 1.2} /> : null)}
               {lay.doors && M.doors.map(d => <DoorGlyph key={d.id} d={d} sel={selDoor?.id === d.id} spec={doorSpec(d.lib, customDoors)} onDown={onDoorDown} />)}
               {lay.dims && (M.dims ?? []).map(d => <DimGlyph key={d.id} d={d} sel={selDim?.id === d.id} fs={fsz} mm={dimMm} onDown={onDimDown} />)}
@@ -850,7 +855,7 @@ export default function Plan3D({ proj, autoFloor }: { proj?: { id: string; floor
               {tool === 'section' ? 'Mặt cắt: bấm điểm đầu, điểm cuối của đường cắt (mũi tên đỏ chỉ hướng nhìn; đảo hướng trong cửa sổ mặt cắt) · Esc để dừng' : tool === 'axisV' || tool === 'axisH' ? 'Bấm vào vị trí đặt trục (tự hút vào tâm cột / đầu mút) · Esc để dừng' : tool === 'wall' || tool === 'glasskit' ? (shp === 'arc' ? 'Cung: bấm điểm đầu, điểm cuối, rồi điểm nằm trên cung' : shp === 'circle' ? 'Tròn: bấm tâm rồi bấm điểm trên đường tròn' : shp === 'rect' ? 'Chữ nhật: bấm hai góc đối diện' : 'Bấm điểm đầu, rồi các điểm tiếp theo · gõ số mm + Enter để đặt đúng chiều dài · Esc/chuột phải để dừng') : tool === 'dim' ? 'Bấm điểm đầu, điểm cuối, rồi bấm để kéo đường kích thước ra' : tool === 'room' ? 'Bấm vào bên trong một không gian kín' : tool === 'roomPoly' ? (shp === 'line' || shp === 'arc' ? 'Bấm từng góc sàn; bấm lại điểm đầu hoặc Enter để chốt' : shp === 'circle' ? 'Bấm tâm rồi bấm điểm trên đường tròn' : 'Bấm hai góc đối diện') : tool === 'furn' ? 'Bấm để đặt món nội thất' : tool !== 'select' ? 'Bấm sát vào tường để đặt cửa' : 'Cuộn = zoom · kéo nền = dời · bấm tường/cửa để chọn · Del = xoá · Ctrl+Z = hoàn tác'}</div>
           </div>}
         </div>
-          <div style={{ display: 'grid', gap: 8, fontSize: 13 }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && (e.target as HTMLElement).tagName === 'INPUT' && (e.target as HTMLInputElement).type !== 'checkbox') { e.preventDefault(); (e.target as HTMLInputElement).blur() } }}>
+          <div style={{ display: 'grid', gap: 8, fontSize: 13, ...(full ? { overflowY: 'auto', minHeight: 0, alignContent: 'start' } : {}) }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && (e.target as HTMLElement).tagName === 'INPUT' && (e.target as HTMLInputElement).type !== 'checkbox') { e.preventDefault(); (e.target as HTMLInputElement).blur() } }}>
             {layersPanel}
             {selWall ? <div className="card" style={{ display: 'grid', gap: 6 }}>
               <b>{selWall.role === 'col' ? 'Cột' : 'Tường'} {selWall.auto ? '(tự nhận từ bản vẽ)' : selWall.shape.type === 'seg' ? '(thêm tay)' : '(từ DXF)'}</b>
