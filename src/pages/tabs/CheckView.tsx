@@ -1,3 +1,4 @@
+import MaterialPopup from '../../components/MaterialPopup'
 import { useEffect, useMemo, useState } from 'react'
 import type { ProjectData } from '../../lib/useProject'
 import type { Entry } from '../../lib/types'
@@ -46,7 +47,8 @@ export default function CheckView({ d }: { d: ProjectData }) {
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState<string | null>(null) // khoá cặp đang xem chi tiết
   const [lang, setLang] = useState<Lang>('vn')
-  const [sel, setSel] = useState<string | null>(null)
+  const [sel, setSel] = useState<string | null>(null)   // mở bảng vật liệu (như tab Theo vật liệu)
+  const [det, setDet] = useState<string | null>(null)   // khung chỉnh chi tiết (EntryPanel)
   const [lopen, setLopen] = useState<string | null>(null) // khoá cặp liên kết đang xem chi tiết
   const issues = useMemo(() => checkEntries(d, lang), [d.entries, d.occ, lang])
   const nErr = issues.filter(r => r.issues.some(i => i.kind === 'err')).length
@@ -55,7 +57,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
   const orig = useMemo(() => new Map(d.entries.map(e => [e.id, e])), [d.entries])
   const sugg = useMemo(() => linkSuggestions(clean).map(x => ({ x, j: judgePair(x.a, x.b, 'link') })).filter(r => r.j.v === 'same').map(({ x, j }) => ({ ...x, why: j.why.join(', '), a: orig.get(x.a.id)!, b: orig.get(x.b.id)! })).filter(x => !ign('link', x.a.id, x.b.id)), [clean, orig, igv]) // eslint-disable-line
   const conflicts = useMemo(() => linkConflicts(d.entries), [d.entries])
-  const selEntry = d.entries.find(e => e.id === sel)
+  const selEntry = d.entries.find(e => e.id === det)
   const keyOf = (p: DupPair) => p.keep.id + p.dup.id
   const [showWeak, setShowWeak] = useState(false)
   /* Kết luận theo BẰNG CHỨNG (pairJudge): chỉ hiện cặp có mã SP/mã vật liệu chung và không mâu thuẫn; cặp chỉ giống chữ mô tả = "ít chắc", ẩn mặc định */
@@ -251,7 +253,8 @@ export default function CheckView({ d }: { d: ProjectData }) {
             </div>
           </div>
         </div>)}
-      {selEntry && <div className="drawer-bg" onMouseDown={() => setSel(null)}><div className="drawer" onMouseDown={e => e.stopPropagation()}><EntryPanel d={d} entry={selEntry} issues={issues.find(r => r.e.id === selEntry.id)?.issues} onClose={() => setSel(null)} /></div></div>}
+      {sel && d.entries.some(e => e.id === sel) && <MaterialPopup d={d} entryId={sel} lang="vn" onClose={() => setSel(null)} onDetail={id => { setSel(null); setDet(id) }} />}
+      {selEntry && <div className="drawer-bg" onMouseDown={() => setDet(null)}><div className="drawer" onMouseDown={e => e.stopPropagation()}><EntryPanel d={d} entry={selEntry} issues={issues.find(r => r.e.id === selEntry.id)?.issues} onClose={() => setDet(null)} /></div></div>}
     </div>
   )
 }
