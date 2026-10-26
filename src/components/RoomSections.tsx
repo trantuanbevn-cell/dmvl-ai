@@ -122,7 +122,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   const [qm, setQm] = useState<{ src: Entry; tgt: Entry } | null>(null)
   const [pickSrc, setPickSrc] = useState<Entry | null>(null)
   const [splitSrc, setSplitSrc] = useState<Entry | null>(null)
-  const [sortSec, setSortSec] = useState<{ title: string; items: Entry[] } | null>(null)
+  const [sortSec, setSortSec] = useState<{ title: string; key: string; items: Entry[] } | null>(null)
   /** Áp thứ tự đã sắp cho từng nhóm mã: các mã của mục chiếm lại đúng các “ô” cũ trong dãy mã của nhóm (mã ngoài mục/đã ẩn giữ nguyên chỗ) */
   const applySorted = async (sorted: Entry[]) => {
     if (d.project) await autoBackup(d.project, 'Tự động trước khi sắp xếp thứ tự vật liệu', { minGapMs: 10 * 60_000 })
@@ -347,7 +347,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   return (
     <div className="sec-wrap">
       {qm && <QuickMergeDialog d={d} src={qm.src} tgt={qm.tgt} onClose={() => setQm(null)} />}
-      {sortSec && <SortSectionDialog d={d} title={sortSec.title} items={sortSec.items} onClose={() => setSortSec(null)} onApply={applySorted} />}
+      {sortSec && <SortSectionDialog d={d} title={sortSec.title} sectionKey={sortSec.key} items={sortSec.items} onClose={() => setSortSec(null)} onApply={applySorted} />}
       {splitSrc && <SplitEntryDialog d={d} src={splitSrc} onClose={() => setSplitSrc(null)} />}
       {pickSrc && <MergePicker d={d} src={pickSrc} symMap={symMap} onClose={() => setPickSrc(null)} onPick={tgt => { setQm({ src: pickSrc, tgt }); setPickSrc(null) }} />}
       {sugE && <SuggestDialog d={d} entry={sugE} occId={focusOcc && d.occ.find(x => x.id === focusOcc)?.entry_id === sugE.id ? focusOcc : undefined} onClose={() => setSugE(null)} />}
@@ -357,7 +357,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
           <div key={section.key}>
             {bandRow && <div className={'band band-' + bandRow}>{bandTitle(bandRow, lang)}</div>}
             <div className="sec-title">{sectionTitle(section, lang)} <span className="cnt">{items.length}</span>{(() => { const n = items.filter(e => missingOf(e, lang).length).length; return n ? <span className="cnt miss-cnt" title="Số dòng còn thiếu thông tin">⚠ {n} dòng thiếu</span> : <span className="cnt ok-cnt">✓ đủ thông tin</span> })()}
-              {canEdit && items.length >= 3 && <button className="btn sm" style={{ marginLeft: 'auto' }} title="Sắp xếp thứ tự các mã trong mục này: theo loại đồ (sofa, armchair, ghế bar…), theo phòng hoặc theo tên" onClick={() => setSortSec({ title: section.vn, items })}>⇅ Sắp xếp</button>}
+              {canEdit && items.length >= 3 && <button className="btn sm" style={{ marginLeft: 'auto' }} title="Sắp xếp thứ tự các mã trong mục này: theo loại đồ (sofa, armchair, ghế bar…), theo phòng hoặc theo tên" onClick={() => setSortSec({ title: section.vn, key: section.key, items })}>⇅ Sắp xếp</button>}
               {canEdit && <button className="btn sm add-sib" style={{ marginLeft: canEdit && items.length >= 3 ? 8 : 'auto' }} title="Thêm vật liệu khác vào mục này (vd màu sơn thứ 2)" onClick={() => { const f = items[0]; onAdd({ section_key: f.section_key, group: f.group_code, category: f.category ?? 'decor', name: f.name_vn, part_vn: f.part_vn, parent_id: f.parent_id, hint: `Thêm vật liệu nhận diện thiếu trong mục “${sectionTitle(section, lang)}”.` }) }}>＋ Thêm vật liệu</button>}</div>
             <table className="sec-table">
               <thead><tr>{[...HEAD[lang], ''].map((t, i) => <th key={i} style={{ width: cw ? cw[i] + '%' : (i < 10 ? HW[i] : '10.5%') }}>{t}{i < 10 && <span className="col-rs" title="Kéo để đổi độ rộng cột (bấm đúp = về mặc định)" onMouseDown={ev => startResize(ev, i)} onDoubleClick={() => setCw(null)} onClick={ev => ev.stopPropagation()} />}</th>)}</tr></thead>
