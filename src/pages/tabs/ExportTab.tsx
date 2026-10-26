@@ -19,6 +19,7 @@ export default function ExportTab({ d }: { d: ProjectData }) {
   const list = useMemo(() => filterEntries(d.entries, o.includePending), [d.entries, o.includePending])
   const groups = useMemo(() => groupBySection(list), [list])
   const sheets = useMemo(() => planSheets(groups, o), [groups, o])
+  const sheetOf = useMemo(() => { const m = new Map<string, string>(); for (const sh of sheets) for (const g of sh.groups) m.set(g.section.key, sh.name); return m }, [sheets])
   const n = useMemo(() => entriesInExport(list, o).length, [list, o])
   const pend = d.entries.filter(e => e.status === 'pending' || e.status === 'review').length
   const roomsMissing = d.rooms.filter(r => !d.occ.some(x => x.room_id === r.id)).length
@@ -124,7 +125,7 @@ export default function ExportTab({ d }: { d: ProjectData }) {
             const band = s.band !== lastBand ? s.band : null; lastBand = s.band
             const cur = o.assign[s.key] ?? 'main'
             return [band && <tr key={'b' + s.band}><td colSpan={3} className="small" style={{ background: '#f1e8de', fontWeight: 700 }}><div className="row between" style={{ flexWrap: 'wrap', gap: 6 }}><span>{bandTitle(s.band, 'vn')}</span><span className="chips" title="Áp cho tất cả mục trong nhóm này">{BAND_TARGETS.map(([k, l]) => { const ms = shown.filter(x => x.band === s.band); const on = ms.every(x => (o.assign[x.key] ?? 'main') === k); return <button key={k} className={'chip' + (on ? ' on' : '')} onClick={() => set({ assign: { ...o.assign, ...Object.fromEntries(ms.map(x => [x.key, k])) } })}>{l}</button> })}</span></div></td></tr>,
-              <tr key={s.key}><td>{s.vn} <span className="muted small">/ {s.en}</span></td><td style={{ width: 60 }}>{cnt} mã</td>
+              <tr key={s.key}><td>{s.vn} <span className="muted small">/ {s.en}</span><div className="small" style={{ color: '#6b3a1f' }}>→ nằm trong sheet “{sheetOf.get(s.key) ?? '—'}”</div></td><td style={{ width: 60 }}>{cnt} mã</td>
                 <td><div className="chips">{TARGETS.map(([k, l]) => <button key={k} className={'chip' + (cur === k ? ' on' : '')} onClick={() => set({ assign: { ...o.assign, [s.key]: k } })}>{l}</button>)}</div></td></tr>]
           })}
         </tbody></table>
