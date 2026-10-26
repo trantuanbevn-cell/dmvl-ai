@@ -312,7 +312,7 @@ export function exportSymbols(list: Entry[], renumber: boolean) {
 }
 
 // ---- Kế hoạch xuất: gộp tất cả vào 1 sheet hay tách từng mục ra sheet riêng
-export type SheetTarget = 'main' | 'own' | 'c1' | 'c2'
+export type SheetTarget = 'main' | 'own' | 'c1' | 'c2' | 'band'
 export type ExportOpts = {
   lang: Lang; includePending: boolean; renumber: boolean; roomSheet: boolean; legend: boolean; quote: boolean
   assign: Record<string, SheetTarget>; names: { main: string; c1: string; c2: string }
@@ -327,6 +327,7 @@ export const PRESETS: { key: string; label: string; make: () => Record<string, S
   { key: 'loose', label: 'Tách riêng đồ rời', make: () => ({ loose: 'own' }) },
   { key: 'furn', label: 'Tách nội thất (liền tường + rời) ra 1 sheet', make: () => ({ joinery: 'c1', loose: 'c1' }) },
   { key: 'bands', label: 'Hoàn thiện (A+B) | Nội thất & thiết bị (C) | Decor & art (D)', make: () => Object.fromEntries(allSections().map(s => [s.key, s.band === 'D' ? 'c2' : s.band === 'A' || s.band === 'B' ? 'main' : 'c1'])) as Record<string, SheetTarget> },
+  { key: 'bandsheet', label: 'Mỗi nhóm A / B / C / D 1 sheet riêng', make: () => Object.fromEntries(allSections().map(s => [s.key, 'band'])) as Record<string, SheetTarget> },
   { key: 'all', label: 'Mỗi mục vật liệu 1 sheet riêng', make: () => Object.fromEntries(allSections().map(s => [s.key, 'own'])) as Record<string, SheetTarget> },
 ]
 const safeName = (s: string) => s.replace(/[\\/*?:\[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 31) || 'Sheet'
@@ -338,6 +339,10 @@ export function planSheets<T extends Entry>(allGroups: { section: Section; items
   const pick = (t: SheetTarget) => groups.filter(g => (o.assign[g.section.key] ?? 'main') === t)
   const push = (name: string, gs: typeof groups) => { if (gs.length) out.push({ name, groups: gs }) }
   push(o.names.main || 'DMVL', pick('main')); push(o.names.c1 || 'Sheet 2', pick('c1')); push(o.names.c2 || 'Sheet 3', pick('c2'))
+  // 'band' = cả nhóm (A, B, C…) thành một sheet riêng
+  const bandGs = pick('band'); const bandSeen: string[] = []
+  for (const g of bandGs) if (!bandSeen.includes(g.section.band)) bandSeen.push(g.section.band)
+  for (const b of bandSeen) out.push({ name: cap(bandTitle(b, vn ? 'vn' : 'en')), groups: bandGs.filter(g => g.section.band === b) })
   for (const g of pick('own')) out.push({ name: cap(vn ? g.section.vn : g.section.en), groups: [g] })
   const seen = new Set<string>()
   return out.map(x => { let n = safeName(x.name), i = 2; while (seen.has(n.toLowerCase())) n = safeName(x.name).slice(0, 28) + ' ' + i++; seen.add(n.toLowerCase()); return { ...x, name: n } })

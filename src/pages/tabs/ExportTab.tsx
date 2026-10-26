@@ -7,7 +7,8 @@ import { supabase } from '../../lib/supabase'
 import { allSections, bandTitle, PRESETS, defaultOpts, groupBySection, planSheets, EXPORT_SETS, entriesInExport, type ExportOpts, type SheetTarget, type Lang } from '../../lib/sections'
 import type { ProjectData } from '../../lib/useProject'
 
-const TARGETS: [SheetTarget, string][] = [['main', 'Sheet chính'], ['own', 'Sheet riêng'], ['c1', 'Sheet phụ 1'], ['c2', 'Sheet phụ 2']]
+const TARGETS: [SheetTarget, string][] = [['main', 'Sheet chính'], ['own', 'Sheet riêng'], ['band', 'Sheet nhóm'], ['c1', 'Sheet phụ 1'], ['c2', 'Sheet phụ 2']]
+const BAND_TARGETS: [SheetTarget, string][] = [['band', 'Cả nhóm 1 sheet riêng'], ['main', 'Gộp vào sheet chính'], ['c1', 'Gộp vào sheet phụ 1'], ['c2', 'Gộp vào sheet phụ 2'], ['own', 'Mỗi mục 1 sheet']]
 const sameAssign = (a: Record<string, SheetTarget>, b: Record<string, SheetTarget>) => Object.keys({ ...a, ...b }).every(k => (a[k] ?? 'main') === (b[k] ?? 'main'))
 
 export default function ExportTab({ d }: { d: ProjectData }) {
@@ -122,12 +123,12 @@ export default function ExportTab({ d }: { d: ProjectData }) {
             const cnt = groups.find(g => g.section.key === s.key)?.items.length ?? 0
             const band = s.band !== lastBand ? s.band : null; lastBand = s.band
             const cur = o.assign[s.key] ?? 'main'
-            return [band && <tr key={'b' + s.band}><td colSpan={3} className="small" style={{ background: '#f1e8de', fontWeight: 700 }}>{bandTitle(s.band, 'vn')}</td></tr>,
+            return [band && <tr key={'b' + s.band}><td colSpan={3} className="small" style={{ background: '#f1e8de', fontWeight: 700 }}><div className="row between" style={{ flexWrap: 'wrap', gap: 6 }}><span>{bandTitle(s.band, 'vn')}</span><span className="chips" title="Áp cho tất cả mục trong nhóm này">{BAND_TARGETS.map(([k, l]) => { const ms = shown.filter(x => x.band === s.band); const on = ms.every(x => (o.assign[x.key] ?? 'main') === k); return <button key={k} className={'chip' + (on ? ' on' : '')} onClick={() => set({ assign: { ...o.assign, ...Object.fromEntries(ms.map(x => [x.key, k])) } })}>{l}</button> })}</span></div></td></tr>,
               <tr key={s.key}><td>{s.vn} <span className="muted small">/ {s.en}</span></td><td style={{ width: 60 }}>{cnt} mã</td>
                 <td><div className="chips">{TARGETS.map(([k, l]) => <button key={k} className={'chip' + (cur === k ? ' on' : '')} onClick={() => set({ assign: { ...o.assign, [s.key]: k } })}>{l}</button>)}</div></td></tr>]
           })}
         </tbody></table>
-        <p className="small muted">“Sheet riêng” = mục đó thành một sheet độc lập (vd tách Nội thất rời để lập danh mục/báo giá riêng cho chủ đầu tư). “Sheet phụ 1/2” = gộp nhiều mục vào cùng một sheet phụ (vd Nội thất liền tường + rời). Lựa chọn được nhớ cho dự án này.</p>
+        <p className="small muted">“Sheet nhóm” / “Cả nhóm 1 sheet riêng” = toàn bộ nhóm (A, B, C, D…) đã phân loại trong danh mục thành một sheet. Dòng tiêu đề mỗi nhóm có nút áp cho cả nhóm; chip bên phải từng mục để chỉnh riêng. “Sheet riêng” = mục đó thành một sheet độc lập (vd tách Nội thất rời để lập danh mục/báo giá riêng cho chủ đầu tư). “Sheet phụ 1/2” = gộp nhiều mục vào cùng một sheet phụ (vd Nội thất liền tường + rời). Lựa chọn được nhớ cho dự án này.</p>
       </div>
 
       <div className="small">Sẽ xuất <b>{n}</b> mã{!o.includePending && pend > 0 ? ` (còn ${pend} mã chờ duyệt không được xuất)` : ''}.</div>
