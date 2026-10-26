@@ -316,6 +316,10 @@ export type SheetTarget = 'main' | 'own' | 'c1' | 'c2'
 export type ExportOpts = {
   lang: Lang; includePending: boolean; renumber: boolean; roomSheet: boolean; legend: boolean; quote: boolean
   assign: Record<string, SheetTarget>; names: { main: string; c1: string; c2: string }
+  /** chỉ xuất các mục này (khoá mục); không có = xuất tất cả. Ký hiệu vẫn đánh theo toàn dự án nên khớp giữa các file */
+  only?: string[] | null
+  /** đuôi tên file (vd 'Ngân sách đồ rời'); mặc định 'Danh mục VLTH' */
+  fileTail?: string
 }
 export const defaultOpts = (): ExportOpts => ({ lang: 'both', includePending: false, renumber: true, roomSheet: true, legend: false, quote: false, assign: {}, names: { main: 'DMVL', c1: 'Nội thất', c2: 'Thiết bị' } })
 export const PRESETS: { key: string; label: string; make: () => Record<string, SheetTarget> }[] = [
@@ -326,10 +330,11 @@ export const PRESETS: { key: string; label: string; make: () => Record<string, S
   { key: 'all', label: 'Mỗi mục vật liệu 1 sheet riêng', make: () => Object.fromEntries(allSections().map(s => [s.key, 'own'])) as Record<string, SheetTarget> },
 ]
 const safeName = (s: string) => s.replace(/[\\/*?:\[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 31) || 'Sheet'
-export function planSheets<T extends Entry>(groups: { section: Section; items: T[] }[], o: ExportOpts): { name: string; groups: { section: Section; items: T[] }[] }[] {
+export function planSheets<T extends Entry>(allGroups: { section: Section; items: T[] }[], o: ExportOpts): { name: string; groups: { section: Section; items: T[] }[] }[] {
   const vn = o.lang !== 'en'
   const cap = (t: string) => t.toLowerCase().replace(/(^|[\s–-])\S/g, c => c.toUpperCase())
   const out: { name: string; groups: { section: Section; items: T[] }[] }[] = []
+  const groups = o.only ? allGroups.filter(g => o.only!.includes(g.section.key)) : allGroups
   const pick = (t: SheetTarget) => groups.filter(g => (o.assign[g.section.key] ?? 'main') === t)
   const push = (name: string, gs: typeof groups) => { if (gs.length) out.push({ name, groups: gs }) }
   push(o.names.main || 'DMVL', pick('main')); push(o.names.c1 || 'Sheet 2', pick('c1')); push(o.names.c2 || 'Sheet 3', pick('c2'))
@@ -369,3 +374,16 @@ export function pickerFamilies(): { label: string; groups: Group[] }[] {
 }
 /** Mục tự tạo (custom) gắn với tiền tố nhóm này, nếu có */
 export const customSectionOfGroup = (g: string): string | null => CUSTOM.find(c => c.groups[0] === g)?.key ?? null
+
+/** Bộ xuất theo yêu cầu CĐT: VLHT + ngân sách tách riêng đồ rời / liền tường / đèn / OS&E (thảm, decor, tranh… tạm tính theo gói) */
+export type ExportSet = { key: string; label: string; tail: string; budget: boolean; keys: () => string[] }
+const OSE = ['carpet', 'curtain', 'fabric', 'equipment', 'decor', 'art', 'sign']
+export const EXPORT_SETS: ExportSet[] = [
+  { key: 'vlht', label: 'VLHT (vật liệu hoàn thiện)', tail: 'Danh mục VLHT', budget: false, keys: () => allSections().filter(x => (x.band === 'A' || x.band === 'B' || x.key === 'sanitary') && !OSE.includes(x.key)).map(x => x.key) },
+  { key: 'loose', label: 'Đồ rời', tail: 'Ngân sách đồ rời', budget: true, keys: () => ['loose'] },
+  { key: 'joinery', label: 'Liền tường', tail: 'Ngân sách nội thất liền tường', budget: true, keys: () => ['joinery'] },
+  { key: 'lighting', label: 'Đèn nội thất', tail: 'Ngân sách đèn', budget: true, keys: () => ['lighting'] },
+  { key: 'ose', label: 'OS&E (thảm, rèm, decor, tranh, biển…)', tail: 'Ngân sách OS&E', budget: true, keys: () => allSections().filter(x => OSE.includes(x.key)).map(x => x.key) },
+]
+/** id các mã nằm trong file xuất (theo o.only) – dùng cho sheet "Theo phòng", chú giải, dựng ảnh */
+export const entriesInExport = <T extends Entry>(list: T[], o: ExportOpts): T[] => !o.only ? list : groupBySection(list).filter(g => o.only!.includes(g.section.key)).flatMap(g => g.items)

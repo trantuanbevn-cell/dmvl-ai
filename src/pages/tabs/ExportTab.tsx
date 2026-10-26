@@ -4,7 +4,7 @@ import { useAuth } from '../../lib/auth'
 import { exportExcel, filterEntries, exportBaseName } from '../../lib/exportExcel'
 import { printSchedule, buildScheduleHtml } from '../../lib/exportPrint'
 import { supabase } from '../../lib/supabase'
-import { allSections, bandTitle, PRESETS, defaultOpts, groupBySection, planSheets, type ExportOpts, type SheetTarget, type Lang } from '../../lib/sections'
+import { allSections, bandTitle, PRESETS, defaultOpts, groupBySection, planSheets, EXPORT_SETS, entriesInExport, type ExportOpts, type SheetTarget, type Lang } from '../../lib/sections'
 import type { ProjectData } from '../../lib/useProject'
 
 const TARGETS: [SheetTarget, string][] = [['main', 'Sheet chính'], ['own', 'Sheet riêng'], ['c1', 'Sheet phụ 1'], ['c2', 'Sheet phụ 2']]
@@ -18,7 +18,7 @@ export default function ExportTab({ d }: { d: ProjectData }) {
   const list = useMemo(() => filterEntries(d.entries, o.includePending), [d.entries, o.includePending])
   const groups = useMemo(() => groupBySection(list), [list])
   const sheets = useMemo(() => planSheets(groups, o), [groups, o])
-  const n = list.length
+  const n = useMemo(() => entriesInExport(list, o).length, [list, o])
   const pend = d.entries.filter(e => e.status === 'pending' || e.status === 'review').length
   const roomsMissing = d.rooms.filter(r => !d.occ.some(x => x.room_id === r.id)).length
   const { canEdit } = useAuth()
@@ -60,7 +60,17 @@ export default function ExportTab({ d }: { d: ProjectData }) {
       setPrev({ html: await buildScheduleHtml(mk(d.latest() as ProjectData), o, false) })
     } catch (e) { alert(String(e)); setPrev(null) }
   }
-  const shown = allSections().filter(s => (groups.find(g => g.section.key === s.key)?.items.length ?? 0) > 0)
+  const allShown = allSections().filter(s => (groups.find(g => g.section.key === s.key)?.items.length ?? 0) > 0)
+  const shown = o.only ? allShown.filter(s => o.only!.includes(s.key)) : allShown
+  const setOf = (k: string) => EXPORT_SETS.find(x => x.key === k)!
+  const curSet = EXPORT_SETS.find(x => o.only && (() => { const a = x.keys().filter(k => allShown.some(s => s.key === k)).sort().join(), b = [...o.only!].filter(k => allShown.some(s => s.key === k)).sort().join(); return a === b })())
+  const pickSet = (k: string | null) => { if (!k) return set({ only: null, fileTail: '', quote: false }); const x = setOf(k); set({ only: x.keys(), fileTail: x.tail, quote: x.budget }) }
+  const toggleSec = (k: string) => { const cur = o.only ?? allShown.map(s => s.key); const nx = cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k]; set({ only: nx, fileTail: '' }) }
+  const exportBundle = async () => {
+    if (!confirm(`Xuất lần lượt ${EXPORT_SETS.length} file Excel: ${EXPORT_SETS.map(x => x.label.split(' (')[0]).join(', ')}? Trình duyệt có thể hỏi cho phép tải nhiều file.`)) return
+    await go('bundle', async data => { for (const x of EXPORT_SETS) { if (!x.keys().some(k => allShown.some(s => s.key === k))) continue; await exportExcel(data, { ...o, only: x.keys(), fileTail: x.tail, quote: x.budget }); await new Promise(r => setTimeout(r, 700)) } })
+  }
+
   let lastBand = ''
   return (
     <div className="card stack">
@@ -86,6 +96,17 @@ export default function ExportTab({ d }: { d: ProjectData }) {
         <label className="row sm-gap"><input type="checkbox" checked={o.roomSheet} onChange={e => set({ roomSheet: e.target.checked })} /> Thêm sheet “Theo phòng”</label>
         <label className="row sm-gap"><input type="checkbox" checked={!!o.legend} onChange={e => set({ legend: e.target.checked })} /> Thêm sheet “Chú giải ký hiệu”</label>
         <label className="row sm-gap"><input type="checkbox" checked={o.quote} onChange={e => set({ quote: e.target.checked })} /> Thêm cột báo giá (Số lượng · Đơn giá · Thành tiền, có tổng cộng)</label>
+      </div>
+
+      <div className="card" style={{ background: 'var(--bg2, #faf6f1)' }}>
+        <div className="row between"><h4 style={{ margin: 0 }}>Chọn hạng mục xuất</h4><span className="small muted">{o.only ? `Chỉ xuất ${shown.length} mục` : 'Đang xuất tất cả các mục'}</span></div>
+        <div className="chips" style={{ margin: '8px 0' }}>
+          <button className={'chip' + (!o.only ? ' on' : '')} onClick={() => pickSet(null)}>Tất cả</button>
+          {EXPORT_SETS.map(x => <button key={x.key} className={'chip' + (curSet?.key === x.key ? ' on' : '')} onClick={() => pickSet(x.key)}>{x.label}</button>)}
+        </div>
+        <div className="row gap small" style={{ flexWrap: 'wrap' }}>{allShown.map(s => <label key={s.key} className="row sm-gap"><input type="checkbox" checked={!o.only || o.only.includes(s.key)} onChange={() => toggleSec(s.key)} />{s.vn.split(' (')[0]}</label>)}</div>
+        <p className="small muted" style={{ marginBottom: 0 }}>Yêu cầu CĐT: <b>VLHT</b> + ngân sách tách riêng <b>đồ rời, liền tường, đèn, OS&E</b> (thảm riêng, decor tạm tính theo gói). Chọn một bộ → xuất file riêng; các bộ ngân sách tự bật cột báo giá. Ký hiệu vẫn đánh theo toàn dự án nên khớp giữa các file. Có thể tick thêm/bớt từng mục. Tên file: <b>{exportBaseName({ name: info.name, item_name: info.item_name }, o.fileTail || undefined)}.xlsx</b></p>
+        <div style={{ marginTop: 6 }}><button className="btn sm" disabled={!!busy || !n} onClick={exportBundle}>⬇ Xuất cả bộ ({EXPORT_SETS.length} file Excel)</button></div>
       </div>
 
       <div className="card" style={{ background: 'var(--bg2, #faf6f1)' }}>

@@ -1,5 +1,5 @@
 import { CATEGORIES } from './codes'
-import { vlLines, groupBySection, sectionTitle, bandTitle, exportSymbols, symbolOf, tx, planSheets, PREFIXES, prefixLabel, type ExportOpts } from './sections'
+import { vlLines, groupBySection, sectionTitle, bandTitle, exportSymbols, symbolOf, tx, planSheets, entriesInExport, PREFIXES, prefixLabel, type ExportOpts } from './sections'
 import { signedUrls } from './supabase'
 import { matMontage, extraPaths } from './matImages'
 import { viewCanvas, regionCanvas } from './crop'
@@ -49,7 +49,7 @@ export async function buildScheduleHtml(d: ExportData, o: ExportOpts, print: boo
     return { occ, img, map }
   }
   const pre = new Map<string, { occ: typeof d.occ; img: string; map: string }>()
-  { const q = [...list]; await Promise.all(Array.from({ length: 6 }, async () => { for (let e = q.shift(); e; e = q.shift()) { try { pre.set(e.id, await prep(e)) } catch { /* dòng lỗi ảnh vẫn xuất chữ */ } } })) }
+  { const q = [...entriesInExport(list, o)]; await Promise.all(Array.from({ length: 6 }, async () => { for (let e = q.shift(); e; e = q.shift()) { try { pre.set(e.id, await prep(e)) } catch { /* dòng lỗi ảnh vẫn xuất chữ */ } } })) }
   let rows = '', lastBand = ''
   const sheets = planSheets(groupBySection(list), o)
   for (const [si, sh] of sheets.entries()) {
@@ -83,7 +83,7 @@ export async function buildScheduleHtml(d: ExportData, o: ExportOpts, print: boo
     const used = PREFIXES.filter(p => list.some(e => p.groups.includes(e.group_code)))
     extra += `<h2 class="brk">${esc(L === 'en' ? 'Legend' : 'Chú giải ký hiệu')}</h2><table><thead><tr>${th2(esc(h('KÍ HIỆU', 'CODE')))}${th2(esc(h('Tên tiếng Anh', 'English name')))}${th2(esc(h('Tên tiếng Việt', 'Vietnamese name')))}${th2(esc(h('Bao gồm', 'Includes')))}</tr></thead><tbody>${used.map(p => `<tr><td class="code">${esc(prefixLabel(p.prefix))}</td><td>${esc(p.en)}</td><td>${esc(p.vn)}</td><td>${esc(L === 'en' ? p.includes_en : L === 'vn' ? p.includes_vn : `${p.includes_vn}\n${p.includes_en}`)}</td></tr>`).join('')}</tbody></table><p class="sub"><i>${esc(h('Ghi chú: ký hiệu = viết tắt tiếng Anh của họ vật liệu; loại con (gỗ tự nhiên, gỗ công nghiệp…) ghi ở cột Hạng mục/Thông số.', 'Note: code = English abbreviation of the material family; sub-types (solid wood, engineered wood…) are described in the Item / Specification columns.'))}</i></p>`
   }
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(exportBaseName(d.project))}</title><style>
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(exportBaseName(d.project, o.fileTail || undefined))}</title><style>
   @page { size: A3 landscape; margin: 10mm }
   body { font-family: Arial, sans-serif; font-size: 9px; color:#222 }
   h1 { font-size: 16px; color:#6B3A1F; margin:0 } h1 .en { font-size: 13px } .sub { color:#555; margin:2px 0 8px }

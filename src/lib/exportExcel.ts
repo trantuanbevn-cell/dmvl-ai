@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs'
 import { groupOf, CATEGORIES } from './codes'
 import { GROUPS } from './codes'
-import { vlLines, prefixLabel, PREFIXES, groupBySection, sectionTitle, bandTitle, exportSymbols, symbolOf, tx, planSheets, type Lang, type ExportOpts, type Section } from './sections'
+import { vlLines, prefixLabel, PREFIXES, groupBySection, sectionTitle, bandTitle, exportSymbols, symbolOf, tx, planSheets, entriesInExport, type Lang, type ExportOpts, type Section } from './sections'
 import { signedUrls } from './supabase'
 import { matMontage, extraPaths } from './matImages'
 import { viewCanvas, regionCanvas, swatchBase64, loadImage } from './crop'
@@ -171,10 +171,10 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
 }
 
 /** Tên file xuất: NămThángNgày_Tên dự án_Hạng mục_Danh mục VLTH */
-export function exportBaseName(project: { name: string; item_name?: string | null }) {
+export function exportBaseName(project: { name: string; item_name?: string | null }, tail = 'Danh mục VLTH') {
   const n = new Date(), ymd = `${n.getFullYear()}${String(n.getMonth() + 1).padStart(2, '0')}${String(n.getDate()).padStart(2, '0')}`
   const clean = (t: string) => t.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()
-  return [ymd, clean(project.name), clean(project.item_name ?? ''), 'Danh mục VLTH'].filter(Boolean).join('_')
+  return [ymd, clean(project.name), clean(project.item_name ?? ''), tail].filter(Boolean).join('_')
 }
 
 export async function exportExcel(d: ExportData, o: ExportOpts) {
@@ -200,7 +200,8 @@ export async function exportExcel(d: ExportData, o: ExportOpts) {
     rs.getRow(1).values = [h('Phòng', 'Room'), ...cats.map(c => tx(c.vn, c.en, L))]
     rs.getRow(1).eachCell(c => { c.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BROWN } }; c.alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' } })
     rs.getColumn(1).width = 30; cats.forEach((_, i) => (rs.getColumn(i + 2).width = 16))
-    const entryById = new Map(list.map(e => [e.id, e]))
+    const inFile = entriesInExport(list, o)
+    const entryById = new Map(inFile.map(e => [e.id, e]))
     d.rooms.forEach((rm, i) => {
       const row = rs.getRow(i + 2)
       row.getCell(1).value = tx(rm.name_vn, rm.name_en, L).replace('\n', ' / ')
@@ -214,7 +215,7 @@ export async function exportExcel(d: ExportData, o: ExportOpts) {
   }
   // 3) Chú giải ký hiệu (chuẩn viết tắt tiếng Anh) – chỉ các nhóm có trong file; mặc định KHÔNG xuất, người dùng tích chọn
   if (o.legend) {
-    const used = PREFIXES.filter(p => list.some(e => p.groups.includes(e.group_code)))
+    const used = PREFIXES.filter(p => entriesInExport(list, o).some(e => p.groups.includes(e.group_code)))
     const ls = wb.addWorksheet(L === 'en' ? 'Legend' : 'Chú giải ký hiệu')
     ls.getRow(1).values = [h('KÍ HIỆU', 'CODE'), h('Tên tiếng Anh', 'English name'), h('Tên tiếng Việt', 'Vietnamese name'), h('Bao gồm', 'Includes')]
     ls.getRow(1).eachCell(c => { c.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BROWN } }; c.alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' } })
@@ -226,7 +227,7 @@ export async function exportExcel(d: ExportData, o: ExportOpts) {
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
-  a.download = exportBaseName(d.project) + '.xlsx'
+  a.download = exportBaseName(d.project, o.fileTail || undefined) + '.xlsx'
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 5000)
 }
