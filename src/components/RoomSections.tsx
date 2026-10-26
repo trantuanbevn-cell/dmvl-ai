@@ -139,7 +139,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     toast('Đã sắp xếp lại thứ tự', 'ok')
   }
   // Chép / dán nhanh thông số: chép nội dung mô tả, vật liệu, hãng, xuất xứ… của một mã rồi dán sang mã khác (không chép mã SP, link, ảnh, màu, SL)
-  const SPEC_KEYS = ['name_vn', 'name_en', 'part_vn', 'part_en', 'material_vn', 'material_en', 'desc_vn', 'desc_en', 'perf_vn', 'perf_en', 'standards', 'brand', 'origin'] as const
+  const SPEC_KEYS = ['name_vn', 'name_en', 'part_vn', 'part_en', 'material_vn', 'material_en', 'desc_vn', 'desc_en', 'perf_vn', 'perf_en', 'standards', 'composition', 'brand', 'origin'] as const
   const [clip, setClip] = useState<{ id: string; sym: string; data: Record<string, unknown> } | null>(() => { try { return JSON.parse(sessionStorage.getItem('dmvl-spec-clip') ?? 'null') } catch { return null } })
   const copySpec = (e: Entry) => {
     const data: Record<string, unknown> = {}; for (const k of SPEC_KEYS) data[k] = e[k] ?? null
@@ -149,7 +149,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   const pasteSpec = async (e: Entry) => {
     if (!clip || clip.id === e.id) return
     const sym = symMap.get(e.id) ?? e.code
-    if (!confirm(`Dán thông số của ${clip.sym} vào ${sym}?\nTên, vật liệu, mô tả, hãng, xuất xứ của ${sym} sẽ được thay bằng của ${clip.sym}. Mã sản phẩm, link, ảnh mẫu, màu, số lượng giữ nguyên.`)) return
+    if (!confirm(`Dán thông số của ${clip.sym} vào ${sym}?\nTên, vật liệu, mô tả, cấu tạo, hãng, xuất xứ của ${sym} sẽ được thay bằng của ${clip.sym}. Mã sản phẩm, link, ảnh mẫu, màu, số lượng giữ nguyên.`)) return
     const old: Record<string, unknown> = {}; for (const k of SPEC_KEYS) old[k] = e[k] ?? null
     const err = await saveEntry(e, clip.data)
     if (err) { toast(err.message); return }
@@ -397,6 +397,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                       {canEdit && <button className="btn ghost sm" title="Thêm hình phối cảnh" onClick={ev => { ev.stopPropagation(); setShotRoom(null); setShotFor(e) }}>＋ ảnh</button>}</td>
                     <td>{shortBi(e, 'name', 30, lang) && <div className="ed-line bi"><Ed e={e} k="name_vn" miss={M('name_vn' as any)} ph="Tên hạng mục" /><span className="bi-sl">/</span><Ed e={e} k="name_en" miss={M('name_en' as any)} ph="Item name (English)" /></div>}{[...(shortBi(e, 'name', 30, lang) ? [] : pair('name', lang)), ...pair('material', lang), ...pair('desc', lang)].map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} miss={M(k) || (!!e.spec_stale && String(k).startsWith('desc'))} area={!String(k).startsWith('name')} ph={String(k).endsWith('_en') ? (String(k).startsWith('name') ? 'Item name (English – not translated yet)' : String(k).startsWith('material') ? 'Material / colour / finish' : 'Specification') : String(k).startsWith('name') ? 'Tên hạng mục' : String(k).startsWith('material') ? 'Vật liệu / màu / bề mặt' : 'Thông số kỹ thuật'} /></div>)}
                       <div className="ed-line lab"><i>{lang === 'en' ? 'Composition' : 'Cấu tạo'}</i><Ed e={e} k="composition" miss={!!e.spec_stale} area ph={lang === 'en' ? 'Composition' : 'Cấu tạo (vật liệu thành phần)'} /></div>
+                      {canEdit && <div className="no-export" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}><button className="btn sm" title="Chép cả ô thông số này (tên, vật liệu, mô tả, cấu tạo, hãng, xuất xứ) để dán sang mã khác rồi chỉnh thêm" onClick={ev => { ev.stopPropagation(); copySpec(e) }}><b>⧉</b> Chép ô này</button>{clip && clip.id !== e.id && <button className="btn sm primary" title={`Dán thông số đã chép từ ${clip.sym} vào mã này`} onClick={ev => { ev.stopPropagation(); void pasteSpec(e) }}><b>⎘</b> Dán từ {clip.sym}</button>}</div>}
                       {!isFinish(e) && (() => {
                         const fr = refsOf(e, fctx), fi = finishIssues(e, fctx), fl = finishLines(e, d.entries, x => symMap.get(x.id) ?? x.code)
                         if (!fr.length && !fi.length && !(canEdit && ['ceiling', 'wall', 'feature_wall', 'base', 'joinery', 'artwork'].includes(e.category ?? ''))) return null
