@@ -255,11 +255,13 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   const [scanning, setScanning] = useState<string | null>(null)
   const [shotNote, setShotNote] = useState<Occurrence | null>(null)
   const delShot = async (o: Occurrence) => {
-    if (!confirm('Xoá hình phối cảnh này khỏi vật liệu?')) return
     const sameRoom = d.occ.filter(x => x.entry_id === o.entry_id && x.room_id === o.room_id)
-    // hình cuối cùng của phòng: giữ lại vị trí phòng, chỉ bỏ ảnh
-    if (sameRoom.length <= 1) await supabase.from('occurrences').update({ page_id: null, bbox: null, view: null }).eq('id', o.id)
-    else await supabase.from('occurrences').delete().eq('id', o.id)
+    const room = d.rooms.find(r => r.id === o.room_id)
+    const last = sameRoom.length <= 1 && !!room
+    if (!confirm(last ? `Xoá hình phối cảnh này? Đây là hình cuối của phòng ${room!.code} nên vị trí phòng ${room!.code} cũng bị bỏ khỏi vật liệu.` : 'Xoá hình phối cảnh này khỏi vật liệu?')) return
+    // hình + vị trí phòng đi cùng nhau: xoá hình cuối thì bỏ luôn phòng (và ngược lại ✕ ở cột Vị trí bỏ cả hình của phòng)
+    const { error } = await supabase.from('occurrences').delete().eq('id', o.id)
+    if (error) { alert(error.message); return }
     d.reload()
   }
   const addLoc = async (e: Entry, roomId: string) => {
