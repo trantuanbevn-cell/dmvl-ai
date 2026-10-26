@@ -11,6 +11,7 @@ import MergePicker from './MergePicker'
 import SplitEntryDialog from './SplitEntryDialog'
 import SortSectionDialog from './SortSectionDialog'
 import { autoBackup } from '../lib/backup'
+import { refMap, syncRefs } from '../lib/refSync'
 import { saveEntry, linkedWith } from '../lib/entryLink'
 import { symOf, vlLines } from '../lib/sections'
 import { kindOfGroup } from '../lib/suggestApply'
@@ -127,13 +128,14 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   const applySorted = async (sorted: Entry[]) => {
     if (d.project) await autoBackup(d.project, 'Tự động trước khi sắp xếp thứ tự vật liệu', { minGapMs: 10 * 60_000 })
     const num = (c: string) => parseInt(c.replace(/\D/g, '') || '0', 10)
+    const lists: Entry[][] = []
     for (const g of [...new Set(sorted.map(e => e.group_code))]) {
       const mine = sorted.filter(e => e.group_code === g), ids = new Set(mine.map(e => e.id))
       const full = d.entries.filter(x => x.group_code === g).sort((a, b) => num(a.code) - num(b.code) || a.code.localeCompare(b.code))
       let k = 0
-      const list = full.map(x => (ids.has(x.id) ? mine[k++] : x))
-      await applyOrder(list)
+      lists.push(full.map(x => (ids.has(x.id) ? mine[k++] : x)))
     }
+    await applyOrder(lists)
     toast('Đã sắp xếp lại thứ tự', 'ok')
   }
   // Chép / dán nhanh thông số: chép nội dung mô tả, vật liệu, hãng, xuất xứ… của một mã rồi dán sang mã khác (không chép mã SP, link, ảnh, màu, SL)
@@ -199,27 +201,24 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     const list = d.entries.filter(x => x.group_code === e.group_code && x.id !== e.id).sort((a, b) => num(a.code) - num(b.code) || a.code.localeCompare(b.code))
     const at = list.findIndex(x => x.id === target.id); if (at < 0) return
     list.splice(at + (after ? 1 : 0), 0, e)
-    await applyOrder(list)
+    await applyOrder([list])
   }
-  /** Gán lại thứ tự cho cả nhóm mã (list = toàn bộ mã của nhóm theo thứ tự mới) + cập nhật ký hiệu VL đang ghi theo dãy số */
-  const applyOrder = async (list: Entry[]) => {
+  /** Gán lại thứ tự cho một hay nhiều nhóm mã (mỗi phần tử = toàn bộ mã của một nhóm theo thứ tự mới), rồi đồng bộ mọi ô chữ nhắc tới ký hiệu (một lượt duy nhất) */
+  const applyOrder = async (lists: Entry[][]) => {
     const num = (c: string) => parseInt(c.replace(/\D/g, '') || '0', 10)
-    const { error } = await supabase.rpc('reorder_entries', { p_ids: list.map(x => x.id) })
-    if (error) { alert('Không đổi được thứ tự: ' + error.message); return }
-    // Ký hiệu VL (mã vật liệu) đang ghi theo dãy số của nhóm (vd GWB-01, GWB-02…) → đổi theo ký hiệu bản vẽ MỚI, để hai cột luôn khớp nhau
+    for (const list of lists) {
+      const { error } = await supabase.rpc('reorder_entries', { p_ids: list.map(x => x.id) })
+      if (error) { alert('Không đổi được thứ tự: ' + error.message); return }
+    }
+    // ĐỒNG BỘ: mã/ký hiệu của cả nhóm vừa hoán đổi → mọi ô chữ trong dự án đang nhắc ký hiệu cũ (mô tả, cấu tạo, mã vật liệu, ghi chú…) đổi sang ký hiệu mới của đúng vật liệu đó
+    const newCode = new Map<string, string>()
+    for (const list of lists) { const codes = list.map(x => x.code).sort((a, b) => num(a) - num(b) || a.localeCompare(b)); list.forEach((x, i) => newCode.set(x.id, codes[i])) }
+    const after = d.entries.map(x => (newCode.has(x.id) ? { ...x, code: newCode.get(x.id)! } : x))
+    const changedCode = new Map([...newCode].filter(([id, c]) => d.entries.find(x => x.id === id)?.code !== c))
     try {
-      const codes = list.map(x => x.code).sort((a, b) => num(a) - num(b) || a.localeCompare(b)), newCode = new Map(list.map((x, i) => [x.id, codes[i]]))
-      const before = symbolMap(d.entries), after = symbolMap(d.entries.map(x => (newCode.has(x.id) ? { ...x, code: newCode.get(x.id)! } : x)))
-      const series = new Set(list.map(x => before.get(x.id)).filter(Boolean) as string[])   // các ký hiệu của chính dãy này
-      const ups: Promise<unknown>[] = []
-      for (const x of list) {
-        const lines = (x.product_code ?? '').split('\n'), nw = after.get(x.id)
-        if (!nw || !lines.some(l => series.has(l.trim()))) continue
-        const next = lines.map(l => (series.has(l.trim()) ? nw : l)).filter((l, i, a) => a.indexOf(l) === i).join('\n')
-        if (next !== (x.product_code ?? '')) ups.push(saveEntry(x, { product_code: next }) as Promise<unknown>)
-      }
-      await Promise.all(ups)
-    } catch { /* không chặn việc đổi thứ tự */ }
+      const r = await syncRefs(d.entries, refMap(d.entries, after), changedCode)
+      if (r.fields) toast(`Đã cập nhật ${r.fields} ô nhắc tới ký hiệu cũ (${r.entries} vật liệu) để khớp thứ tự mới`, 'ok')
+    } catch (er) { alert('Đã đổi thứ tự nhưng chưa đồng bộ hết các ô nhắc tới ký hiệu: ' + (er as Error).message + '\nHãy chạy lại sắp xếp hoặc báo mình kiểm tra.') }
     d.reload()
   }
   /** Kéo ảnh phối cảnh từ một vật liệu sang vật liệu khác (giữ Ctrl/Alt để sao chép thay vì chuyển) */
