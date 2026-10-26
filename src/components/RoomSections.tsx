@@ -6,6 +6,7 @@ import LinkCell from './LinkCell'
 import { toast } from '../lib/toast'
 import { moveRoom, undoMove } from '../lib/cropMove'
 import QuickMergeDialog from './QuickMergeDialog'
+import MergePicker from './MergePicker'
 import { saveEntry, linkedWith } from '../lib/entryLink'
 import { symOf, vlLines } from '../lib/sections'
 import { kindOfGroup } from '../lib/suggestApply'
@@ -116,6 +117,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   // Gộp nhanh: bấm đúp ký hiệu bản vẽ → gõ/dán ký hiệu của vật liệu khác → Enter → hộp xác nhận
   const [symEdit, setSymEdit] = useState<{ id: string; v: string } | null>(null)
   const [qm, setQm] = useState<{ src: Entry; tgt: Entry } | null>(null)
+  const [pickSrc, setPickSrc] = useState<Entry | null>(null)
   const startMerge = (src: Entry, text: string) => {
     setSymEdit(null)
     const k = text.trim().toUpperCase().replace(/\s+/g, ''); if (!k) return
@@ -306,6 +308,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   return (
     <div className="sec-wrap">
       {qm && <QuickMergeDialog d={d} src={qm.src} tgt={qm.tgt} onClose={() => setQm(null)} />}
+      {pickSrc && <MergePicker d={d} src={pickSrc} symMap={symMap} onClose={() => setPickSrc(null)} onPick={tgt => { setQm({ src: pickSrc, tgt }); setPickSrc(null) }} />}
       {sugE && <SuggestDialog d={d} entry={sugE} occId={focusOcc && d.occ.find(x => x.id === focusOcc)?.entry_id === sugE.id ? focusOcc : undefined} onClose={() => setSugE(null)} />}
       {secs.map(({ section, items }) => {
         const bandRow = section.band !== lastBand ? section.band : null; lastBand = section.band
@@ -372,6 +375,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                       {canEdit && <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}><b>✓</b> Duyệt</button>}
                       {canEdit && can('suggest') && <button className="btn sm no-export" title="Vật Liệu Đề Xuất – tìm mẫu thư viện khớp với phối cảnh (chỉ hiện trong phần mềm, không xuất file)" onClick={ev => { ev.stopPropagation(); setSugE(e) }}><b>✨</b> Đề xuất</button>}
                       <button className="btn ghost sm" title="Chi tiết / chọn mã hãng từ thư viện" onClick={ev => { ev.stopPropagation(); onDetail(e.id) }}><b>⋯</b> Chi tiết</button>
+                      {canEdit && <button className="btn ghost sm" title="Gộp nhanh: chuyển toàn bộ phòng + ảnh phối cảnh của mã này sang mã khác, thông số lấy theo mã đích" onClick={ev => { ev.stopPropagation(); setPickSrc(e) }}><b>⇢</b> Gộp vào…</button>}
                       {canEdit && <button className="btn ghost sm" title="Nhân đôi vật liệu này (vd màu thứ 2) – chép nội dung, chỉ sửa vài chỗ" onClick={ev => { ev.stopPropagation(); onAdd({ copy: e.id, section_key: e.section_key, group: e.group_code, category: cat, name: e.name_vn, part_vn: e.part_vn, parent_id: e.parent_id, hint: `Thêm vật liệu cùng loại với ${e.code} – ${e.name_vn}. Sửa tên/màu cho khác đi.` }) }}><b>＋</b> Nhân đôi</button>}
                       {canEdit && <button className="btn ghost sm" title="Xoá hạng mục này" onClick={ev => { ev.stopPropagation(); del(e) }}><b>🗑</b> Xoá</button>}</div></td>
                   </tr>)
