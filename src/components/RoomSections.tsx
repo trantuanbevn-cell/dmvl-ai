@@ -8,6 +8,7 @@ import { toast } from '../lib/toast'
 import { moveRoom, undoMove } from '../lib/cropMove'
 import QuickMergeDialog from './QuickMergeDialog'
 import MergePicker from './MergePicker'
+import SplitEntryDialog from './SplitEntryDialog'
 import { saveEntry, linkedWith } from '../lib/entryLink'
 import { symOf, vlLines } from '../lib/sections'
 import { kindOfGroup } from '../lib/suggestApply'
@@ -118,6 +119,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   const [symEdit, setSymEdit] = useState<{ id: string; v: string } | null>(null)
   const [qm, setQm] = useState<{ src: Entry; tgt: Entry } | null>(null)
   const [pickSrc, setPickSrc] = useState<Entry | null>(null)
+  const [splitSrc, setSplitSrc] = useState<Entry | null>(null)
   // Chép / dán nhanh thông số: chép nội dung mô tả, vật liệu, hãng, xuất xứ… của một mã rồi dán sang mã khác (không chép mã SP, link, ảnh, màu, SL)
   const SPEC_KEYS = ['name_vn', 'name_en', 'part_vn', 'part_en', 'material_vn', 'material_en', 'desc_vn', 'desc_en', 'perf_vn', 'perf_en', 'standards', 'brand', 'origin'] as const
   const [clip, setClip] = useState<{ id: string; sym: string; data: Record<string, unknown> } | null>(() => { try { return JSON.parse(sessionStorage.getItem('dmvl-spec-clip') ?? 'null') } catch { return null } })
@@ -324,6 +326,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   return (
     <div className="sec-wrap">
       {qm && <QuickMergeDialog d={d} src={qm.src} tgt={qm.tgt} onClose={() => setQm(null)} />}
+      {splitSrc && <SplitEntryDialog d={d} src={splitSrc} onClose={() => setSplitSrc(null)} />}
       {pickSrc && <MergePicker d={d} src={pickSrc} symMap={symMap} onClose={() => setPickSrc(null)} onPick={tgt => { setQm({ src: pickSrc, tgt }); setPickSrc(null) }} />}
       {sugE && <SuggestDialog d={d} entry={sugE} occId={focusOcc && d.occ.find(x => x.id === focusOcc)?.entry_id === sugE.id ? focusOcc : undefined} onClose={() => setSugE(null)} />}
       {secs.map(({ section, items }) => {
@@ -391,6 +394,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                       {canEdit && <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}><b>✓</b> Duyệt</button>}
                       {canEdit && can('suggest') && <button className="btn sm no-export" title="Vật Liệu Đề Xuất – tìm mẫu thư viện khớp với phối cảnh (chỉ hiện trong phần mềm, không xuất file)" onClick={ev => { ev.stopPropagation(); setSugE(e) }}><b>✨</b> Đề xuất</button>}
                       <button className="btn ghost sm" title="Chi tiết / chọn mã hãng từ thư viện" onClick={ev => { ev.stopPropagation(); onDetail(e.id) }}><b>⋯</b> Chi tiết</button>
+                      {canEdit && locs.length >= 1 && os.length >= 2 && <button className="btn ghost sm" title="Tách vật liệu: chọn các ảnh phối cảnh / phòng thuộc vật liệu mới (vd 2 ghế ở 2 phòng khác nhau)" onClick={ev => { ev.stopPropagation(); setSplitSrc(e) }}><b>⑂</b> Tách…</button>}
                       {canEdit && <button className="btn ghost sm" title="Chép thông số (tên, vật liệu, mô tả, hãng, xuất xứ) của mã này" onClick={ev => { ev.stopPropagation(); copySpec(e) }}><b>⧉</b> Chép</button>}
                       {canEdit && clip && clip.id !== e.id && <button className="btn ghost sm" title={`Dán thông số đã chép từ ${clip.sym} vào mã này`} onClick={ev => { ev.stopPropagation(); void pasteSpec(e) }}><b>⎘</b> Dán từ {clip.sym}</button>}
                       {canEdit && <button className="btn ghost sm" title="Gộp nhanh: chuyển toàn bộ phòng + ảnh phối cảnh của mã này sang mã khác, thông số lấy theo mã đích" onClick={ev => { ev.stopPropagation(); setPickSrc(e) }}><b>⇢</b> Gộp vào…</button>}
