@@ -23,7 +23,6 @@ import AddShot from './AddShot'
 import RoomShotFallback from './RoomShotFallback'
 import GroupPicker from './GroupPicker'
 import { changeGroup } from '../lib/entryGroup'
-import { analyzeRoom } from '../lib/pipeline'
 import MatImage from './MatImage'
 import { StatusDot } from '../pages/tabs/MaterialView'
 import { useAuth } from '../lib/auth'
@@ -251,17 +250,15 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     if (!room || !d.project) return
     const hasPages = d.pages.some(p => p.room_id === roomId && (p.kind === 'render' || p.kind === 'plan'))
     if (!hasPages) { toast(`Đã thêm ${room.code}. Phòng này chưa có trang phối cảnh nên chưa có ảnh – bấm “＋ ảnh” khi có.`); return }
-    if (!isAdmin) { toast(`Đã thêm vị trí ${room.code}. Bấm “＋ ảnh” để khoanh hình tay (chỉ quản trị viên mới chạy được AI rà phòng).`); return }
-    if (!confirm(`Đã thêm vị trí ${room.code} ${room.name_vn}.\n\nĐể AI rà lại phòng này, tìm vật liệu và tự khoanh mũi tên? (dùng lượt AI, mất vài chục giây; mã và thông tin đã sửa tay được giữ nguyên, có thể xuất hiện thêm mã mới ở trạng thái “Chờ duyệt”)\n\nBấm Huỷ = chỉ thêm vị trí, tự khoanh ảnh sau.`)) { setShotFor(e); return }
+    if (!isAdmin) { toast(`Đã thêm vị trí ${room.code}. Bấm “＋ ảnh” để khoanh hình tay (chỉ quản trị viên mới chạy được AI).`); return }
+    // CHỈ khoanh cho đúng vật liệu này ở phòng này: không rà cả phòng, không tạo mã/vị trí mới ở các bảng khác
+    if (!confirm(`Đã thêm vị trí ${room.code} ${room.name_vn}.\n\nĐể AI tìm riêng ${e.name_vn} trong phối cảnh phòng này và khoanh ảnh? (chỉ ghi vào ô vật liệu này; không thêm mã mới, không đụng các bảng khác; có sao lưu trước)\n\nBấm Huỷ = tự khoanh tay bằng “＋ ảnh”.`)) { setShotRoom(roomId); setShotFor(e); return }
     setScanning(room.code)
     try {
-      await analyzeRoom(d.project, room, () => {})
-      // bỏ dòng vị trí thủ công (chưa có ảnh) nếu AI đã tìm được vật liệu này trong phòng
-      const { data: oc } = await supabase.from('occurrences').select('*').eq('entry_id', e.id).eq('room_id', roomId)
-      const rows = (oc ?? []) as Occurrence[]
-      if (rows.some(o => o.bbox)) { const dead = rows.filter(o => !o.bbox && !o.page_id).map(o => o.id); if (dead.length) await supabase.from('occurrences').delete().in('id', dead); toast(`AI đã tìm thấy vật liệu trong ${room.code} và khoanh mũi tên.`, 'ok') }
-      else { toast(`AI không thấy vật liệu này trong ${room.code}. Hãy khoanh tay bằng “＋ ảnh”.`); setShotRoom(roomId); setShotFor(e) }
-    } catch (er) { toast('Rà phòng lỗi: ' + String(er)); setShotRoom(roomId); setShotFor(e) }
+      const rep = await locateMissingShots(d, { entryIds: [e.id], roomIds: [roomId] }, () => {})
+      if (rep.updated.length) toast(`AI đã khoanh ${e.name_vn} trong ${room.code}.`, 'ok')
+      else { toast(`AI không thấy hoặc không chắc ${e.name_vn} trong ${room.code}. Hãy khoanh tay bằng “＋ ảnh”.`); setShotRoom(roomId); setShotFor(e) }
+    } catch (er) { toast('AI khoanh lỗi: ' + String((er as Error).message ?? er)); setShotRoom(roomId); setShotFor(e) }
     setScanning(null); d.reload()
   }
   /** Rà lần lượt các phòng chưa có ảnh của vật liệu này bằng AI (mỗi phòng 1 lượt phân tích) */
