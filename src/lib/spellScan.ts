@@ -2,7 +2,7 @@
 import { supabase } from './supabase'
 import { saveEntry } from './entryLink'
 import { addIgnore, addIgnores, isIgnored } from './qcIgnore'
-import { fixText, type Fix, type Flag, type SpellLang } from './spell'
+import { bulletOf, fixText, type Fix, type Flag, type SpellLang } from './spell'
 import type { ProjectData } from './useProject'
 
 export type SpellItem = { key: string; kind: 'entry' | 'room'; id: string; label: string; field: string; fieldLabel: string; lang: SpellLang; cap: boolean; before: string; after: string; fixes: Fix[]; flags: Flag[] }
@@ -52,7 +52,7 @@ export function spellScan(d: ProjectData): SpellItem[] {
   const run = (kind: 'entry' | 'room', id: string, label: string, field: string, fieldLabel: string, lang: SpellLang, cap: boolean, v: unknown) => {
     const before = String(v ?? ''); if (!before.trim()) return
     const key = `${id}:${field}:${before}`; if (isIgnored('spell', key)) return
-    const r = fixText(before, lang, { cap })
+    const r = fixText(before, lang, { cap, bullet: bulletOf(field) })
     if (r.text !== before || r.flags.length) out.push({ key, kind, id, label, field, fieldLabel, lang, cap, before, after: r.text, fixes: r.fixes, flags: r.flags })
   }
   for (const e of d.entries) if (e.status !== 'rejected') for (const [f, fl, lang, cap] of ENTRY_FIELDS) run('entry', e.id, `${e.code} · ${e.name_vn}`, f, fl, lang, cap, (e as any)[f])

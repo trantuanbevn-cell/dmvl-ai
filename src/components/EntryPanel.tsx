@@ -1,3 +1,4 @@
+import { bulletOf } from '../lib/spell'
 import OpRuleBadge from './OpRuleBadge'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -38,8 +39,8 @@ function Field({ e, k, label, area, onSaved, type = 'text', bad }: { e: Entry; k
   const dl = String(k).endsWith('_vn') ? 'vn' : String(k).endsWith('_en') ? 'en' : ['product_code', 'color_hex', 'product_url', 'product_image_url'].includes(String(k)) || type === 'number' ? 'none' : 'name'
   return (
     <label className={'fld' + (bad ? ' bad' : '')} data-flag={bad ? '1' : undefined}>{label}
-      {area ? <textarea data-lang={dl} value={v} onChange={x => setV(x.target.value)} onFocus={focus} onBlur={() => { save(); blur() }} rows={3} />
-        : <input data-lang={dl} type={type} value={v} onChange={x => setV(x.target.value)} onFocus={focus} onBlur={() => { save(); blur() }} />}
+      {area ? <textarea data-lang={dl} data-bullet={bulletOf(String(k))} value={v} onChange={x => setV(x.target.value)} onFocus={focus} onBlur={() => { save(); blur() }} rows={3} />
+        : <input data-lang={dl} data-bullet={bulletOf(String(k))} type={type} value={v} onChange={x => setV(x.target.value)} onFocus={focus} onBlur={() => { save(); blur() }} />}
     </label>
   )
 }

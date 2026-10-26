@@ -10,9 +10,9 @@ function setNative(el: HTMLInputElement | HTMLTextAreaElement, v: string) {
   el.dispatchEvent(new Event('input', { bubbles: true }))
 }
 const summary = (fx: Fix[]) => {
-  const spell = fx.filter(f => f.kind === 'spell' || f.kind === 'tone'), other = fx.length - spell.length
+  const fmt = fx.some(f => f.kind === 'format'), spell = fx.filter(f => f.kind === 'spell' || f.kind === 'tone'), other = fx.length - spell.length
   const parts = spell.slice(0, 3).map(f => `“${f.from}” → “${f.to}”`)
-  return `✎ Đã tự sửa${parts.length ? ': ' + parts.join(', ') + (spell.length > 3 ? '…' : '') : ' dấu câu / khoảng trắng'}${parts.length && other ? ' + dấu câu' : ''}`
+  return `✎ Đã tự sửa${parts.length ? ': ' + parts.join(', ') + (spell.length > 3 ? '…' : '') : (fmt ? ' định dạng đầu dòng' : ' dấu câu / khoảng trắng')}${parts.length && other ? ' + dấu câu' : ''}`
 }
 
 function onFocusOut(ev: FocusEvent) {
@@ -29,7 +29,7 @@ function onFocusOut(ev: FocusEvent) {
   if (!mode && SKIP_PH.test(el.placeholder ?? '')) return
   const lang: SpellLang = mode === 'vn' ? 'vi' : mode === 'en' ? 'en' : mode === 'name' ? null : detectLang(value)
   const natural = mode === 'vn' || mode === 'en' || el.dataset.cap !== undefined
-  const r = fixText(value, lang, { cap: natural })
+  const b = el.dataset.bullet, r = fixText(value, lang, { cap: natural, bullet: b === 'dash' || b === 'none' ? b : undefined })
   if (r.text !== value) { setNative(el, r.text); toast(summary(r.fixes), 'ok') }
   if (r.flags.length) el.setAttribute('data-spell-warn', r.flags.map(f => f.word + (f.suggestions[0] ? ` → ${f.suggestions[0]}` : '')).join('; '))
   else el.removeAttribute('data-spell-warn')

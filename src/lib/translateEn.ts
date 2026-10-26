@@ -3,7 +3,7 @@
 //  2) Phần còn lại (cụm dài/phức tạp/từ lạ): AI dịch (chỉ quản trị viên) kèm bản nháp của từ điển, rồi qua bộ sửa chính tả tiếng Anh.
 import { supabase, FUNCTIONS_URL } from './supabase'
 import { autoBackup } from './backup'
-import { fixText, loadEnglish } from './spell'
+import { bulletOf, fixText, loadEnglish } from './spell'
 import { translateViText } from './viEn'
 import type { ProjectData } from './useProject'
 import type { EnSrc } from './types'
@@ -64,7 +64,7 @@ async function put(it: TrItem, en: string) {
   const { error } = await q
   if (error) throw new Error(error.message)
 }
-const polish = (en: string, field: string) => fixText(en, 'en', { cap: field !== 'desc_en' ? true : true }).text
+const polish = (en: string, field: string) => fixText(en, 'en', { cap: true, bullet: bulletOf(field) }).text
 
 /** Điền các ô đã dịch chắc bằng từ điển. Trả về số ô đã điền. */
 export async function fillByDictionary(d: ProjectData, items: TrItem[]): Promise<number> {

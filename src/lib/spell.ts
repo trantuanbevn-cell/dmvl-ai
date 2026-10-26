@@ -5,12 +5,29 @@
 import { addIgnore, isIgnored } from './qcIgnore'
 import { checkVi, suggestVi } from './viSyllable'
 
-export type FixKind = 'unicode' | 'space' | 'punct' | 'case' | 'tone' | 'spell' | 'dup'
+export type FixKind = 'unicode' | 'space' | 'punct' | 'case' | 'tone' | 'spell' | 'dup' | 'format'
 export type Fix = { from: string; to: string; kind: FixKind }
 export type Flag = { word: string; suggestions: string[] }
 export type SpellResult = { text: string; fixes: Fix[]; flags: Flag[] }
 export type SpellLang = 'vi' | 'en' | null
-export type SpellOpts = { cap?: boolean }
+/** bullet: 'dash' = mỗi dòng bắt đầu “- ” + viết hoa (ô thông số/ghi chú nhiều dòng); 'none' = không gạch đầu dòng (ô tên/vật liệu) */
+export type BulletMode = 'dash' | 'none'
+export type SpellOpts = { cap?: boolean; bullet?: BulletMode }
+/** Quy chuẩn trình bày chung toàn dự án theo tên cột */
+export const bulletOf = (field: string): BulletMode | undefined => (/^(desc|perf|note)_(vn|en)$/.test(field) ? 'dash' : /^(name|part|material)_(vn|en)$/.test(field) ? 'none' : undefined)
+const MARK = /^(?:[•*·●▪▫■□◦‣⁃]\s*|[-–—+]\s+|[-–—](?=\p{L}))/u
+/** Chuẩn hoá đầu dòng: dòng thường → “- …”; dòng tiêu đề kết thúc bằng “:” (ngay trước dòng khác) và dòng thụt lề giữ nguyên; bỏ dòng trống */
+function formatBullets(lines: string[], origIndent: boolean[], mode: BulletMode): string[] {
+  const keep = lines.map((l, i) => ({ l, nested: origIndent[i] })).filter(x => x.l.trim() !== '')
+  return keep.map((x, i) => {
+    const body = x.l.replace(MARK, '').trim()
+    if (!body) return ''
+    if (mode === 'none') return body
+    if (x.nested) return '  ' + (x.l.trim().startsWith('-') ? x.l.trim() : body)
+    if (/:$/.test(body) && i < keep.length - 1) return body
+    return '- ' + body
+  })
+}
 
 // ---------- Từ điển tiếng Anh (nạp lười) ----------
 let en: { correct: (w: string) => boolean; suggest: (w: string) => string[]; add: (w: string) => void } | null = null
@@ -139,7 +156,14 @@ export function fixText(text: string, lang: SpellLang, opts: SpellOpts = {}): Sp
   if (/&#\d+;|&#x[0-9a-f]+;|&(?:amp|quot|apos|lt|gt|nbsp);/i.test(text)) text = text.replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&nbsp;/gi, ' ').replace(/&quot;/gi, '"').replace(/&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&amp;/gi, '&')
   const nfc = text.normalize('NFC')
   if (nfc !== text) fixes.push({ from: text, to: nfc, kind: 'unicode' })
-  let lines = nfc.split('\n').map(l => tidyLine(l, lang, opts, fixes))
+  const raw = nfc.split('\n')
+  let lines = raw.map(l => tidyLine(l, lang, opts, fixes))
+  if (opts.bullet) {
+    const f = formatBullets(lines, raw.map(l => /^ {2,}\S/.test(l)), opts.bullet)
+    if (opts.cap) for (let i = 0; i < f.length; i++) f[i] = f[i].replace(/^((?:- )?)(\p{Ll})/u, (_, a, c) => a + c.toUpperCase())
+    if (f.join('\n') !== lines.join('\n')) fixes.push({ from: lines.join('\n'), to: f.join('\n'), kind: 'format' })
+    lines = f
+  }
   while (lines.length && lines[lines.length - 1] === '') lines.pop()
   let t = lines.join('\n')
   t = spellWords(t, lang, fixes, flags)

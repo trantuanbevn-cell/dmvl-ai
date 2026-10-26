@@ -1,3 +1,4 @@
+import { bulletOf } from '../lib/spell'
 import OpRuleBadge from './OpRuleBadge'
 import { syncLibrary } from '../lib/matLibrary'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -44,7 +45,7 @@ function Ed({ e, k, area, ph, num, w, miss }: { e: Entry; k: K; area?: boolean; 
     if (error) alert(error.message)
   }
   const dl = String(k).endsWith('_vn') ? 'vn' : String(k).endsWith('_en') ? 'en' : ['product_code', 'color_hex', 'product_url'].includes(String(k)) || num ? 'none' : 'name'
-  const common = { value: v, placeholder: ph, 'data-lang': dl, readOnly: !canEdit, className: miss ? 'miss' : undefined, title: miss ? 'Thiếu thông tin – cần điền' : undefined, onChange: (x: any) => setV(x.target.value), onBlur: save, onClick: (x: any) => x.stopPropagation(), style: w ? { width: w } : undefined }
+  const common = { value: v, placeholder: ph, 'data-lang': dl, 'data-bullet': bulletOf(String(k)), readOnly: !canEdit, className: miss ? 'miss' : undefined, title: miss ? 'Thiếu thông tin – cần điền' : undefined, onChange: (x: any) => setV(x.target.value), onBlur: save, onClick: (x: any) => x.stopPropagation(), style: w ? { width: w } : undefined }
   const ref = useRef<HTMLTextAreaElement>(null)
   // ô chữ tự giãn cao theo nội dung (và theo độ rộng cột) để thấy ĐỦ chữ, kiểm tra được đúng như bản xuất
   const fit = () => { const t = ref.current; if (!t) return; t.style.height = 'auto'; t.style.height = t.scrollHeight + 2 + 'px' }
