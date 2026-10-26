@@ -5,7 +5,10 @@ import { wallTypeOf, finishOf, type Layer } from './library'
 import { furnRect } from './xform'
 import { furnTypeOf } from './furn'
 
-export type Sec = { id: string; name: string; a: Pt; b: Pt; /** đảo hướng nhìn sang phía bên kia đường cắt */ flip?: boolean; /** chỉ lấy các vật thể trong khoảng này phía sau mặt cắt (m); bỏ trống = hết */ depth?: number }
+/** Dim trên bản vẽ mặt cắt (toạ độ x dọc đường cắt, z cao độ; m). off = khoảng đẩy đường dim ra khỏi vật thể */
+export type SecDim = { id: string; a: [number, number]; b: [number, number]; off: number; txt?: string }
+export type SecNote = { id: string; x: number; z: number; t: string }
+export type Sec = { id: string; name: string; a: Pt; b: Pt; dims?: SecDim[]; notes?: SecNote[]; /** ngày lập (ghi trên bản vẽ) */ date?: string; /** đảo hướng nhìn sang phía bên kia đường cắt */ flip?: boolean; /** chỉ lấy các vật thể trong khoảng này phía sau mặt cắt (m); bỏ trống = hết */ depth?: number }
 export type Hatch = Layer['hatch'] | 'none'
 /** Vật liệu do danh mục (hoặc thư viện) cấp cho một vị trí: tên, màu, các lớp cấu tạo (nếu danh mục khai đủ) */
 export type MatInfo = { name: string; color?: string; code?: string; layers?: string[]; full?: boolean; src: 'catalog' | 'lib' }
