@@ -118,6 +118,24 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
   const [symEdit, setSymEdit] = useState<{ id: string; v: string } | null>(null)
   const [qm, setQm] = useState<{ src: Entry; tgt: Entry } | null>(null)
   const [pickSrc, setPickSrc] = useState<Entry | null>(null)
+  // Chép / dán nhanh thông số: chép nội dung mô tả, vật liệu, hãng, xuất xứ… của một mã rồi dán sang mã khác (không chép mã SP, link, ảnh, màu, SL)
+  const SPEC_KEYS = ['name_vn', 'name_en', 'part_vn', 'part_en', 'material_vn', 'material_en', 'desc_vn', 'desc_en', 'perf_vn', 'perf_en', 'standards', 'brand', 'origin'] as const
+  const [clip, setClip] = useState<{ id: string; sym: string; data: Record<string, unknown> } | null>(() => { try { return JSON.parse(sessionStorage.getItem('dmvl-spec-clip') ?? 'null') } catch { return null } })
+  const copySpec = (e: Entry) => {
+    const data: Record<string, unknown> = {}; for (const k of SPEC_KEYS) data[k] = e[k] ?? null
+    const c = { id: e.id, sym: symMap.get(e.id) ?? e.code, data }; setClip(c); try { sessionStorage.setItem('dmvl-spec-clip', JSON.stringify(c)) } catch { /* bỏ qua */ }
+    toast(`Đã chép thông số ${c.sym}. Bấm “Dán” ở dòng khác để áp dụng.`, 'ok')
+  }
+  const pasteSpec = async (e: Entry) => {
+    if (!clip || clip.id === e.id) return
+    const sym = symMap.get(e.id) ?? e.code
+    if (!confirm(`Dán thông số của ${clip.sym} vào ${sym}?\nTên, vật liệu, mô tả, hãng, xuất xứ của ${sym} sẽ được thay bằng của ${clip.sym}. Mã sản phẩm, link, ảnh mẫu, màu, số lượng giữ nguyên.`)) return
+    const old: Record<string, unknown> = {}; for (const k of SPEC_KEYS) old[k] = e[k] ?? null
+    const err = await saveEntry(e, clip.data)
+    if (err) { toast(err.message); return }
+    await d.reload()
+    toast(`Đã dán thông số ${clip.sym} vào ${sym}`, 'ok', { label: '↶ Hoàn tác', run: async () => { await saveEntry(e, old); toast('Đã hoàn tác', 'ok'); d.reload() } })
+  }
   const startMerge = (src: Entry, text: string) => {
     setSymEdit(null)
     const k = text.trim().toUpperCase().replace(/\s+/g, ''); if (!k) return
@@ -375,6 +393,8 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                       {canEdit && <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}><b>✓</b> Duyệt</button>}
                       {canEdit && can('suggest') && <button className="btn sm no-export" title="Vật Liệu Đề Xuất – tìm mẫu thư viện khớp với phối cảnh (chỉ hiện trong phần mềm, không xuất file)" onClick={ev => { ev.stopPropagation(); setSugE(e) }}><b>✨</b> Đề xuất</button>}
                       <button className="btn ghost sm" title="Chi tiết / chọn mã hãng từ thư viện" onClick={ev => { ev.stopPropagation(); onDetail(e.id) }}><b>⋯</b> Chi tiết</button>
+                      {canEdit && <button className="btn ghost sm" title="Chép thông số (tên, vật liệu, mô tả, hãng, xuất xứ) của mã này" onClick={ev => { ev.stopPropagation(); copySpec(e) }}><b>⧉</b> Chép</button>}
+                      {canEdit && clip && clip.id !== e.id && <button className="btn ghost sm" title={`Dán thông số đã chép từ ${clip.sym} vào mã này`} onClick={ev => { ev.stopPropagation(); void pasteSpec(e) }}><b>⎘</b> Dán từ {clip.sym}</button>}
                       {canEdit && <button className="btn ghost sm" title="Gộp nhanh: chuyển toàn bộ phòng + ảnh phối cảnh của mã này sang mã khác, thông số lấy theo mã đích" onClick={ev => { ev.stopPropagation(); setPickSrc(e) }}><b>⇢</b> Gộp vào…</button>}
                       {canEdit && <button className="btn ghost sm" title="Nhân đôi vật liệu này (vd màu thứ 2) – chép nội dung, chỉ sửa vài chỗ" onClick={ev => { ev.stopPropagation(); onAdd({ copy: e.id, section_key: e.section_key, group: e.group_code, category: cat, name: e.name_vn, part_vn: e.part_vn, parent_id: e.parent_id, hint: `Thêm vật liệu cùng loại với ${e.code} – ${e.name_vn}. Sửa tên/màu cho khác đi.` }) }}><b>＋</b> Nhân đôi</button>}
                       {canEdit && <button className="btn ghost sm" title="Xoá hạng mục này" onClick={ev => { ev.stopPropagation(); del(e) }}><b>🗑</b> Xoá</button>}</div></td>
