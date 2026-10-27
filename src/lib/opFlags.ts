@@ -102,12 +102,12 @@ export function flagsFor(d: ProjectData, e: Entry, ignoreStatus = false): FlagHi
   if (g === 'LVT') add('voc', rooms)
   if (g === 'FGWB' && inR(KITCHEN).length) add('kceil', inR(KITCHEN))
   if (/ghế đôn|ghế băng|băng ghế/i.test(t) && inR(/thay đồ/i).length) add('bench', inR(/thay đồ/i))
-  if (['FUR', 'PLB', 'EQP', 'FF'].includes(g) && inR(PREP).length) add('kcons', inR(PREP))
-  if (g === 'SKT' && inR(KITCHEN).length) add('cove', inR(KITCHEN))
+  if (['FF', 'SF', 'BA', 'EQ', 'JN', 'FH'].includes(g) && inR(PREP).length) add('kcons', inR(PREP))
+  if (g === 'BS' && inR(KITCHEN).length) add('cove', inR(KITCHEN))
   if (g === 'WT' && /sáo/i.test(t)) add('blind', rooms)
-  if (['FUR', 'ART', 'DC'].includes(g) && inR(OFFICE).length) add('gm', inR(OFFICE))
-  if (g === 'ART' && inR(BOH).length) add('art', inR(BOH))
-  if (g === 'LGT') {
+  if (['FF', 'AW', 'DC', 'JN'].includes(g) && inR(OFFICE).length) add('gm', inR(OFFICE))
+  if (g === 'AW' && inR(BOH).length) add('art', inR(BOH))
+  if (g === 'LT') {
     const k = inR(/bếp|rửa bát|kho thực phẩm|nhà ăn|căng tin|phục vụ/i)
     if (k.length || rooms.length >= 30) add('klight', k)
     add('relamp', [])
