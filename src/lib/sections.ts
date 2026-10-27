@@ -338,7 +338,9 @@ export function planSheets<T extends Entry>(allGroups: { section: Section; items
   const groups = o.only ? allGroups.filter(g => o.only!.includes(g.section.key)) : allGroups
   const pick = (t: SheetTarget) => groups.filter(g => (o.assign[g.section.key] ?? 'main') === t)
   const push = (name: string, gs: typeof groups) => { if (gs.length) out.push({ name, groups: gs }) }
-  push(o.names.main || 'DMVL', pick('main')); push(o.names.c1 || 'Sheet 2', pick('c1')); push(o.names.c2 || 'Sheet 3', pick('c2'))
+  // sheet chỉ có đúng 1 mục (vd chỉ còn thảm) → lấy tên của mục đó thay vì tên chung (DMVL…)
+  const nm = (t: SheetTarget, dflt: string) => { const gs = pick(t); return gs.length === 1 ? cap(vn ? gs[0].section.vn : gs[0].section.en) : dflt }
+  push(nm('main', o.names.main || 'DMVL'), pick('main')); push(nm('c1', o.names.c1 || 'Sheet 2'), pick('c1')); push(nm('c2', o.names.c2 || 'Sheet 3'), pick('c2'))
   // 'band' = cả nhóm (A, B, C…) thành một sheet riêng
   const bandGs = pick('band'); const bandSeen: string[] = []
   for (const g of bandGs) if (!bandSeen.includes(g.section.band)) bandSeen.push(g.section.band)
