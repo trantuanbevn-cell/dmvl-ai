@@ -1,5 +1,6 @@
 import { bulletOf } from '../lib/spell'
 import OpRuleBadge from './OpRuleBadge'
+import OpFlagBadge from './OpFlagBadge'
 import { syncLibrary } from '../lib/matLibrary'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -439,7 +440,7 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
                     <td className="c-brand"><div className="ed-pre"><b>{lang === 'en' ? 'Origin' : 'Xuất xứ'}:</b><Ed e={e} k="origin" ph="Xuất xứ" /></div><div className="ed-pre"><b>{lang === 'en' ? 'Brand' : 'Thương hiệu'}:</b><Ed e={e} k="brand" ph="Hãng / thương hiệu" /></div>{cbar(e, 'brand')}</td>
                     <td className="c-mat"><MatImage d={d} e={e} />
                       <LinkCell d={d} e={e} />{cbar(e, 'mat')}</td>
-                    <td>{pair('note', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} area ph="Ghi chú" /></div>)}<OpRuleBadge d={d} entryId={e.id} />{cbar(e, 'note')}</td>
+                    <td>{pair('note', lang).map(k => <div key={String(k)} className="ed-line">{lang === 'both' && <i>{flag(k)}</i>}<Ed e={e} k={k} area ph="Ghi chú" /></div>)}<OpFlagBadge d={d} entryId={e.id} /><OpRuleBadge d={d} entryId={e.id} />{cbar(e, 'note')}</td>
                     <td className="c-act"><div className="act-col"><StatusDot s={e.status} />
                       {canEdit && <button className={'btn sm' + (e.status === 'approved' ? ' ok-on' : '')} onClick={ev => quick(e, 'approved', ev)}><b>✓</b> Duyệt</button>}
                       {canEdit && can('suggest') && <button className="btn sm no-export" title="Vật Liệu Đề Xuất – tìm mẫu thư viện khớp với phối cảnh (chỉ hiện trong phần mềm, không xuất file)" onClick={ev => { ev.stopPropagation(); setSugE(e) }}><b>✨</b> Đề xuất</button>}

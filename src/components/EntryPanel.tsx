@@ -1,5 +1,6 @@
 import { bulletOf } from '../lib/spell'
 import OpRuleBadge from './OpRuleBadge'
+import OpFlagBadge from './OpFlagBadge'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import ProductReadDialog from './ProductReadDialog'
@@ -94,6 +95,7 @@ export default function EntryPanel({ d, entry, onClose, issues, focusOcc }: { d:
       {!!issues?.length && <div className="issue-banner"><b>Cần sửa ({issues.length}) – các ô tô đỏ bên dưới:</b>
         {issues.map((i, k) => <div key={k} className={'small ib-' + i.kind}>• {i.text}{i.finishFix && canEdit && <button className="btn sm primary" style={{ marginLeft: 8 }} onClick={async () => { try { await applyFinishFix(entry, i.finishFix!); d.reload() } catch (err) { alert(String((err as Error).message ?? err)) } }}>{i.finishFix.label}</button>}{i.finishKey && canEdit && <button className="btn ghost sm" style={{ marginLeft: 6 }} title="Cảnh báo này không đúng – bỏ và không báo lại" onClick={async () => { try { await dismissFinish(entry, i.finishKey!); d.reload() } catch (err) { alert(String((err as Error).message ?? err)) } }}>✕ Không đúng</button>}{i.fix === 'category' && canEdit && <button className="btn sm primary" style={{ marginLeft: 8 }} onClick={async () => { await fixCategory(entry); d.reload() }}>Tự sửa</button>}</div>)}</div>}
       {!!others.filter(o => o.act).length && <div className="note" style={{ borderLeft: '4px solid ' + colorOf(others[0].id) }}>👁 {others.map(o => <b key={o.id} style={{ color: colorOf(o.id) }}>{o.name} </b>)}{others.find(o => o.act)!.act}</div>}
+      <OpFlagBadge d={d} entryId={entry.id} />
       <OpRuleBadge d={d} entryId={entry.id} />
 
       <fieldset className="plain" disabled={!canEdit}>
