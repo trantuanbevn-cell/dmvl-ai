@@ -495,4 +495,3 @@ input[data-lang="en"], textarea[data-lang="en"] { font-style: italic }
 .loc-tag.drag { cursor: grab }
 .sym-in { width: 100%; box-sizing: border-box; font-weight: 700; font-size: 12px; padding: 3px 4px; border: 2px solid var(--orange); border-radius: 6px }
 .opflag-btn { display: inline-block; margin: 4px 4px 0 0; padding: 3px 9px; border-radius: 14px; border: 1px solid #b3261e; background: #fde8e6; color: #b3261e; font-weight: 700; font-size: 12px; cursor: pointer } .opflag-btn:hover { background: #f9d0cc }
-.dot.st-review { background: #f08a24 } .item-card.st-review, .mat-card.st-review { border-left-color: #f08a24 }

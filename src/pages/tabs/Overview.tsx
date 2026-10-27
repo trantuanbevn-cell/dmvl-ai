@@ -53,15 +53,15 @@ export default function Overview({ d }: { d: ProjectData }) {
 
   const flipList = isAdmin && isWestin(d) ? flippable(d) : []
   const applyFlags = async () => {
-    if (!confirm(`Chuyển ${flipList.length} vật liệu đang xanh nhưng vận hành yêu cầu sửa sang trạng thái cam “Cần xem lại”?\nChỉ đổi trạng thái; nội dung vật liệu không đổi. Các mã này sẽ không có trong file xuất (mặc định chỉ xuất mã đã xác nhận) cho tới khi sửa xong và bấm Duyệt.`)) return
+    if (!confirm(`Chuyển ${flipList.length} vật liệu đang xanh nhưng vận hành yêu cầu sửa sang trạng thái vàng “Chờ duyệt”?\nChỉ đổi trạng thái; nội dung vật liệu không đổi. Các mã này sẽ không có trong file xuất (mặc định chỉ xuất mã đã xác nhận) cho tới khi sửa xong và bấm Duyệt.`)) return
     await autoBackup(d.project!, 'Trước khi gắn cảnh báo vận hành', { minGapMs: 0 })
-    const { error } = await supabase.from('entries').update({ status: 'review' }).in('id', flipList.map(e => e.id))
+    const { error } = await supabase.from('entries').update({ status: 'pending' }).in('id', flipList.map(e => e.id))
     if (error) { toast(error.message); return }
-    await d.reload(); toast(`Đã chuyển ${flipList.length} vật liệu sang “Cần xem lại” (cam).`, 'ok')
+    await d.reload(); toast(`Đã chuyển ${flipList.length} vật liệu sang “Chờ duyệt” (vàng).`, 'ok')
   }
   return (
     <div className="stack">
-      {flipList.length > 0 && <div className="note" style={{ borderColor: '#b3261e' }}>🔴 Vận hành có góp ý cần sửa cho <b>{flipList.length}</b> vật liệu đang được đánh dấu xanh. <button className="btn sm primary" onClick={applyFlags}>Chuyển sang “Cần xem lại” (cam)</button></div>}
+      {flipList.length > 0 && <div className="note" style={{ borderColor: '#b3261e' }}>🔴 Vận hành có góp ý cần sửa cho <b>{flipList.length}</b> vật liệu đang được đánh dấu xanh. <button className="btn sm primary" onClick={applyFlags}>Chuyển sang “Chờ duyệt” (vàng)</button></div>}
       <div className="card hero-card">
         <div className="hero-top">
           <div className="big-pct"><b>{ps.pct}%</b><span>đã xác nhận</span></div>
