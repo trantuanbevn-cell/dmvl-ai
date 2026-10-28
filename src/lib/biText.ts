@@ -50,7 +50,10 @@ export type EntryCells = { cat: Seg[]; loc: Seg[]; loc2: Seg[]; spec: Seg[]; bra
 export const allRoomsCount = (locs: { room: { id: string } }[], rooms: { id: string; name_vn: string | null }[]) => { const real = rooms.filter(r => !/^\s*tất cả/i.test(r.name_vn ?? '')); return real.length > 1 && real.every(r => locs.some(l => l.room.id === r.id)) ? real.length : 0 }
 export function entryCells(e: Entry, L: Lang, occCats: string[], locs: { room: { name_vn: string; name_en: string | null } }[], fin: { vn: string; en: string }[] = [], allRooms = 0): EntryCells {
   const flat = (s: string | null | undefined) => (s ?? '').replace(/\n/g, ' ')
-  const cat = occCats.flatMap(k => { const c = CATEGORIES.find(z => z.key === k); return c ? pair(c.vn, c.en, L) : one(k) })
+  // Cột Hạng mục phải GIỐNG màn hình: màn hình hiện ô “Bộ phận áp dụng” (part) → ưu tiên part; chỉ khi trống mới dùng loại hạng mục ẩn (category) của vị trí
+  const byCat = occCats.flatMap(k => { const c = CATEGORIES.find(z => z.key === k); return c ? pair(c.vn, c.en, L) : one(k) })
+  const byPart = pair(e.part_vn, e.part_en, L)
+  const cat = byPart.length ? byPart : byCat
   // Nhiều phòng (>10): chia hai cột nhỏ (cột Vị trí + cột Vị trí phụ cạnh bên), mỗi phòng một mục: tiếng Việt đậm, tiếng Anh nghiêng ngay bên dưới – giống màn hình
   const roomLines = (ls: typeof locs) => ls.flatMap(l => pair(flat(l.room.name_vn), flat(l.room.name_en), L))
   const split = locs.length > 10 && !(allRooms > 1 && locs.length >= allRooms)
