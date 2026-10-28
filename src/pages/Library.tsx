@@ -183,11 +183,11 @@ export function MatDetail({ m, onClose, onPick, pickLabel }: { m: Mat; onClose: 
   return (
     <div className="modal-bg center" style={{ zIndex: 95 }} onMouseDown={e => { e.stopPropagation(); onClose() }}>
       <div className="modal" style={{ width: 'min(760px, 96vw)', maxHeight: '90vh', overflow: 'auto' }} onMouseDown={e => e.stopPropagation()}>
-        {zoom && <div onMouseDown={e => { e.stopPropagation(); setZoom(false) }} style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(20,15,10,.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out', padding: 16 }}><img src={pick?.tex || m.tex_url || ''} alt="" referrerPolicy="no-referrer" style={{ maxWidth: '96vw', maxHeight: '94vh', objectFit: 'contain', borderRadius: 6, background: '#fff' }} /><span style={{ position: 'fixed', top: 14, right: 22, color: '#fff', fontSize: 13 }}>Bấm bất kỳ đâu để đóng</span></div>}
+        {zoom && <div onMouseDown={e => { e.stopPropagation(); setZoom(false) }} style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(20,15,10,.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out', padding: 16 }}><img loading="lazy" decoding="async" src={pick?.tex || m.tex_url || ''} alt="" referrerPolicy="no-referrer" style={{ maxWidth: '96vw', maxHeight: '94vh', objectFit: 'contain', borderRadius: 6, background: '#fff' }} /><span style={{ position: 'fixed', top: 14, right: 22, color: '#fff', fontSize: 13 }}>Bấm bất kỳ đâu để đóng</span></div>}
         <div className="row between"><h3>{m.product_code} — {m.name}</h3><button className="btn ghost sm" onClick={onClose}>✕</button></div>
         <div className="row" style={{ gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           {(pick?.tex || m.tex_url)
-            ? <img src={pick?.tex || m.tex_url || ''} alt="" title="Bấm để phóng to map" onClick={() => setZoom(true)} referrerPolicy="no-referrer" style={{ cursor: 'zoom-in', width: 340, maxWidth: '100%', aspectRatio: '2/1', objectFit: 'cover', borderRadius: 8, background: '#eee' }} />
+            ? <img loading="lazy" decoding="async" src={pick?.tex || m.tex_url || ''} alt="" title="Bấm để phóng to map" onClick={() => setZoom(true)} referrerPolicy="no-referrer" style={{ cursor: 'zoom-in', width: 340, maxWidth: '100%', aspectRatio: '2/1', objectFit: 'cover', borderRadius: 8, background: '#eee' }} />
             : <div title={A.color ?? ''} style={{ width: 340, maxWidth: '100%', aspectRatio: '2/1', borderRadius: 8, background: A.color || '#eee', border: '1px solid #ddd' }} />}
           <div style={{ flex: '1 1 260px' }} className="small">
             <div><b>Hãng:</b> {m.brand}</div><div><b>Dòng:</b> {m.line}</div>

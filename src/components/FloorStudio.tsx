@@ -40,7 +40,7 @@ function FloorThumb({ pid, fp, tick, fallback }: { pid: string; fp: FloorPlan; t
     </svg>
   }
   return <div style={{ height: 300, display: 'grid', placeItems: 'center', background: '#f4efe6', borderRadius: 6, textAlign: 'center', color: '#8a8478' }}>
-    {state === 'load' ? 'Đang tải…' : fallback ? <img src={fallback} alt="" style={{ maxWidth: '100%', maxHeight: 300 }} /> : <span>Chưa dựng mặt bằng.<br />Nhấp đúp để dựng từ DXF.</span>}
+    {state === 'load' ? 'Đang tải…' : fallback ? <img loading="lazy" decoding="async" src={fallback} alt="" style={{ maxWidth: '100%', maxHeight: 300 }} /> : <span>Chưa dựng mặt bằng.<br />Nhấp đúp để dựng từ DXF.</span>}
   </div>
 }
 

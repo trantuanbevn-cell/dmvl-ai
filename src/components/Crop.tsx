@@ -61,7 +61,7 @@ function Lightbox({ url, bbox, pageW, pageH, view, replUrl, onEdit, onClose }: P
       <div className="lb-body" onMouseDown={e => e.stopPropagation()}>
         {!full
           ? <CropView url={url} bbox={bbox} pageW={pageW} pageH={pageH} view={view} replUrl={replUrl} height={Math.round(window.innerHeight * 0.82)} maxWidth={Math.round(window.innerWidth * 0.94)} />
-          : <div className="lb-full"><img src={url} alt="" draggable={false} /><svg viewBox="0 0 1 1" preserveAspectRatio="none"><rect x={x} y={y} width={w} height={h} fill="none" stroke="#e11d1d" strokeWidth={3} vectorEffect="non-scaling-stroke" /></svg></div>}
+          : <div className="lb-full"><img loading="lazy" decoding="async" src={url} alt="" draggable={false} /><svg viewBox="0 0 1 1" preserveAspectRatio="none"><rect x={x} y={y} width={w} height={h} fill="none" stroke="#e11d1d" strokeWidth={3} vectorEffect="non-scaling-stroke" /></svg></div>}
       </div>
     </div>, document.body)
 }

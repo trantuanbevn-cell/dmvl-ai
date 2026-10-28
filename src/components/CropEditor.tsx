@@ -119,7 +119,7 @@ export default function CropEditor({ mode, baseUrl, bbox, pageW, pageH, view, re
           <div className="editor-stage">
             {shownUrl ? (
               <div className="ed-box" ref={box}>
-                <img src={shownUrl} alt="" draggable={false} />
+                <img loading="lazy" decoding="async" src={shownUrl} alt="" draggable={false} />
                 {showOverlay && <>
                   <div className="ed-region" style={{ left: pc(rx), top: pc(ry), width: pc(rw), height: pc(rh) }} onPointerDown={start('move')}>
                     {(['tl', 'tr', 'bl', 'br'] as const).map(k => <i key={k} className={'ed-h ' + k} onPointerDown={start(k)} />)}

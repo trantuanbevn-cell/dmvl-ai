@@ -147,8 +147,8 @@ export default function PlanReader() {
           <b>AI kiểm tra: {issues.length ? `${issues.length} chỗ nghi sai` : 'không thấy lỗi rõ ràng'}</b> <span className="muted">– bấm “🛠 Tự sửa theo AI” để phần mềm tự thêm vách ngăn còn thiếu (chỉ nhận nét thật sự cắt được một không gian); bấm một dòng để xem hai ảnh cạnh nhau.</span>{fixMsg && <div style={{ margin: '4px 0', color: '#8a4b00' }}>{fixMsg}</div>}
           {issues.map(it => <div key={it.n} style={{ cursor: 'pointer', padding: '3px 0', fontWeight: focus?.n === it.n ? 700 : 400 }} onClick={() => setFocus(focus?.n === it.n ? null : it)}>
             <span className="pill" style={{ background: '#d4202a', color: '#fff' }}>{it.n}</span> <b>{ISSUE_LABEL[it.kind] ?? it.kind}</b>{it.rooms.length ? ` (không gian ${it.rooms.join(', ')})` : ''}: {it.note}{it.conf != null ? <span className="muted"> · {Math.round(it.conf * 100)}%</span> : null}</div>)}
-          {focus && <div className="row" style={{ gap: 8, marginTop: 8 }}><div style={{ flex: 1 }}><div className="muted">Bản vẽ gốc</div><img src={crop(orig, focus.box)} style={{ width: '100%' }} /></div>
-            <div style={{ flex: 1 }}><div className="muted">Bản dựng lại</div><img src={crop(canvas, focus.box)} style={{ width: '100%' }} /></div></div>}
+          {focus && <div className="row" style={{ gap: 8, marginTop: 8 }}><div style={{ flex: 1 }}><div className="muted">Bản vẽ gốc</div><img loading="lazy" decoding="async" src={crop(orig, focus.box)} style={{ width: '100%' }} /></div>
+            <div style={{ flex: 1 }}><div className="muted">Bản dựng lại</div><img loading="lazy" decoding="async" src={crop(canvas, focus.box)} style={{ width: '100%' }} /></div></div>}
         </div>}
         {vec ? <PlanView base={pv ?? dv} vec={vec} res={res} showRooms={showRooms} showDoors={showDoors} showLabels={showLabels} issues={showIssues ? issues : null} diffs={showDiff && mg ? mg.diffs : null} ppp={res.ppp} /> : <div className="muted small">Đang dựng bản vector…</div>}
         <details style={{ marginTop: 8 }}><summary><b>Danh sách không gian</b></summary>

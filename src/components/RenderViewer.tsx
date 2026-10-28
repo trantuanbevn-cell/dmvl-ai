@@ -136,7 +136,7 @@ export default function RenderViewer({ d, pageId, onClose, onGo }: { d: ProjectD
       <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minHeight: 0 }}>
           <b className="small">Phối cảnh</b>
-          <ZoomPane><img src={img(page)} alt="" draggable={false} style={{ width: '100%', display: 'block' }} /></ZoomPane>
+          <ZoomPane><img loading="lazy" decoding="async" src={img(page)} alt="" draggable={false} style={{ width: '100%', display: 'block' }} /></ZoomPane>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minHeight: 0 }}>
           <div className="row gap sm-gap" style={{ flexWrap: 'wrap' }}>
@@ -151,7 +151,7 @@ export default function RenderViewer({ d, pageId, onClose, onGo }: { d: ProjectD
           </div>
           {plan ? <ZoomPane pan={!tool}>
             <div ref={wrap} style={{ position: 'relative' }} onPointerDown={down} onPointerMove={move} onPointerUp={up}>
-              <img src={img(plan)} alt="" draggable={false} style={{ width: '100%', display: 'block' }} onLoad={e => { const im = e.currentTarget; setNat(n => ({ ...n, [plan.id]: [im.naturalWidth, im.naturalHeight] })) }} />
+              <img loading="lazy" decoding="async" src={img(plan)} alt="" draggable={false} style={{ width: '100%', display: 'block' }} onLoad={e => { const im = e.currentTarget; setNat(n => ({ ...n, [plan.id]: [im.naturalWidth, im.naturalHeight] })) }} />
               <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
                 {others.map(p => { const c = p.camera as Cam; return <g key={p.id} opacity={.55}><polygon points={cone(c)} fill="rgba(21,101,192,.18)" stroke="#1565c0" strokeWidth={sw * .8} /><circle cx={c.cam.x * W} cy={c.cam.y * H} r={sw * 3} fill="#1565c0" stroke="#fff" strokeWidth={sw * .8} /><text x={c.cam.x * W + sw * 5} y={c.cam.y * H - sw * 3} fontSize={sw * 12} fill="#0d47a1" stroke="#fff" strokeWidth={sw * .6} paintOrder="stroke">Tr.{p.page_no}</text></g> })}
                 {shown && <g><polygon points={cone(shown)} fill="rgba(229,57,53,.25)" stroke="#e53935" strokeWidth={sw} /><circle cx={shown.cam.x * W} cy={shown.cam.y * H} r={sw * 4.5} fill="#e53935" stroke="#fff" strokeWidth={sw} /></g>}

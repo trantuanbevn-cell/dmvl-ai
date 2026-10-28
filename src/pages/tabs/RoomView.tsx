@@ -160,7 +160,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
         {page ? (
           <div className="viewer">
             <div className="row between">
-              <div className="page-strip">{pages.map((p, i) => <button key={p.id} className={'ps-tile' + (i === pageIdx ? ' on' : '')} onClick={() => setPageIdx(i)} onDoubleClick={() => can('camplan') && setViewId(p.id)} title={can('camplan') ? 'Kích đúp để phóng to, xem mặt bằng và đặt camera' : undefined}><img src={d.urls[p.thumb_path ?? p.image_path]} alt="" /><span>Tr.{p.page_no}{p.kind === 'plan' ? ' · MB' : ''}</span></button>)}</div>
+              <div className="page-strip">{pages.map((p, i) => <button key={p.id} className={'ps-tile' + (i === pageIdx ? ' on' : '')} onClick={() => setPageIdx(i)} onDoubleClick={() => can('camplan') && setViewId(p.id)} title={can('camplan') ? 'Kích đúp để phóng to, xem mặt bằng và đặt camera' : undefined}><img loading="lazy" decoding="async" src={d.urls[p.thumb_path ?? p.image_path]} alt="" /><span>Tr.{p.page_no}{p.kind === 'plan' ? ' · MB' : ''}</span></button>)}</div>
               <div className="row gap sm-gap">
                 {canEdit && <button className={'btn sm' + (brushOn ? ' primary' : '')} title="Chọn một vật liệu rồi bấm lên ô khoanh sai để thay, hoặc kéo chuột lên vùng còn thiếu để gán thêm" onClick={() => { const on = !brushOn; setBrushOn(on); setDraw(on); setNewMode(false); if (on && !brush && sel) setBrush(sel) }}>{brushOn ? '🖌 Đang gán nhanh (Esc để thoát)' : '🖌 Gán nhanh trên ảnh'}</button>}
                 {canEdit && <button className={'btn sm' + (newMode ? ' primary' : '')} title="Khoanh một vùng trên ảnh rồi chọn vật liệu có sẵn trong danh mục để gán – dùng khi phòng bị thiếu vật liệu" onClick={() => { setNewMode(!newMode); setDraw(!newMode) }}>{newMode ? 'Kéo chuột trên ảnh để khoanh vùng…' : '✚ Khoanh & gán vật liệu'}</button>}
@@ -179,7 +179,7 @@ export default function RoomView({ d }: { d: ProjectData }) {
               onMouseDown={e => { if (draw) { const p = rel(e); setDrag({ x0: p.x, y0: p.y, x1: p.x, y1: p.y }) } }}
               onMouseMove={e => { if (draw && drag) { const p = rel(e); setDrag({ ...drag, x1: p.x, y1: p.y }) } }}
               onMouseUp={finishDraw}>
-              <img src={d.urls[page.image_path]} alt="" draggable={false} />
+              <img loading="lazy" decoding="async" src={d.urls[page.image_path]} alt="" draggable={false} />
               <svg viewBox="0 0 1 1" preserveAspectRatio="none">
                 {occ.filter(o => o.page_id === page.id && o.bbox).map(o => {
                   const [x, y, w, h] = clampBox(o.bbox!)

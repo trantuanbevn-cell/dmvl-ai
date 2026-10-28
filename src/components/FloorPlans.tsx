@@ -49,11 +49,11 @@ export function FloorCard({ d, fp, run, busy, compact, noImg }: { d: ProjectData
         </div>
         <div className="muted">Cập nhật chỉ thay phần mặt bằng của tầng này: tên phòng/phép gộp được chuyển sang tự động nếu hình dáng toàn nhà khớp; dữ liệu vật liệu của dự án không bị đụng tới.</div>
       </div>}
-      {compact && !noImg && url && <div className="img-wrap" style={{ maxWidth: 560, margin: '6px 0' }}><img src={url} alt="" draggable={false} />
+      {compact && !noImg && url && <div className="img-wrap" style={{ maxWidth: 560, margin: '6px 0' }}><img loading="lazy" decoding="async" src={url} alt="" draggable={false} />
         {g && <svg viewBox="0 0 1 1" preserveAspectRatio="none">{g.rooms.map((r, i) => roomPolys(r).map((pl, k) => <polygon key={r.id + '-' + k} points={pl.map(p => p.join(',')).join(' ')} fill={COLS[i % 10] + '55'} stroke={COLS[i % 10]} strokeWidth={0.002} />))}</svg>}</div>}
       {!compact && <div className="floor-grid">
         <div className="img-wrap">
-          {url && <img src={url} alt="" draggable={false} />}
+          {url && <img loading="lazy" decoding="async" src={url} alt="" draggable={false} />}
           {g && <svg viewBox="0 0 1 1" preserveAspectRatio="none">{g.rooms.map((r, i) => roomPolys(r).map((pl, k) => <polygon key={r.id + '-' + k} points={pl.map(p => p.join(',')).join(' ')} fill={COLS[i % 10] + (sel === r.id || pick.includes(r.id) ? 'aa' : '44')} stroke={pick.includes(r.id) ? '#000' : COLS[i % 10]} strokeWidth={sel === r.id || pick.includes(r.id) ? 3 : 1} vectorEffect="non-scaling-stroke" onClick={() => click(r.id)} />))}</svg>}
           {g && g.rooms.filter(r => nameOf(r) && r.area_m2 > 3).map(r => <span key={'l' + r.id} className="zone-lab" style={{ left: r.cx * 100 + '%', top: r.cy * 100 + '%' }}>{nameOf(r)}<br />{r.area_m2} m²</span>)}
         </div>

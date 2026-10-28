@@ -18,7 +18,7 @@ export default function PlanMap({ url, plan, cam, cams, planPage, room }: { url?
   return (
     <div className="planmap">
       <div className="img-wrap">
-        <img src={url} alt="" draggable={false} />
+        <img loading="lazy" decoding="async" src={url} alt="" draggable={false} />
         <svg viewBox={vb} preserveAspectRatio="none">
           {mine?.regions.map((r, i) => r.poly.length > 2 && <polygon key={i} points={r.poly.map(p => `${p[0] * W},${p[1] * H}`).join(' ')} fill="rgba(46,125,50,.18)" stroke="#2e7d32" strokeWidth={sw} />)}
           {mine?.items.map((it, i) => <circle key={i} cx={it.x * W} cy={it.y * H} r={sw * 1.6} fill={it.t === 'c' ? '#1565c0' : '#ef6c00'} />)}

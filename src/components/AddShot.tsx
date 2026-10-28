@@ -83,9 +83,9 @@ export default function AddShot({ d, entry, roomId, onClose }: { d: ProjectData;
         </div>}
         {tab === 'page' ? <>
           <div className="small muted">Chọn trang của phòng, rồi kéo chuột khoanh vùng có vật liệu này.</div>
-          <div className="row gap sm-gap" style={{ flexWrap: 'wrap' }}>{pages.map(p => <img key={p.id} src={d.urls[p.thumb_path ?? p.image_path]} alt="" onClick={() => { setPageId(p.id); setBox(null) }} style={{ height: 70, borderRadius: 6, cursor: 'pointer', outline: p.id === page?.id ? '3px solid #c57542' : '1px solid #ddd' }} />)}{!pages.length && <span className="muted small">Phòng này chưa có trang concept.</span>}</div>
+          <div className="row gap sm-gap" style={{ flexWrap: 'wrap' }}>{pages.map(p => <img loading="lazy" decoding="async" key={p.id} src={d.urls[p.thumb_path ?? p.image_path]} alt="" onClick={() => { setPageId(p.id); setBox(null) }} style={{ height: 70, borderRadius: 6, cursor: 'pointer', outline: p.id === page?.id ? '3px solid #c57542' : '1px solid #ddd' }} />)}{!pages.length && <span className="muted small">Phòng này chưa có trang concept.</span>}</div>
           {page && <div ref={wrap} className="img-wrap drawing" style={{ touchAction: 'none' }} onPointerDown={down} onPointerMove={move} onPointerUp={up}>
-            <img src={d.urls[page.image_path]} alt="" draggable={false} />
+            <img loading="lazy" decoding="async" src={d.urls[page.image_path]} alt="" draggable={false} />
             {box && <div style={{ position: 'absolute', left: box[0] * 100 + '%', top: box[1] * 100 + '%', width: box[2] * 100 + '%', height: box[3] * 100 + '%', border: '2px solid #e5322d', background: 'rgba(229,50,45,.12)', pointerEvents: 'none' }} />}
           </div>}
         </> : <label className="fld">Ảnh phối cảnh / ảnh minh hoạ<input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)} /></label>}

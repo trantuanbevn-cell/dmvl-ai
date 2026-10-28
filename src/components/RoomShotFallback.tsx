@@ -32,7 +32,7 @@ export default function RoomShotFallback({ d, roomId, height = 64, width = 90, o
           <button className="chip" onClick={() => setZoom(false)}>✕ Đóng (Esc)</button>
         </div>
         <div className="lb-body" onMouseDown={e => e.stopPropagation()}>
-          <div className="lb-full"><img src={bigUrl} alt="" draggable={false} /></div>
+          <div className="lb-full"><img loading="lazy" decoding="async" src={bigUrl} alt="" draggable={false} /></div>
         </div>
       </div>, document.body)}
   </span>

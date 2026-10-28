@@ -31,7 +31,7 @@ export default function LibraryBrowser({ custom, customDoors, onDoor, onWall, on
         <span className="muted small" style={{ marginLeft: 'auto' }}>Nạp ảnh vật liệu thật của bạn:</span><input placeholder="Tên vật liệu" value={name} onChange={e => setName(e.target.value)} style={{ width: 130 }} /><input title="Cạnh ảnh ngoài thực tế (m)" value={size} onChange={e => setSize(e.target.value)} style={{ width: 44 }} />m
         <label className="btn sm">＋ Chọn ảnh<input type="file" accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; if (f) onAddImage(f, name || f.name.replace(/\.[^.]+$/, ''), parseFloat(size.replace(',', '.')) || 0.6, 'Của tôi'); e.target.value = '' }} /></label></div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(112px,1fr))', gap: 6 }}>{fins.map(f => <div key={f.id} style={card(false)} onClick={() => onFinish(f)} title={f.name}>
-        <img src={dataUrl(f)} alt="" style={{ width: '100%', height: 54, objectFit: 'cover', borderRadius: 3, border: '1px solid #ccc' }} /><div style={{ lineHeight: 1.2 }}>{f.name}</div>
+        <img loading="lazy" decoding="async" src={dataUrl(f)} alt="" style={{ width: '100%', height: 54, objectFit: 'cover', borderRadius: 3, border: '1px solid #ccc' }} /><div style={{ lineHeight: 1.2 }}>{f.name}</div>
         {f.group === 'Của tôi' && <button className="btn sm" onClick={e => { e.stopPropagation(); onRemoveCustom(f.id) }}>Xoá</button>}</div>)}</div></>}
   </div>
 }

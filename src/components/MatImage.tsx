@@ -12,7 +12,7 @@ import CropEditor, { type EditorResult } from './CropEditor'
 export function MatView({ url, region, maxW = 96, maxH = 70, onDouble }: { url: string; region?: number[] | null; maxW?: number; maxH?: number; onDouble?: () => void }) {
   const [dim, setDim] = useState<[number, number] | null>(null)
   useEffect(() => { let off = false; loadImage(url).then(im => { if (!off) setDim([im.naturalWidth, im.naturalHeight]) }).catch(() => { if (!off) setDim(null) }); return () => { off = true } }, [url])
-  if (!dim) return <img className="mat-img" src={url} alt="" style={{ maxWidth: maxW, maxHeight: maxH }} onDoubleClick={onDouble} />
+  if (!dim) return <img loading="lazy" decoding="async" className="mat-img" src={url} alt="" style={{ maxWidth: maxW, maxHeight: maxH }} onDoubleClick={onDouble} />
   const [x, y, w, h] = region && region.length === 4 ? region : [0, 0, 1, 1]
   const ar = (w * dim[0]) / (h * dim[1])
   let cw = maxW, ch = cw / ar; if (ch > maxH) { ch = maxH; cw = ch * ar }
