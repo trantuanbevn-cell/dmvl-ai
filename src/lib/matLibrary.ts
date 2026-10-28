@@ -1,6 +1,5 @@
 // Thư viện vật liệu chung của công ty: mọi mã tạo trong các dự án đều tự lưu lại để dự án sau đối chiếu / gợi ý.
 import { supabase } from './supabase'
-import { cached, dropCache } from './persistCache'
 import { norm } from './similar'
 import { findSimilar, type Similar } from './similar'
 import type { Entry } from './types'
@@ -10,15 +9,12 @@ export const libKey = (e: Pick<Entry, 'group_code' | 'name_vn' | 'material_vn' |
 
 const FIELDS = ['group_code', 'category', 'name_vn', 'name_en', 'part_vn', 'material_vn', 'material_en', 'color_hex', 'desc_vn', 'desc_en', 'perf_vn', 'perf_en', 'standards', 'brand', 'product_code', 'product_name', 'product_url', 'product_image_url', 'origin'] as const
 let cache: LibRow[] | null = null
-export const resetLibCache = () => { cache = null; void dropCache('matlib-v1') }
+export const resetLibCache = () => { cache = null }
 
 export async function loadLibrary(force = false): Promise<LibRow[]> {
   if (cache && !force) return cache
-  cache = await cached('matlib-v1', 30 * 60_000, async () => {
-    const { data, error } = await supabase.from('material_library').select('*').order('uses', { ascending: false }).limit(5000)
-    if (error) throw error
-    return data as LibRow[]
-  }, force).catch(() => [] as LibRow[])
+  const { data, error } = await supabase.from('material_library').select('*').order('uses', { ascending: false }).limit(5000)
+  cache = error ? [] : (data as LibRow[])
   return cache
 }
 

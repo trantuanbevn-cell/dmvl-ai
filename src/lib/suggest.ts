@@ -1,6 +1,5 @@
 // Vật Liệu Đề Xuất: so khớp ảnh crop trong phối cảnh với map vật liệu trong thư viện (hoàn toàn bằng phần mềm, không dùng AI).
 import { supabase } from './supabase'
-import { cached } from './persistCache'
 import { cropCanvas, loadImage, clampBox } from './crop'
 import { normSizes, type Mat, type Var } from '../pages/Library'
 import { kindOfGroup, applyPicks, type Pick } from './suggestApply'
@@ -63,9 +62,6 @@ export type FMat = Mat & { feat: Feat; feat2?: number[] | null; pat?: Pat | null
 let cache: FMat[] | null = null
 export async function loadFeatMats(force = false): Promise<FMat[]> {
   if (cache && !force) return cache
-  return (cache = await cached('featmats-v1', 12 * 3600_000, loadFeatMatsRaw, force))
-}
-async function loadFeatMatsRaw(): Promise<FMat[]> {
   const out: FMat[] = []
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase.from('materials').select('id,brand,product_code,name,line,kind,url,image_url,tex_url,attrs,feat,feat2,pat').not('tex_url', 'is', null).order('id').range(from, from + 999)
@@ -73,7 +69,7 @@ async function loadFeatMatsRaw(): Promise<FMat[]> {
     out.push(...((data ?? []) as FMat[]).filter(m => m.feat?.length || m.feat2?.length === FEAT_LEN))
     if (!data || data.length < 1000) break
   }
-  return out
+  return (cache = out)
 }
 
 /** Đặc trưng của 1 vị trí trong ảnh phối cảnh (bbox 0..1 trên ảnh trang) */

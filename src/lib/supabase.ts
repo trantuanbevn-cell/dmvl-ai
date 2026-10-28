@@ -35,7 +35,7 @@ export function dropSigned(path: string) { if (urlCache.delete(path)) persist() 
     const s: any = origFrom(b)
     if (b !== BUCKET) return s
     const up = s.upload.bind(s), rm = s.remove.bind(s)
-    s.upload = (p: string, body: any, opts?: any, ...a: any[]) => up(p, body, { cacheControl: '604800', ...(opts ?? {}) }, ...a).then((r: any) => { dropSigned(p); return r })
+    s.upload = (p: string, ...a: any[]) => up(p, ...a).then((r: any) => { dropSigned(p); return r })
     s.remove = (ps: string[]) => rm(ps).then((r: any) => { ps.forEach(dropSigned); return r })
     return s
   }

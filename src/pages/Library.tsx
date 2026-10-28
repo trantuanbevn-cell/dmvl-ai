@@ -2,7 +2,6 @@
 // Cây: Nhóm vật liệu → Thương hiệu → Dòng nhóm sản phẩm; bên phải là lưới map vật liệu.
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { cached } from '../lib/persistCache'
 import { useAuth } from '../lib/auth'
 import LibraryImport from '../components/LibraryImport'
 import { backfillFeats } from '../lib/suggest'
@@ -45,7 +44,7 @@ let allCache: { t: number; p: Promise<Mat[]> } | null = null
 /** Tải toàn thư viện (hàng chục nghìn mã, mất 10–20 giây) – dùng chung một lần tải trong 5 phút giữa trang Thư viện và hộp tìm mẫu */
 export function loadAll(force = false): Promise<Mat[]> {
   if (!force && allCache && Date.now() - allCache.t < 300000) return allCache.p
-  const p = cached('library-all-v1', 6 * 3600_000, loadAllRaw, force); allCache = { t: Date.now(), p }; p.catch(() => { if (allCache?.p === p) allCache = null }); return p
+  const p = loadAllRaw(); allCache = { t: Date.now(), p }; p.catch(() => { if (allCache?.p === p) allCache = null }); return p
 }
 async function loadAllRaw(): Promise<Mat[]> {
   const out: Mat[] = []
