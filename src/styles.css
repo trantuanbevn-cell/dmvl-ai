@@ -495,3 +495,7 @@ input[data-lang="en"], textarea[data-lang="en"] { font-style: italic }
 .loc-tag.drag { cursor: grab }
 .sym-in { width: 100%; box-sizing: border-box; font-weight: 700; font-size: 12px; padding: 3px 4px; border: 2px solid var(--orange); border-radius: 6px }
 .opflag-btn { display: inline-block; margin: 4px 4px 0 0; padding: 3px 9px; border-radius: 14px; border: 1px solid #b3261e; background: #fde8e6; color: #b3261e; font-weight: 700; font-size: 12px; cursor: pointer } .opflag-btn:hover { background: #f9d0cc }
+
+/* Đánh dấu vật liệu đã chỉnh sửa */
+.sec-table tr.chg td, .sec-table tr.chg td.c-code, .sec-table tr.chg.st-approved td.c-code { background: #fff3b0 }
+.chg-tick { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 4px; cursor: pointer; border-radius: 4px; color: #7a5a00; white-space: nowrap } .chg-tick input { width: auto !important; margin: 0 } .chg-tick.on { background: #ffe58a; font-weight: 600 }

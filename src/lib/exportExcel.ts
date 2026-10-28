@@ -117,6 +117,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
         if (col.key in cl) T(c, (cl as any)[col.key] as Seg[], 9, 'FF000000')
         else { c.value = (v[col.key] ?? '') as any; c.font = { name: 'Arial', size: 9, bold: col.key === 'sym', color: { argb: col.key === 'sym' ? BROWN : 'FF000000' } } }
         c.alignment = { vertical: 'top', wrapText: true, horizontal: 'left' }; c.border = border
+        if (e.changed_at) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE8B0' } }   // vật liệu đã chỉnh sửa: tô vàng cam nhẹ
       })
       if (o.quote) {
         const q = ci('q_qty'), p = ci('q_price'), t = ci('q_total')

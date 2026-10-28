@@ -24,6 +24,7 @@ export type Entry = {
   spec_stale?: string | null
   en_src?: EnSrc | null
   section_key?: string | null
+  changed_at?: string | null
   mat_view?: { img?: string | null; region?: number[] | null } | null
   mat_extra?: { img?: string | null; region?: number[] | null }[] | null
 }
