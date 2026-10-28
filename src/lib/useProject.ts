@@ -53,7 +53,12 @@ export function useProject(id: string): ProjectData {
   roomsRef.current = s.rooms
   useEffect(() => {
     let t: ReturnType<typeof setTimeout> | undefined
-    const bump = () => { clearTimeout(t); t = setTimeout(() => { reload() }, 1200) }
+    // Tiết kiệm egress: gộp thay đổi trong 4 s; tab đang ẩn thì hoãn đến khi quay lại (không tải lại ngầm vô ích)
+    let stale = false
+    const run = () => { if (document.hidden) { stale = true; return } stale = false; reload() }
+    const bump = () => { clearTimeout(t); t = setTimeout(run, 4000) }
+    const vis = () => { if (!document.hidden && stale) { clearTimeout(t); t = setTimeout(run, 500) } }
+    document.addEventListener('visibilitychange', vis)
     const ch = supabase.channel('proj-' + id)
     for (const table of ['rooms', 'entries', 'occurrences', 'warnings', 'pages', 'floor_plans'])
       ch.on('postgres_changes', { event: '*', schema: 'public', table }, (p: any) => {
@@ -65,7 +70,7 @@ export function useProject(id: string): ProjectData {
         bump()
       })
     ch.subscribe()
-    return () => { clearTimeout(t); supabase.removeChannel(ch) }
+    return () => { clearTimeout(t); document.removeEventListener('visibilitychange', vis); supabase.removeChannel(ch) }
   }, [id, reload])
   return { ...s, reload, latest: () => latestRef.current ?? s }
 }
