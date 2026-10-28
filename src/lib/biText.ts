@@ -36,9 +36,7 @@ function descPairs(e: Entry, L: Lang): Seg[] {
 /** Dòng "Vật liệu / màu" (material) – bảng trong phần mềm hiển thị ngay dưới tên, bản xuất cũng phải có (trừ khi đã nằm sẵn trong thông số hoặc trùng tên) */
 function materialPairs(e: Entry, L: Lang): Seg[] {
   const vn = (e.material_vn ?? '').split('\n').map(x => x.trim()).filter(Boolean); if (!vn.length || !(e.desc_vn ?? '').trim()) return []   // desc trống → descPairs đã lấy material
-  const k = (t: string) => t.toLowerCase().replace(/[\s.;,\-–]+/g, ' ').trim()
-  const hay = k(`${e.desc_vn ?? ''} ${e.name_vn ?? ''}`)
-  const keep = vn.filter(l => !hay.includes(k(l)))
+  const keep = vn   // giống màn hình: luôn hiện đủ các dòng Vật liệu/màu (không tự ẩn dòng trùng với thông số)
   if (!keep.length) return []
   if (L === 'vn') return keep.map(t => ({ t, k: 'n' as const }))
   const enAll = (e.material_en ?? '').split('\n').map(x => x.trim()).filter(Boolean)
@@ -65,9 +63,7 @@ export function entryCells(e: Entry, L: Lang, occCats: string[], locs: { room: {
   const loc: Seg[] = [...loc0, ...locNote]
   const loc2: Seg[] = split ? roomLines(locs.slice(half)) : []
   const lab = (a: string, b: string, vn: string | null | undefined, en: string | null | undefined) => pair(vn ? `${a}: ${vn}` : '', vn || en ? `${b}: ${en || vn}` : '', L)
-  // Không in dòng "Bộ phận": cột Hạng mục đã nêu rõ (sàn/tường/trần…)
-  const noPart = (ls: Seg[]) => ls.filter(l => !/^\s*(bộ phận|part)\s*:/i.test(l.t))
-  const spec = [...pair(e.name_vn, e.name_en, L), ...noPart(materialPairs(e, L)), ...noPart(descPairs(e, L)), ...fin.flatMap(f => pair(f.vn, f.en, L)),
+  const spec = [...pair(e.name_vn, e.name_en, L), ...materialPairs(e, L), ...descPairs(e, L), ...fin.flatMap(f => pair(f.vn, f.en, L)),
     ...(e.composition ? lab('Cấu tạo', 'Composition', e.composition, compEn(e.composition)) : [])]
   const originEn = (v: string) => v.replace(/hoặc tương đương/gi, 'or equivalent').replace(/\bViệt Nam\b/g, 'Vietnam').replace(/\bTrung Quốc\b/g, 'China').replace(/\bNhật Bản\b/g, 'Japan').replace(/\bHàn Quốc\b/g, 'South Korea').replace(/\bÝ\b/g, 'Italy').replace(/\bĐức\b/g, 'Germany').replace(/\bTây Ban Nha\b/g, 'Spain').replace(/\bThái Lan\b/g, 'Thailand').replace(/\bMalaysia\b/g, 'Malaysia').replace(/\bẤn Độ\b/g, 'India').replace(/\bThổ Nhĩ Kỳ\b/g, 'Turkey').replace(/\bPháp\b/g, 'France').replace(/\bMỹ\b/g, 'USA').replace(/\bĐài Loan\b/g, 'Taiwan').replace(/\bchâu Âu\b/gi, 'Europe').replace(/\bnhập khẩu\b/gi, 'imported')
   const o = (e.origin ?? '').trim(), b = (e.brand ?? '').trim()   // dòng 1: xuất xứ; dòng 2: hãng / thương hiệu – luôn kèm nhãn
