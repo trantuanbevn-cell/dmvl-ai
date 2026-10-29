@@ -3,6 +3,7 @@ import polygonClipping from 'polygon-clipping'
 import type { VecPage } from '../vector'
 import { classifyFurn, furnTypeOf } from './furn'
 import { detectVertical, detectThinPartitions } from './vertical'
+import { senseWalls, orientStairs } from './planSense'
 import { PT_MM } from '../dims'
 import { FURN_LAYER } from '../dxf'
 
@@ -78,13 +79,25 @@ export function modelFromVec(v: VecPage, den: number): Model {
       walls.push({ id: uid('w'), role, kind: role === 'col' ? 'concrete' : 'brick', shape: { type: 'poly', rings: [l, ...holes] } })
     })
   }
+  // ĐỌC THEO HÌNH (không cần layer / block): tường, cột, vách kính theo quy cách thể hiện – bổ sung chỗ dò theo layer bỏ sót
+  const sense = senseWalls(v, m)
+  { const fp = walls.map(k => { const rs = footprint(k); return { rs, bb: bbox(rs) } })
+    const cov = (x: number, y: number) => fp.some(k => x >= k.bb.x0 - 0.03 && x <= k.bb.x1 + 0.03 && y >= k.bb.y0 - 0.03 && y <= k.bb.y1 + 0.03 && k.rs.reduce((n, r) => n + (inside([x, y], r) ? 1 : 0), 0) % 2 === 1)
+    const mid = (w: Wall): Pt => { if (w.shape.type === 'seg') return [(w.shape.a[0] + w.shape.b[0]) / 2, (w.shape.a[1] + w.shape.b[1]) / 2]; const o = obb(w.shape.rings[0]); const c: Pt = [o.cx, o.cy]; if (inside(c, w.shape.rings[0])) return c; const r = w.shape.rings[0]; return [(r[0][0] + r[1][0]) / 2, (r[0][1] + r[1][1]) / 2] }
+    // trong lồng thang bộ / thang xoắn: mảng tô, nét bậc… thuộc về thang, không phải tường
+    const vz = detectVertical(v, m).filter(t => t.kind === 'stair' || t.kind === 'spiral')
+    const inVz = (p: Pt) => vz.some(t => { const c = Math.cos(t.ang), s2 = Math.sin(t.ang), dx = p[0] - t.x, dy = p[1] - t.y; return Math.abs(dx * c + dy * s2) < t.w / 2 + 0.1 && Math.abs(-dx * s2 + dy * c) < t.d / 2 + 0.1 })
+    for (const w of sense.walls) { const p = mid(w); if (!cov(p[0], p[1]) && !inVz(p)) walls.push(w) } }
   // VẬT THỂ NHẬN TỪ KHỐI (tên + layer + hình học) – chắc chắn hơn dò nét: ưu tiên, bỏ kết quả dò nét trùng chỗ
   const objs = (v.objs ?? []).map(o => ({ ...o, cx: o.cx * m, cy: o.cy * m, w: o.w * m, d: o.d * m, t: o.t !== undefined ? o.t * m : undefined, H1: o.H1 ? [o.H1[0] * m, o.H1[1] * m] as Pt : undefined, H2: o.H2 ? [o.H2[0] * m, o.H2[1] * m] as Pt : undefined, O: o.O ? [o.O[0] * m, o.O[1] * m] as Pt : undefined }))
   const objGlass: Wall[] = objs.filter(o => o.kind === 'glass' || o.kind === 'window').map(o => { const c = Math.cos(o.rot), s2 = Math.sin(o.rot), h = o.w / 2
     return { id: uid('w'), role: 'wall' as const, kind: (o.t ?? 0.02) >= 0.04 ? 'curtain' : 'glass', name: o.kind === 'window' ? 'Cửa sổ' : 'Vách kính', panel: 1.2, auto: true, shape: { type: 'seg' as const, a: [o.cx - c * h, o.cy - s2 * h] as Pt, b: [o.cx + c * h, o.cy + s2 * h] as Pt, t: Math.max(0.012, Math.min(0.3, o.t ?? 0.02)) } } })
   const nearObjGlass = (w: Wall) => { if (w.shape.type !== 'seg') return false; const mx = (w.shape.a[0] + w.shape.b[0]) / 2, my = (w.shape.a[1] + w.shape.b[1]) / 2
     return objGlass.some(g => { if (g.shape.type !== 'seg') return false; const { a, b } = g.shape, dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((mx - a[0]) * dx + (my - a[1]) * dy) / L2)); return Math.hypot(mx - (a[0] + t * dx), my - (a[1] + t * dy)) < 0.2 }) }
-  const glass = [...objGlass, ...detectGlass(v, m).filter(g => !nearObjGlass(g))]; walls.push(...glass)
+  const glass0 = [...objGlass, ...detectGlass(v, m).filter(g => !nearObjGlass(g))]
+  const nearGlass = (w: Wall) => { if (w.shape.type !== 'seg') return false; const mx = (w.shape.a[0] + w.shape.b[0]) / 2, my = (w.shape.a[1] + w.shape.b[1]) / 2
+    return glass0.some(g => { if (g.shape.type !== 'seg') return false; const { a, b } = g.shape, dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((mx - a[0]) * dx + (my - a[1]) * dy) / L2)); return Math.hypot(mx - (a[0] + t * dx), my - (a[1] + t * dy)) < 0.2 }) }
+  const glass = [...glass0, ...sense.glass.filter(g => !nearGlass(g))]; walls.push(...glass)
   const sideOf = (H: Pt, C: Pt, O: Pt) => { const ux = C[0] - H[0], uy = C[1] - H[1]; return ((O[0] - H[0]) * -uy + (O[1] - H[1]) * ux) > 0 ? 1 : -1 }
   const objDoors: Door[] = objs.filter(o => (o.kind === 'door' || o.kind === 'double') && o.H1 && o.H2 && o.O).map(o => {
     const H = o.H1!, C = o.H2!, w = Math.hypot(C[0] - H[0], C[1] - H[1]), kind = o.kind as DoorKind
@@ -97,6 +110,7 @@ export function modelFromVec(v: VecPage, den: number): Model {
   for (const o of objs) if (o.kind === 'spiral' || o.kind === 'lift' || o.kind === 'stair') {
     for (let i = vert.length - 1; i >= 0; i--) if (Math.hypot(vert[i].x - o.cx, vert[i].y - o.cy) < Math.max(o.w, o.d) * 0.6) vert.splice(i, 1)
     vert.push({ id: uid('f'), kind: o.kind, name: o.name.slice(0, 40), x: o.cx, y: o.cy, w: o.w, d: o.d, ang: o.rot, h: furnTypeOf(o.kind).h, auto: true }) }
+  orientStairs(vert, v, m)   // theo quy cách: chữ LÊN/UP › mũi tên đường đi › đường cắt › chiếu nghỉ (số bậc ở dưới, nếu có, được ưu tiên hơn)
   // BẬC ĐẦU TIÊN của thang bộ: bản vẽ thường đánh số bậc (1, 2 … 18) – bậc "1" là bậc đầu (thấp nhất). Mô hình 3D dựng thấp ở phía −w → xoay 180° nếu số 1 nằm phía +w
   { const nums = (v.texts ?? []).map(t => ({ n: /^\s*(\d{1,2})\s*$/.exec(t.t)?.[1], x: t.x * m, y: t.y * m })).filter(t => t.n).map(t => ({ n: +t.n!, x: t.x, y: t.y }))
     for (const f of vert) { if (f.kind !== 'stair' || nums.length < 2) continue

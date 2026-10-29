@@ -40,3 +40,27 @@ def build(ver, name, walls='line'):
 build('R2018','t2018.dxf'); build('R2000','t2000.dxf'); build('R2018','tmline.dxf','mline')
 d=ezdxf.readfile('t2018.dxf'); d.saveas('tbin.dxf', fmt='bin')
 print('ok')
+
+# ---- Bản vẽ "không layer, không block": mọi nét ở layer 0, chỉ khác bút in (màu 4 = nét đậm 0.3 mm theo CTB công ty) ----
+def nolayer(name):
+    doc = ezdxf.new('R2018'); doc.header['$INSUNITS'] = 4; msp = doc.modelspace()
+    H = {'layer': '0', 'color': 4}; T = {'layer': '0', 'color': 8}
+    def wall(x0, y0, x1, y1, t=200):  # tường = 2 nét đậm song song + bịt đầu
+        import math
+        dx, dy = x1 - x0, y1 - y0; L = math.hypot(dx, dy); nx, ny = -dy / L * t / 2, dx / L * t / 2
+        msp.add_lwpolyline([(x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny), (x0 - nx, y0 - ny)], close=True, dxfattribs=H)
+    # phòng 6 x 5 m, cửa đi 900 ở tường dưới (x 2000–2900)
+    wall(0, 0, 2000, 0); wall(2900, 0, 6000, 0); wall(6000, 0, 6000, 5000); wall(6000, 5000, 0, 5000); wall(0, 5000, 0, 0)
+    msp.add_line((2000, 100), (2000, 1000), dxfattribs=T)                      # cánh cửa (mở vào trong)
+    msp.add_arc((2000, 100), 900, 0, 90, dxfattribs=T)                         # cung quay
+    # đồ đạc nét mảnh: bàn 1800x900, sofa sát tường
+    msp.add_lwpolyline([(3000, 2000), (4800, 2000), (4800, 2900), (3000, 2900)], close=True, dxfattribs=T)
+    msp.add_lwpolyline([(4000, 4400), (5800, 4400), (5800, 4900), (4000, 4900)], close=True, dxfattribs=T)
+    # thang bộ 10 bậc (280) chạy theo +x từ x=600; vòng tròn ở chân thang; đường cắt xiên
+    for i in range(11): msp.add_line((600 + i * 280, 3000), (600 + i * 280, 4200), dxfattribs=T)
+    msp.add_line((600, 3000), (3400, 3000), dxfattribs=T); msp.add_line((600, 4200), (3400, 4200), dxfattribs=T)
+    msp.add_circle((750, 3600), 80, dxfattribs=T)
+    msp.add_line((2300, 3000), (2900, 4200), dxfattribs=T)
+    for i in range(30): msp.add_line((i * 200, -2000), (i * 200 + 100, -2000), dxfattribs=T)
+    doc.saveas(name)
+nolayer('tnolayer.dxf')

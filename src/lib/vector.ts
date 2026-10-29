@@ -19,6 +19,10 @@ export type VecPage = {
   draw?: DrawRun[]
   /** đồ nội thất rời nhận từ DXF (pt, y xuống): tâm, kích thước theo 2 trục, góc xoay (rad) */
   furn?: { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number; src: 'block' | 'loose' }[]
+  /** mọi vùng hatch (đảo: vòng ngoài + lỗ, pt) kèm nét in (mm) và có nằm trong khối không – cho bộ đọc theo hình */
+  regions?: { loops: [number, number][][]; solid: boolean; pat: string; blk: boolean; pen: number }[]
+  /** mọi đường khép kín (pt) kèm nét in (mm) */
+  rings?: { pts: [number, number][]; pen: number; blk: boolean }[]
   /** vật thể nhận từ khối DXF (pt, y xuống): cửa – H1/H2 hai đầu ô cửa (bản lề), O đầu cánh khi mở; vách/thang – hộp bao xoay */
   objs?: { kind: string; name: string; layer: string; why: string; cx: number; cy: number; w: number; d: number; rot: number; t?: number; H1?: [number, number]; H2?: [number, number]; O?: [number, number] }[]
 }

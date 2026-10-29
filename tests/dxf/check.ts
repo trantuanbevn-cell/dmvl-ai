@@ -21,4 +21,19 @@ for (const f of ['t2018.dxf', 't2000.dxf', 'tmline.dxf', 'tbin.dxf']) {
   ok(!!at('BẾP'), 'MULTILEADER đọc được')
   const a = v.arcs[0]; ok(!!a && Math.abs((a.a[0] - x0) * k - off - 10200) < 60, 'cung có pháp tuyến −Z đặt đúng chỗ')
 }
-console.log(fail ? `${fail} lỗi` : 'Tất cả đạt'); if (fail) process.exit(1)
+
+// ---- bản vẽ không layer / không block: phải nhận tường, cửa, thang (bậc đầu) mà không nhận nhầm đồ đạc ----
+{
+  const { modelFromVec } = await import('../../src/lib/plan3d/model')
+  console.log('tnolayer.dxf')
+  const b = readFileSync(dir + 'tnolayer.dxf')
+  const v: any = await readDxfPage(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer, undefined, { draw: true })
+  const M = modelFromVec(v, v.dxf.den)
+  const brick = M.walls.filter(w => w.role === 'wall' && w.kind === 'brick')
+  ok(brick.length >= 5 && brick.length <= 6, `nhận đúng tường theo hình, không nhận nhầm bàn / sofa (${brick.length})`)
+  ok(M.doors.length === 1 && Math.abs(M.doors[0].w - 0.9) < 0.1, `nhận 1 cửa 900 (${M.doors.map(d => d.w).join(',')})`)
+  const st = (M.furn ?? []).filter(f => f.kind === 'stair')
+  ok(st.length === 1, `nhận 1 vế thang (${st.length})`)
+  if (st[0]) { const f = st[0], x0 = f.x - Math.cos(f.ang) * f.w / 2; ok(Math.abs(x0 - Math.min(...M.walls.flatMap(w => w.shape.type === 'poly' ? w.shape.rings[0].map(p => p[0]) : [w.shape.a[0], w.shape.b[0]])) - 0.7) < 0.4, 'bậc đầu ở phía vòng tròn (chân thang)') }
+}
+console.log(fail ? `${fail} lỗi` : 'Tất cả đạt (cả bản không layer)'); if (fail) process.exit(1)

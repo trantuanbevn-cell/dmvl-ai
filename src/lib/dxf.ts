@@ -140,12 +140,14 @@ export type FurnRaw = { name: string; layer: string; cx: number; cy: number; w: 
 export const ZONE_LAYER = /(^|\$)area$|ranh.?gioi|dien.?tich|room.?bound|space.?bound/i
 
 /** DXF → các đường (toạ độ bản vẽ, đơn vị gốc) + chữ */
-function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>, extra?: RawExtras): { paths: Path[]; texts: Txt[]; layers: Record<string, { color: number; off: boolean }>; insts: { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number }[]; loose: { x0: number; y0: number; x1: number; y1: number; layer: string }[]; blk: BlkRaw[] } {
+function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>, extra?: RawExtras): { paths: Path[]; texts: Txt[]; layers: Record<string, { color: number; off: boolean }>; insts: { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number }[]; loose: { x0: number; y0: number; x1: number; y1: number; layer: string }[]; blk: BlkRaw[]; regs: { loops: Pt[][]; layer: string; solid: boolean; pat: string; blk: boolean; color?: number }[]; rings: { pts: Pt[]; layer: string; color?: number; blk: boolean }[] } {
   const layers: Record<string, { color: number; off: boolean }> = {}
   for (const [k, l] of Object.entries<any>(dxf.tables?.layer?.layers ?? {})) layers[k] = { color: Math.abs(l.colorIndex ?? l.color ?? 7) || 7, off: l.visible === false || l.frozen === true }
   const blocks: Record<string, any> = dxf.blocks ?? {}
   const paths: Path[] = [], texts: Txt[] = []
   const blk: BlkRaw[] = []
+  /** mọi vùng hatch (mọi layer) + mọi đường khép kín – để bộ đọc theo hình (planSense) tự xét, không cần layer */
+  const regs: { loops: Pt[][]; layer: string; solid: boolean; pat: string; blk: boolean; color?: number }[] = [], rings: { pts: Pt[]; layer: string; color?: number; blk: boolean }[] = []
   const insts: { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number }[] = [], loose: { x0: number; y0: number; x1: number; y1: number; layer: string }[] = []
   let inFurn = 0
   const apT = (m: M, p: Pt): Pt => [m[0] * p[0] + m[2] * p[1] + m[4], m[1] * p[0] + m[3] * p[1] + m[5]]
@@ -167,13 +169,15 @@ function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>, extra?: RawE
       const add = (pts: Pt[], closed = false, fill = false) => {
         if (pts.length < 2) return
         const tp = pts.map(p => apT(m, p)); paths.push({ pts: tp, layer, color, lw, closed, fill })
+        if ((closed || (pts.length >= 4 && Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) < 1e-3)) && pts.length >= 4 && rings.length < 60000) rings.push({ pts: tp, layer, color, blk: depth > 0 })   // đường kép kín cả khi không bật cờ "closed" (điểm cuối trùng điểm đầu)
         if (!inFurn && FURN_LAYER.test(layer)) { let x0 = 1e18, y0 = 1e18, x1 = -1e18, y1 = -1e18; for (const t of tp) { x0 = Math.min(x0, t[0]); x1 = Math.max(x1, t[0]); y0 = Math.min(y0, t[1]); y1 = Math.max(y1, t[1]) } loose.push({ x0, y0, x1, y1, layer }) }
       }
       switch (e.type) {
         case 'HATCH': {
           // chỉ tô hatch của tường/cột/bê tông (nhận theo layer); lấy đường biên ngoài (lớn nhất)
-          if (!/hatch|wall|tuong|column|btct|be ?tong/i.test(layer)) break
           const lps = (e.loops as HatchLoop[]).filter(lp => lp.length >= 3).map(lp => [...lp, lp[0]].map(p => apT(m, p)))
+          if (lps.length && regs.length < 30000) regs.push({ loops: lps, layer, solid: !!e.solid, pat: String(e.pat ?? ''), blk: depth > 0, color })
+          if (!/hatch|wall|tuong|column|btct|be ?tong/i.test(layer)) break
           // cột (hatch BTCT): các đường biên con chỉ là nét của mẫu hatch → chỉ lấy biên ngoài; tường/sàn: giữ lỗ (even-odd)
           const ar = (lp: Pt[]) => { let a = 0; for (let i = 0; i + 1 < lp.length; i++) a += lp[i][0] * lp[i + 1][1] - lp[i + 1][0] * lp[i][1]; return Math.abs(a) }
           if (lps.length) { const big = lps.reduce((b, l) => (ar(l) > ar(b) ? l : b)), use = /column|btct/i.test(layer + ' ' + (e.pat ?? '')) ? lps.filter(l => l === big || ar(l) > ar(big) * 0.4) : lps; /* cột: bỏ nét nhỏ của mẫu; vòng tường BTCT (có lỗ lớn) giữ cả lỗ */ paths.push({ pts: use[0], layer, closed: true, fill: true, hatch: true, loops: use }) }
@@ -239,7 +243,7 @@ function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>, extra?: RawE
   if (extra) for (const [n, xs] of Object.entries(extra.blocks)) if (blocks[n]) blocks[n] = { ...blocks[n], entities: [...(blocks[n].entities ?? []), ...xs] }
   const hasModel = ents.some(e => !e.inPaperSpace)
   walk(ents, ID, {}, 0, !hasModel)
-  return { paths, texts, layers, insts, loose, blk }
+  return { paths, texts, layers, insts, loose, blk, regs, rings }
 }
 
 const q = (a: number[], p: number) => { const s = a.slice().sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.max(0, Math.floor(p * (s.length - 1))))] }
@@ -258,7 +262,7 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
     try { hatches = rawHatches(L) } catch { /* bỏ hatch */ }
     try { extra = rawExtras(L) } catch { /* bỏ phần bổ sung */ }
   } catch (e) { throw new Error('Không đọc được DXF: ' + String(e)) }
-  const { paths, texts: rawT, layers, insts, loose, blk } = collect(dxf, hatches, extra)
+  const { paths, texts: rawT, layers, insts, loose, blk, regs, rings } = collect(dxf, hatches, extra)
   if (paths.length < 20) throw new Error('DXF gần như không có nét vẽ trong Model space.')
   const xs: number[] = [], ys: number[] = []
   // khung bản vẽ: ưu tiên nét tường / ô diện tích (bản vẽ hay có vật thể lạc rất xa), không có thì lấy mọi nét trừ Defpoints
@@ -444,12 +448,27 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
       if (!ok(wm, dm) || cx < x0 || cx > x1 || cy < y0 || cy > y1) continue
       furn.push({ name: '', layer: c.layer, cx: X(cx), cy: Y(cy), w: wm / mPt, d: dm / mPt, rot: 0, src: 'loose' }) }
   }
+  // vùng hatch (tách đảo) + đường khép kín → toạ độ trang, kèm bề dày nét in (mm) – cho bộ đọc theo hình
+  const penMm = (color: number | undefined, layer: string) => CTB_LW[((color ?? layers[layer]?.color ?? 7) - 1)] ?? 0.09
+  const inFrame = (lp: Pt[]) => lp.some(t => t[0] >= x0 && t[0] <= x1 && t[1] >= y0 && t[1] <= y1)
+  const toPt = (lp: Pt[]) => lp.map(t => [X(t[0]), Y(t[1])] as [number, number])
+  const regions: NonNullable<VecPage['regions']> = []
+  {
+    const ar = (lp: Pt[]) => { let a = 0; for (let i = 0; i + 1 < lp.length; i++) a += lp[i][0] * lp[i + 1][1] - lp[i + 1][0] * lp[i][1]; return Math.abs(a) / 2 }
+    const inP = (pt: Pt, lp: Pt[]) => { let c = false; for (let i = 0, j = lp.length - 1; i < lp.length; j = i++) if ((lp[i][1] > pt[1]) !== (lp[j][1] > pt[1]) && pt[0] < ((lp[j][0] - lp[i][0]) * (pt[1] - lp[i][1])) / (lp[j][1] - lp[i][1]) + lp[i][0]) c = !c; return c }
+    for (const r of regs) { if (/defpoints/i.test(r.layer) || !r.loops.some(inFrame) || r.loops.length > 400) continue
+      const A = r.loops.map(ar), dep = r.loops.map((lp, a) => r.loops.reduce((n, o, b) => n + (b !== a && A[b] > A[a] && inP(lp[0], o) ? 1 : 0), 0))
+      r.loops.forEach((lp, a) => { if (dep[a] % 2 || regions.length > 40000) return
+        const holes = r.loops.filter((h, b) => dep[b] === dep[a] + 1 && inP(h[0], lp))
+        regions.push({ loops: [lp, ...holes].map(toPt), solid: r.solid, pat: r.pat, blk: r.blk, pen: penMm(r.color, r.layer) }) }) }
+  }
+  const closedRings: NonNullable<VecPage['rings']> = rings.filter(r => !/defpoints/i.test(r.layer) && inFrame(r.pts) && r.pts.length <= 400).slice(0, 40000).map(r => ({ pts: toPt(r.pts), pen: penMm(r.color, r.layer), blk: r.blk }))
   // vật thể nhận từ khối (cửa 1/2 cánh, vách kính, thang…) → toạ độ trang (pt, y xuống)
   const P = (q?: Pt): [number, number] | undefined => (q ? [X(q[0]), Y(q[1])] : undefined)
   const objs = classifyBlocks(blk, mmU).filter(o => o.cx >= x0 && o.cx <= x1 && o.cy >= y0 && o.cy <= y1)
     .map(o => ({ ...o, cx: X(o.cx), cy: Y(o.cy), w: o.w / k, d: o.d / k, t: o.t !== undefined ? o.t / k : undefined, rot: -o.rot, H1: P(o.H1), H2: P(o.H2), O: P(o.O) }))
   if (objs.length) onLog?.(`  Khối nhận được: ${Object.entries(objs.reduce((a: Record<string, number>, o) => { a[o.kind] = (a[o.kind] ?? 0) + 1; return a }, {})).map(([kk, n]) => `${n} ${OBJ_VN[kk] ?? kk}`).join(', ')}`)
-  return { ...(opt.draw ? { draw: [...hatchRuns, ...runs] } : {}), objs, furn, arcs, w: W, h: H, segs: new Float32Array(segs), cls: new Uint16Array(segCls), fills, classes, texts, nSeg: segs.length / 4, zones, dxf: { unit, mmPerUnit: mmU, den, sheets: nSheets, extentM: [(x1 - x0) * mmU / 1000, (y1 - y0) * mmU / 1000] } }
+  return { ...(opt.draw ? { draw: [...hatchRuns, ...runs] } : {}), objs, regions, rings: closedRings, furn, arcs, w: W, h: H, segs: new Float32Array(segs), cls: new Uint16Array(segCls), fills, classes, texts, nSeg: segs.length / 4, zones, dxf: { unit, mmPerUnit: mmU, den, sheets: nSheets, extentM: [(x1 - x0) * mmU / 1000, (y1 - y0) * mmU / 1000] } }
 }
 
 /** Ảnh xem trước từ DXF (JPEG) */
