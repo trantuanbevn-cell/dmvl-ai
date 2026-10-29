@@ -3,6 +3,7 @@ import DxfParser from 'dxf-parser'
 import { asArc, type VecPage, type VecClass, type VecText, type DrawRun } from './vector'
 import { PT_MM, STD_DEN } from './dims'
 import { CTB_LW } from './ctbDefault'
+import { decodeDxf, rawExtras, splinePts, type RawExtras } from './dxfRaw'
 
 /** File có phải PDF không (nếu không → coi là DXF) */
 export const isPdfBuf = (b: ArrayBuffer) => { const u = new Uint8Array(b, 0, Math.min(1024, b.byteLength)); for (let i = 0; i + 4 <= u.length; i++) if (u[i] === 0x25 && u[i + 1] === 0x50 && u[i + 2] === 0x44 && u[i + 3] === 0x46) return true; return false }
@@ -10,6 +11,9 @@ export const isPdfBuf = (b: ArrayBuffer) => { const u = new Uint8Array(b, 0, Mat
 type M = [number, number, number, number, number, number] // x' = a x + c y + e ; y' = b x + d y + f
 const mul = (p: M, q: M): M => [p[0] * q[0] + p[2] * q[1], p[1] * q[0] + p[3] * q[1], p[0] * q[2] + p[2] * q[3], p[1] * q[2] + p[3] * q[3], p[0] * q[4] + p[2] * q[5] + p[4], p[1] * q[4] + p[3] * q[5] + p[5]]
 const ID: M = [1, 0, 0, 1, 0, 0]
+const MIRX: M = [-1, 0, 0, 1, 0, 0]
+/** đối tượng có toạ độ trong hệ OCS (phụ thuộc pháp tuyến); LINE, SPLINE, MTEXT, ELLIPSE, MLINE dùng toạ độ thế giới */
+const OCS_TYPES = new Set(['ARC', 'CIRCLE', 'LWPOLYLINE', 'POLYLINE', 'TEXT', 'ATTRIB', 'INSERT', 'SOLID', 'TRACE'])
 const MM_PER_UNIT: Record<number, number> = { 1: 25.4, 2: 304.8, 3: 1609344, 4: 1, 5: 10, 6: 1000, 7: 1e6, 8: 0.0000254, 9: 0.0254, 10: 914.4, 13: 0.001, 14: 100, 15: 1e4, 16: 1e5 }
 
 function aciHex(i: number): string {
@@ -27,17 +31,11 @@ function cleanMtext(s: string): string {
   return s.replace(/\\P/g, ' ').replace(/\\[ACFfHQTW][^;]*;/g, '').replace(/\\[Ll~Oo]/g, '').replace(/[{}]/g, '').replace(/\\\\/g, '\\').replace(/%%[cC]/g, 'Ø').replace(/%%[dD]/g, '°').replace(/%%[pP]/g, '±').trim()
 }
 
-function decode(data: ArrayBuffer): string {
-  let s = new TextDecoder('utf-8').decode(data)
-  if ((s.match(/\uFFFD/g)?.length ?? 0) > 3) s = new TextDecoder('windows-1252').decode(data)
-  return s
-}
-
 type Pt = [number, number]
 type HatchLoop = Pt[]
 /** HATCH không có trong dxf-parser → đọc thô từ text DXF: trả về hatch (theo ENTITIES / theo tên block) với các đường biên */
-function rawHatches(txt: string): { model: any[]; blocks: Record<string, any[]> } {
-  const L = txt.split(/\r?\n/), model: any[] = [], blocks: Record<string, any[]> = {}
+function rawHatches(L: string[]): { model: any[]; blocks: Record<string, any[]> } {
+  const model: any[] = [], blocks: Record<string, any[]> = {}
   let sec = '', blk = ''
   for (let i = 0; i + 1 < L.length; i += 2) {
     const c = L[i].trim(), v = L[i + 1].trim()
@@ -45,7 +43,7 @@ function rawHatches(txt: string): { model: any[]; blocks: Record<string, any[]> 
     if (c === '0' && v === 'BLOCK') { for (let j = i + 2; j < Math.min(L.length, i + 40); j += 2) if (L[j].trim() === '2') { blk = L[j + 1].trim(); break } continue }
     if (c === '0' && v === 'ENDBLK') { blk = ''; continue }
     if (c !== '0' || v !== 'HATCH' || (sec !== 'ENTITIES' && sec !== 'BLOCKS')) continue
-    let j = i + 2, layer = '0', solid = 0, pat = ''
+    let j = i + 2, layer = '0', solid = 0, pat = '', negZ = false
     const loops: HatchLoop[] = []
     let cur: HatchLoop | null = null, mode: 'poly' | 'edge' | '' = '', edge = 0, nv = 0, bul = 0
     const pts: number[][] = []
@@ -81,6 +79,7 @@ function rawHatches(txt: string): { model: any[]; blocks: Record<string, any[]> 
     for (; j + 1 < L.length; j += 2) {
       const cc = +L[j], vv = L[j + 1].trim()
       if (cc === 0) break
+      if (cc === 230 && !cur && !edges.length) { negZ = +vv < -0.5; continue }
       if (cc === 8) layer = vv; else if (cc === 70 && !pat) solid = +vv; else if (cc === 2) pat = vv
       else if (cc === 75 || cc === 98) { flush(); mode = '' } // hết phần đường biên (sau đó là điểm hạt/mẫu – không phải đỉnh)
       else if (cc === 92) { flush(); cur = []; mode = (+vv & 2) ? 'poly' : 'edge'; edge = 0; nv = 0; pts.length = 0 }
@@ -108,7 +107,7 @@ function rawHatches(txt: string): { model: any[]; blocks: Record<string, any[]> 
     }
     void bul; void nv
     flush()
-    if (loops.length) { const e = { type: 'HATCH', layer, loops, solid, pat }; if (sec === 'ENTITIES') model.push(e); else if (blk) (blocks[blk] ??= []).push(e) }
+    if (loops.length) { const e = { type: 'HATCH', layer, loops: negZ ? loops.map(lp => lp.map(p => [-p[0], p[1]] as Pt)) : loops, solid, pat }; if (sec === 'ENTITIES') model.push(e); else if (blk) (blocks[blk] ??= []).push(e) }
   }
   return { model, blocks }
 }
@@ -138,7 +137,7 @@ export type FurnRaw = { name: string; layer: string; cx: number; cy: number; w: 
 export const ZONE_LAYER = /(^|\$)area$|ranh.?gioi|dien.?tich|room.?bound|space.?bound/i
 
 /** DXF → các đường (toạ độ bản vẽ, đơn vị gốc) + chữ */
-function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>): { paths: Path[]; texts: Txt[]; layers: Record<string, { color: number; off: boolean }>; insts: { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number }[]; loose: { x0: number; y0: number; x1: number; y1: number; layer: string }[] } {
+function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>, extra?: RawExtras): { paths: Path[]; texts: Txt[]; layers: Record<string, { color: number; off: boolean }>; insts: { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number }[]; loose: { x0: number; y0: number; x1: number; y1: number; layer: string }[] } {
   const layers: Record<string, { color: number; off: boolean }> = {}
   for (const [k, l] of Object.entries<any>(dxf.tables?.layer?.layers ?? {})) layers[k] = { color: Math.abs(l.colorIndex ?? l.color ?? 7) || 7, off: l.visible === false || l.frozen === true }
   const blocks: Record<string, any> = dxf.blocks ?? {}
@@ -146,14 +145,18 @@ function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>): { paths: Pa
   const insts: { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number }[] = [], loose: { x0: number; y0: number; x1: number; y1: number; layer: string }[] = []
   let inFurn = 0
   const apT = (m: M, p: Pt): Pt => [m[0] * p[0] + m[2] * p[1] + m[4], m[1] * p[0] + m[3] * p[1] + m[5]]
-  const walk = (ents: any[], m: M, inherit: { layer?: string; color?: number }, depth: number, paper: boolean) => {
+  const walk = (ents: any[], m0: M, inherit: { layer?: string; color?: number }, depth: number, paper: boolean) => {
     for (const e of ents) {
+      let m = m0
       if (!e || (paper !== !!e.inPaperSpace && depth === 0)) continue
       const own = e.layer ?? '0', layer = own === '0' && inherit.layer ? inherit.layer : own
       if (layers[layer]?.off || NOISE.test(layer)) continue
       let color: number | undefined = typeof e.colorIndex === 'number' && e.colorIndex > 0 && e.colorIndex < 256 ? e.colorIndex : undefined
       if (color === undefined && inherit.color) color = inherit.color
       const lw = typeof e.lineweight === 'number' && e.lineweight > 0 ? e.lineweight / 100 : undefined
+      // hệ toạ độ đối tượng lật (pháp tuyến −Z): toạ độ OCS → WCS = lật trục X (thuật toán trục tuỳ ý của DXF, trường hợp mặt phẳng XY)
+      const flipZ = !!e.negZ || (!!e.handle && !!extra?.negZ.has(e.handle))
+      if (flipZ && OCS_TYPES.has(e.type)) m = mul(m, MIRX)
       const add = (pts: Pt[], closed = false, fill = false) => {
         if (pts.length < 2) return
         const tp = pts.map(p => apT(m, p)); paths.push({ pts: tp, layer, color, lw, closed, fill })
@@ -169,6 +172,7 @@ function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>): { paths: Pa
           if (lps.length) { const big = lps.reduce((b, l) => (ar(l) > ar(b) ? l : b)), use = /column|btct/i.test(layer + ' ' + (e.pat ?? '')) ? lps.filter(l => l === big || ar(l) > ar(big) * 0.4) : lps; /* cột: bỏ nét nhỏ của mẫu; vòng tường BTCT (có lỗ lớn) giữ cả lỗ */ paths.push({ pts: use[0], layer, closed: true, fill: true, hatch: true, loops: use }) }
           break
         }
+        case '_POLY': add(e.pts, e.closed); break   // MLINE đã tách thành nét (dxfRaw)
         case 'LINE': if (e.vertices?.length >= 2) add([[e.vertices[0].x, e.vertices[0].y], [e.vertices[1].x, e.vertices[1].y]]); break
         case 'LWPOLYLINE': case 'POLYLINE': {
           const v: any[] = e.vertices ?? []; if (v.length < 2) break
@@ -182,13 +186,21 @@ function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>): { paths: Pa
         case 'ELLIPSE': {
           const c = e.center, a = e.majorAxisEndPoint, rt = e.axisRatio ?? 1, rot = Math.atan2(a.y, a.x), ra = Math.hypot(a.x, a.y)
           const s0 = e.startAngle ?? 0, s1 = e.endAngle ?? Math.PI * 2, pts: Pt[] = []
-          for (let i = 0; i <= 36; i++) { const t = s0 + ((s1 - s0) * i) / 36, x = ra * Math.cos(t), y = ra * rt * Math.sin(t); pts.push([c.x + x * Math.cos(rot) - y * Math.sin(rot), c.y + x * Math.sin(rot) + y * Math.cos(rot)]) }
+          const sg = flipZ ? -1 : 1   // pháp tuyến −Z: trục phụ = N × trục chính → đảo chiều
+          for (let i = 0; i <= 36; i++) { const t = s0 + ((s1 - s0) * i) / 36, x = ra * Math.cos(t), y = sg * ra * rt * Math.sin(t); pts.push([c.x + x * Math.cos(rot) - y * Math.sin(rot), c.y + x * Math.sin(rot) + y * Math.cos(rot)]) }
           add(pts); break
         }
-        case 'SPLINE': { const src: any[] = e.fitPoints?.length ? e.fitPoints : e.controlPoints ?? []; add(src.map(p => [p.x, p.y] as Pt)); break }
+        case 'SPLINE': { // đường cong B-spline thật; thiếu dữ liệu nút → nối qua điểm đi qua (fit) hoặc điểm điều khiển như cũ
+          const cp: Pt[] = (e.controlPoints ?? []).map((p: any) => [p.x, p.y] as Pt)
+          const cur = cp.length ? splinePts(cp, e.knotValues ?? [], e.degreeOfSplineCurve ?? 3, e.weights) : null
+          const src: any[] = e.fitPoints?.length ? e.fitPoints : e.controlPoints ?? []
+          add(cur ?? src.map(p => [p.x, p.y] as Pt), !!e.closed); break }
         case 'SOLID': { const v: any[] = e.points ?? []; if (v.length >= 3) { const q = v.map(p => [p.x, p.y] as Pt); if (v.length === 4) [q[2], q[3]] = [q[3], q[2]]; add([...q, q[0]], true, true) } break }
         case 'TEXT': case 'MTEXT': case 'ATTRIB': {
-          const p = e.startPoint ?? e.position; const raw = String(e.text ?? ''); const t = cleanMtext(raw)
+          // chữ căn giữa / phải / trên…: AutoCAD lưu vị trí thật ở ĐIỂM CĂN (nhóm 11); căn đều (aligned/fit) → giữa hai điểm
+          const ha = e.halign ?? 0, va = e.valign ?? 0, sp = e.startPoint ?? e.position, ep = e.endPoint
+          const p = e.type !== 'MTEXT' && ep && (ha || va) ? (ha === 3 || ha === 5 ? { x: (sp.x + ep.x) / 2, y: (sp.y + ep.y) / 2 } : ep) : sp
+          const raw = String(e.text ?? ''); const t = cleanMtext(raw)
           if (p && t) { const [x, y] = apT(m, [p.x, p.y]); texts.push({ t, x, y, h: (e.textHeight ?? e.height ?? 1) * Math.hypot(m[0], m[1]), rot: (e.rotation ?? 0) + (Math.atan2(m[1], m[0]) * 180) / Math.PI, ly: layer }) }
           break
         }
@@ -206,15 +218,16 @@ function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>): { paths: Pa
               // khung bao theo hướng chèn khối (xoay theo góc INSERT) → kích thước thật của món đồ
               const co = Math.cos(-r), si = Math.sin(-r); let a0 = 1e18, b0 = 1e18, a1 = -1e18, b1 = -1e18
               for (let q = n0; q < paths.length; q++) for (const t of paths[q].pts) { const u = t[0] * co - t[1] * si, v2 = t[0] * si + t[1] * co; a0 = Math.min(a0, u); a1 = Math.max(a1, u); b0 = Math.min(b0, v2); b1 = Math.max(b1, v2) }
-              if (a1 > a0 && b1 > b0) { const cu = (a0 + a1) / 2, cv = (b0 + b1) / 2; insts.push({ name: String(e.name ?? ''), layer, cx: cu * Math.cos(r) - cv * Math.sin(r), cy: cu * Math.sin(r) + cv * Math.cos(r), w: a1 - a0, d: b1 - b0, rot: r }) } }
+              if (a1 > a0 && b1 > b0) { const cu = (a0 + a1) / 2, cv = (b0 + b1) / 2; insts.push({ name: extra?.dynName.get(String(e.name ?? '')) ?? String(e.name ?? ''), layer, cx: cu * Math.cos(r) - cv * Math.sin(r), cy: cu * Math.sin(r) + cv * Math.cos(r), w: a1 - a0, d: b1 - b0, rot: r }) } }
           }
           break
         }
       }
     }
   }
-  const ents: any[] = [...(dxf.entities ?? []), ...(hatches?.model ?? [])]
+  const ents: any[] = [...(dxf.entities ?? []), ...(hatches?.model ?? []), ...(extra?.model ?? [])]
   if (hatches) for (const [n, hs] of Object.entries(hatches.blocks)) if (blocks[n]) blocks[n] = { ...blocks[n], entities: [...(blocks[n].entities ?? []), ...hs] }
+  if (extra) for (const [n, xs] of Object.entries(extra.blocks)) if (blocks[n]) blocks[n] = { ...blocks[n], entities: [...(blocks[n].entities ?? []), ...xs] }
   const hasModel = ents.some(e => !e.inPaperSpace)
   walk(ents, ID, {}, 0, !hasModel)
   return { paths, texts, layers, insts, loose }
@@ -227,11 +240,16 @@ export type DxfInfo = { unit: string; mmPerUnit: number; den: number; extentM: [
 /** DXF → VecPage. Tỉ lệ (den) được chọn theo kích thước bản vẽ thật nên m/pt chính xác tuyệt đối theo đơn vị của file. */
 export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void, opt: { draw?: boolean } = {}): Promise<VecPage & { dxf: DxfInfo; zones: { layer: string; pts: number[] }[] }> {
   onLog?.('Đang đọc DXF...')
-  const head = new Uint8Array(data, 0, Math.min(22, data.byteLength)); if (String.fromCharCode(...head).startsWith('AutoCAD Binary DXF')) throw new Error('DXF dạng nhị phân – hãy lưu lại ở dạng DXF ASCII (SAVEAS → DXF → "AutoCAD 2018 DXF").')
   let dxf: any
-  let hatches: ReturnType<typeof rawHatches> | undefined
-  try { const txt = decode(data); dxf = new DxfParser().parseSync(txt); try { hatches = rawHatches(txt) } catch { /* bỏ hatch */ } } catch (e) { throw new Error('Không đọc được DXF: ' + String(e)) }
-  const { paths, texts: rawT, layers, insts, loose } = collect(dxf, hatches)
+  let hatches: ReturnType<typeof rawHatches> | undefined, extra: RawExtras | undefined
+  try {
+    const txt = decodeDxf(data)   // ASCII hoặc nhị phân; đúng bảng mã file đời cũ; giải \U+XXXX
+    dxf = new DxfParser().parseSync(txt)
+    const L = txt.split(/\r?\n/)
+    try { hatches = rawHatches(L) } catch { /* bỏ hatch */ }
+    try { extra = rawExtras(L) } catch { /* bỏ phần bổ sung */ }
+  } catch (e) { throw new Error('Không đọc được DXF: ' + String(e)) }
+  const { paths, texts: rawT, layers, insts, loose } = collect(dxf, hatches, extra)
   if (paths.length < 20) throw new Error('DXF gần như không có nét vẽ trong Model space.')
   const xs: number[] = [], ys: number[] = []
   // khung bản vẽ: ưu tiên nét tường / ô diện tích (bản vẽ hay có vật thể lạc rất xa), không có thì lấy mọi nét trừ Defpoints
