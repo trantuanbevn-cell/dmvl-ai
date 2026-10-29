@@ -6,7 +6,7 @@ import { isAnnoLayer } from './dims'
 
 const OPS = pdfjs.OPS as Record<string, number>
 
-export type VecClass = { key: string; layer: string; lw: number; fill: boolean; len: number; n: number }
+export type VecClass = { key: string; layer: string; lw: number; fill: boolean; len: number; n: number; /** nét đứt (khuất/phía trên) */ dash?: boolean }
 export type VecText = { t: string; x: number; y: number; h: number; rot?: number; ly?: string } // pt, gốc trên-trái; rot: độ (theo chiều kim đồng hồ)
 /** một đoạn vẽ liên tiếp cùng kiểu (giữ nguyên thứ tự vẽ của PDF) – để dựng lại mặt bằng dạng vector */
 export type DrawRun = { cls: number; sc?: string; fc?: string; lw: number; d: string; eo?: boolean; hp?: boolean; rl?: 'wall' | 'col'; /** mảng tường chắc chắn (đảo của hatch đặc lớn ở mặt bằng) */ sure?: boolean }
@@ -22,7 +22,7 @@ export type VecPage = {
   /** mọi vùng hatch (đảo: vòng ngoài + lỗ, pt) kèm nét in (mm) và có nằm trong khối không – cho bộ đọc theo hình */
   regions?: { loops: [number, number][][]; solid: boolean; pat: string; blk: boolean; pen: number }[]
   /** mọi đường khép kín (pt) kèm nét in (mm) */
-  rings?: { pts: [number, number][]; pen: number; blk: boolean }[]
+  rings?: { pts: [number, number][]; pen: number; blk: boolean; dash?: boolean }[]
   /** vật thể nhận từ khối DXF (pt, y xuống): cửa – H1/H2 hai đầu ô cửa (bản lề), O đầu cánh khi mở; vách/thang – hộp bao xoay */
   objs?: { kind: string; name: string; layer: string; why: string; cx: number; cy: number; w: number; d: number; rot: number; t?: number; H1?: [number, number]; H2?: [number, number]; O?: [number, number] }[]
 }

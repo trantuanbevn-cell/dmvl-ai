@@ -80,11 +80,12 @@ function binaryToText(u: Uint8Array): string {
 export type RawText = { type: 'ATTRIB'; layer: string; startPoint: { x: number; y: number }; endPoint?: { x: number; y: number }; halign: number; valign: number; textHeight: number; rotation: number; text: string; negZ: boolean; inPaperSpace: boolean; colorIndex?: number }
 export type RawPoly = { type: '_POLY'; layer: string; pts: Pt[]; closed: boolean; colorIndex?: number; inPaperSpace: boolean }
 export type RawHatch = { type: 'HATCH'; layer: string; loops: Pt[][]; solid: number; pat: string; inPaperSpace: boolean }
-export type RawExtras = { model: (RawText | RawPoly | RawHatch)[]; blocks: Record<string, (RawText | RawPoly | RawHatch)[]>; negZ: Set<string>; dynName: Map<string, string> }
+export type RawExtras = { /** layer → kiểu nét (CONTINUOUS, HIDDEN, DASHED…) */ layerLt: Map<string, string>; model: (RawText | RawPoly | RawHatch)[]; blocks: Record<string, (RawText | RawPoly | RawHatch)[]>; negZ: Set<string>; dynName: Map<string, string> }
 
 /** Một lần quét văn bản DXF: ATTRIB, MLINE, MULTILEADER, đối tượng pháp tuyến −Z, tên thật của block động */
 export function rawExtras(L: string[]): RawExtras {
   const model: RawExtras['model'] = [], blocks: RawExtras['blocks'] = {}, negZ = new Set<string>()
+  const layerLt = new Map<string, string>()
   const recByName = new Map<string, string>(), nameByHandle = new Map<string, string>(), repOf = new Map<string, string>()
   let sec = '', blk = '', tbl = ''
   const push = (e: RawText | RawPoly | RawHatch) => { if (sec === 'ENTITIES') model.push(e); else if (sec === 'BLOCKS' && blk) (blocks[blk] ??= []).push(e) }
@@ -103,6 +104,9 @@ export function rawExtras(L: string[]): RawExtras {
       if (name) { if (h) { nameByHandle.set(h, name); recByName.set(name, h) } if (rep) repOf.set(name, rep) }
       continue
     }
+    if (sec === 'TABLES' && tbl === 'LAYER' && v === 'LAYER') { let name = '', lt = ''
+      for (let j = i + 2; j + 1 < L.length; j += 2) { const cc = L[j].trim(); if (cc === '0') break; if (cc === '2') name = L[j + 1].trim(); else if (cc === '6') lt = L[j + 1].trim() }
+      if (name) layerLt.set(name, lt.toUpperCase()); continue }
     if (sec !== 'ENTITIES' && sec !== 'BLOCKS') continue
     // pháp tuyến −Z (hệ toạ độ đối tượng bị lật): ghi lại handle để bộ đọc chính lật toạ độ
     if (v !== 'ATTRIB' && v !== 'MLINE' && v !== 'MULTILEADER') {
@@ -161,7 +165,7 @@ export function rawExtras(L: string[]): RawExtras {
   const dynName = new Map<string, string>()
   for (const [name, h] of repOf) { const real = nameByHandle.get(h); if (real && real !== name) dynName.set(name, real) }
   void recByName
-  return { model, blocks, negZ, dynName }
+  return { layerLt, model, blocks, negZ, dynName }
 }
 
 // ───────── SPLINE ─────────

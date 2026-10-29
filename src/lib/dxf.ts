@@ -126,10 +126,10 @@ function arcPts(cx: number, cy: number, r: number, a0: number, a1: number): Pt[]
   for (let i = 0; i <= n; i++) out.push([cx + r * Math.cos(a0 + (sw * i) / n), cy + r * Math.sin(a0 + (sw * i) / n)]); return out
 }
 
-type Path = { pts: Pt[]; layer: string; color?: number; lw?: number; closed?: boolean; fill?: boolean; hatch?: boolean; loops?: Pt[][]; /** đảo tách từ hatch đặc lớn ở mặt bằng (không nằm trong khối đồ) → chắc là thân tường */ isl?: boolean }
+type Path = { pts: Pt[]; layer: string; color?: number; lw?: number; /** nét đứt (khuất / phía trên mặt cắt) */ dash?: boolean; closed?: boolean; fill?: boolean; hatch?: boolean; loops?: Pt[][]; /** đảo tách từ hatch đặc lớn ở mặt bằng (không nằm trong khối đồ) → chắc là thân tường */ isl?: boolean }
 type Txt = { t: string; x: number; y: number; h: number; rot: number; ly: string }
-/** layer nhiễu (đường ống, cơ điện, tâm…) – ẩn đi */
-const NOISE = /defpoints|xref- ?ps|(^|\$)(m|p)-|g-impt|a-genm|dwatcopi|fitting|pipe|(^|\$)center$|s-dim|淘宝|balloon|xr_(?!b2)[^$]*plan|net.?khuat|net.?thay|(^|\$)i_thay|(^|\$)defpoints/i
+/** layer nhiễu (đường ống, cơ điện, tâm…) – ẩn đi. "Nét thấy" (bậc thang, mép bàn… nhìn thấy dưới mặt cắt) KHÔNG phải nhiễu: cần để nhận thang */
+const NOISE = /defpoints|xref- ?ps|(^|\$)(m|p)-|g-impt|a-genm|dwatcopi|fitting|pipe|(^|\$)center$|s-dim|淘宝|balloon|xr_(?!b2)[^$]*plan|(^|\$)defpoints/i
 /** layer ranh giới không gian khép kín (có sẵn trong bản vẽ) */
 /** layer của cửa đi/cửa sổ – chỉ cung ở các layer này mới được coi là cung quét cánh cửa (không lẫn với ghế, bàn, thiết bị) */
 export const DOOR_LAYER = /door|(^|\$)cua|cua ?di|cua ?so|(^|\$)dr[_ -]|window/i
@@ -140,18 +140,19 @@ export type FurnRaw = { name: string; layer: string; cx: number; cy: number; w: 
 export const ZONE_LAYER = /(^|\$)area$|ranh.?gioi|dien.?tich|room.?bound|space.?bound/i
 
 /** DXF → các đường (toạ độ bản vẽ, đơn vị gốc) + chữ */
-function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>, extra?: RawExtras): { paths: Path[]; texts: Txt[]; layers: Record<string, { color: number; off: boolean }>; insts: { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number }[]; loose: { x0: number; y0: number; x1: number; y1: number; layer: string }[]; blk: BlkRaw[]; regs: { loops: Pt[][]; layer: string; solid: boolean; pat: string; blk: boolean; color?: number }[]; rings: { pts: Pt[]; layer: string; color?: number; blk: boolean }[] } {
+function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>, extra?: RawExtras): { paths: Path[]; texts: Txt[]; layers: Record<string, { color: number; off: boolean }>; insts: { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number }[]; loose: { x0: number; y0: number; x1: number; y1: number; layer: string }[]; blk: BlkRaw[]; regs: { loops: Pt[][]; layer: string; solid: boolean; pat: string; blk: boolean; color?: number }[]; rings: { pts: Pt[]; layer: string; color?: number; blk: boolean; dash?: boolean }[] } {
   const layers: Record<string, { color: number; off: boolean }> = {}
   for (const [k, l] of Object.entries<any>(dxf.tables?.layer?.layers ?? {})) layers[k] = { color: Math.abs(l.colorIndex ?? l.color ?? 7) || 7, off: l.visible === false || l.frozen === true }
   const blocks: Record<string, any> = dxf.blocks ?? {}
   const paths: Path[] = [], texts: Txt[] = []
   const blk: BlkRaw[] = []
   /** mọi vùng hatch (mọi layer) + mọi đường khép kín – để bộ đọc theo hình (planSense) tự xét, không cần layer */
-  const regs: { loops: Pt[][]; layer: string; solid: boolean; pat: string; blk: boolean; color?: number }[] = [], rings: { pts: Pt[]; layer: string; color?: number; blk: boolean }[] = []
+  const regs: { loops: Pt[][]; layer: string; solid: boolean; pat: string; blk: boolean; color?: number }[] = [], rings: { pts: Pt[]; layer: string; color?: number; blk: boolean; dash?: boolean }[] = []
   const insts: { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number }[] = [], loose: { x0: number; y0: number; x1: number; y1: number; layer: string }[] = []
   let inFurn = 0
   const apT = (m: M, p: Pt): Pt => [m[0] * p[0] + m[2] * p[1] + m[4], m[1] * p[0] + m[3] * p[1] + m[5]]
-  const walk = (ents: any[], m0: M, inherit: { layer?: string; color?: number }, depth: number, paper: boolean) => {
+  const SOLID_LT = /^(|CONTINUOUS|BYLAYER|BYBLOCK)$/i
+  const walk = (ents: any[], m0: M, inherit: { layer?: string; color?: number; lt?: string }, depth: number, paper: boolean) => {
     for (const e of ents) {
       let m = m0
       if (!e || (paper !== !!e.inPaperSpace && depth === 0)) continue
@@ -163,13 +164,15 @@ function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>, extra?: RawE
       let color: number | undefined = typeof e.colorIndex === 'number' && e.colorIndex > 0 && e.colorIndex < 256 ? e.colorIndex : undefined
       if (color === undefined && inherit.color) color = inherit.color
       const lw = typeof e.lineweight === 'number' && e.lineweight > 0 ? e.lineweight / 100 : undefined
+      // kiểu nét: nét đứt = vật khuất / phía trên mặt cắt (dầm, vách di động, mép trần…) – không phải bộ phận bị cắt
+      const ltE = String(e.lineType ?? 'BYLAYER').toUpperCase(), lt = ltE === 'BYLAYER' ? (extra?.layerLt.get(layer) ?? '') : ltE === 'BYBLOCK' ? (inherit.lt ?? '') : ltE, dash = !SOLID_LT.test(lt)
       // hệ toạ độ đối tượng lật (pháp tuyến −Z): toạ độ OCS → WCS = lật trục X (thuật toán trục tuỳ ý của DXF, trường hợp mặt phẳng XY)
       const flipZ = !!e.negZ || (!!e.handle && !!extra?.negZ.has(e.handle))
       if (flipZ && OCS_TYPES.has(e.type)) m = mul(m, MIRX)
       const add = (pts: Pt[], closed = false, fill = false) => {
         if (pts.length < 2) return
-        const tp = pts.map(p => apT(m, p)); paths.push({ pts: tp, layer, color, lw, closed, fill })
-        if ((closed || (pts.length >= 4 && Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) < 1e-3)) && pts.length >= 4 && rings.length < 60000) rings.push({ pts: tp, layer, color, blk: depth > 0 })   // đường kép kín cả khi không bật cờ "closed" (điểm cuối trùng điểm đầu)
+        const tp = pts.map(p => apT(m, p)); paths.push({ pts: tp, layer, color, lw, closed, fill, ...(dash ? { dash: true } : {}) })
+        if ((closed || (pts.length >= 4 && Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) < 1e-3)) && pts.length >= 4 && rings.length < 60000) rings.push({ pts: tp, layer, color, blk: depth > 0, ...(dash ? { dash: true } : {}) })   // đường kép kín cả khi không bật cờ "closed" (điểm cuối trùng điểm đầu)
         if (!inFurn && FURN_LAYER.test(layer)) { let x0 = 1e18, y0 = 1e18, x1 = -1e18, y1 = -1e18; for (const t of tp) { x0 = Math.min(x0, t[0]); x1 = Math.max(x1, t[0]); y0 = Math.min(y0, t[1]); y1 = Math.max(y1, t[1]) } loose.push({ x0, y0, x1, y1, layer }) }
       }
       switch (e.type) {
@@ -224,7 +227,7 @@ function collect(dxf: any, hatches?: ReturnType<typeof rawHatches>, extra?: RawE
           const isF = depth === 0 && FURN_LAYER.test(layer) && !inFurn
           for (let i = 0; i < Math.min(cols.c, 200); i++) for (let j = 0; j < Math.min(cols.r, 200); j++) {
             const n0 = paths.length; if (isF) inFurn++
-            walk(b.entities, mul(m, mul([1, 0, 0, 1, i * cols.dc * c - j * cols.dr * s, i * cols.dc * s + j * cols.dr * c], ins)), { layer, color }, depth + 1, paper)
+            walk(b.entities, mul(m, mul([1, 0, 0, 1, i * cols.dc * c - j * cols.dr * s, i * cols.dc * s + j * cols.dr * c], ins)), { layer, color, lt }, depth + 1, paper)
             if (isF) { inFurn--
               // khung bao theo hướng chèn khối (xoay theo góc INSERT) → kích thước thật của món đồ
               const co = Math.cos(-r), si = Math.sin(-r); let a0 = 1e18, b0 = 1e18, a1 = -1e18, b1 = -1e18
@@ -272,6 +275,7 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
   const insu = +(dxf.header?.$INSUNITS ?? 0)
   let x0 = q(xs, 0.02), x1 = q(xs, 0.98), y0 = q(ys, 0.02), y1 = q(ys, 0.98)
   let tight = false, nSheets = 1
+  const sheetBoxes: number[][] = []
   { // vật thể lạc xa (xref, khối ngoại lai) làm khung phình to → mặt bằng nhỏ lại: chia lưới 120×120 trên mọi nét, giữ cụm ô liền nhau (cho phép hở 2 ô) có nhiều điểm nhất
     const ax: number[] = [], ay: number[] = []; for (const p of paths) if (!/defpoints/i.test(p.layer)) for (const pt of p.pts) { ax.push(pt[0]); ay.push(pt[1]) }
     if (ax.length > 2000) {
@@ -299,10 +303,15 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
         const top = Math.max(...tots), bigI = tots.map((t, i) => i).filter(i => tots[i] >= top * 0.35)
         // khung tên / khung giấy bao quanh một bản vẽ khác → không tính là bản vẽ riêng
         const big = bigI.filter(i => !bigI.some(j => j !== i && bbs[i][0] <= bbs[j][0] && bbs[i][1] <= bbs[j][1] && bbs[i][2] >= bbs[j][2] && bbs[i][3] >= bbs[j][3])).length
-        if (big > 1) { nSheets = big; onLog?.(`  ⚠ File có ${big} bản vẽ đặt cạnh nhau – đang đọc bản nhiều nét nhất. Muốn đọc bản khác: tách bản đó ra file DXF riêng.`) } }
+        if (big > 1) { nSheets = big; onLog?.(`  ⚠ File có ${big} bản vẽ đặt cạnh nhau – đang đọc bản nhiều nét nhất. Muốn đọc bản khác: tách bản đó ra file DXF riêng.`) }
+        for (const i of bigI) if (!bigI.some(j => j !== i && bbs[i][0] <= bbs[j][0] && bbs[i][1] <= bbs[j][1] && bbs[i][2] >= bbs[j][2] && bbs[i][3] >= bbs[j][3])) sheetBoxes.push([qx0 + bbs[i][0] * cw2, qx0 + (bbs[i][2] + 1) * cw2, qy0 + bbs[i][1] * ch2, qy0 + (bbs[i][3] + 1) * ch2]) }
       if (best >= 0) { let a0 = N, a1 = 0, b0 = N, b1 = 0; for (let c = 0; c < N * N; c++) if (comp[c] === best) { const i = (c / N) | 0, j = c % N; a0 = Math.min(a0, i); a1 = Math.max(a1, i + 1); b0 = Math.min(b0, j); b1 = Math.max(b1, j + 1) }
         const nx0 = gx0 + a0 * cw, nx1 = gx0 + a1 * cw, ny0 = gy0 + b0 * ch, ny1 = gy0 + b1 * ch
         if ((nx1 - nx0) * (ny1 - ny0) < (x1 - x0) * (y1 - y0) * 1.5) { x0 = nx0; x1 = nx1; y0 = ny0; y1 = ny1; tight = true } }
+      // khung vừa chọn CẮT NGANG một bản vẽ (vd mặt bằng có sảnh rộng ít nét, cụm điểm bị tách đôi) → nới ra bao trọn bản vẽ đó
+      { let bestB: number[] | null = null, bo = 0
+        for (const b of sheetBoxes) { const ox = Math.max(0, Math.min(x1, b[1]) - Math.max(x0, b[0])), oy = Math.max(0, Math.min(y1, b[3]) - Math.max(y0, b[2])), o = ox * oy; if (o > bo) { bo = o; bestB = b } }
+        if (bestB) { const tol = 0.03 * Math.max(bestB[1] - bestB[0], bestB[3] - bestB[2]); if (bestB[0] < x0 - tol || bestB[1] > x1 + tol || bestB[2] < y0 - tol || bestB[3] > y1 + tol) { x0 = Math.min(x0, bestB[0]); x1 = Math.max(x1, bestB[1]); y0 = Math.min(y0, bestB[2]); y1 = Math.max(y1, bestB[3]); tight = true; onLog?.('  Khung đọc được nới ra để bao trọn mặt bằng') } } }
     }
   }
   const mx = (x1 - x0) * (tight ? 0.05 : 0.25), my = (y1 - y0) * (tight ? 0.05 : 0.25); x0 -= mx; x1 += mx; y0 -= my; y1 += my
@@ -319,9 +328,9 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
   const W = (x1 - x0) / k, H = (y1 - y0) / k
   const X = (x: number) => (x - x0) / k, Y = (y: number) => (y1 - y) / k
   const classIdx = new Map<string, number>(), classes: VecClass[] = []
-  const clsOf = (layer: string, lw: number, fill: boolean) => {
-    const w = fill ? -1 : Math.round(lw * 20) / 20, key = `${layer}|${fill ? 'fill' : w}`
-    let i = classIdx.get(key); if (i === undefined) { i = classes.length; classIdx.set(key, i); classes.push({ key, layer, lw: w, fill, len: 0, n: 0 }) } return i
+  const clsOf = (layer: string, lw: number, fill: boolean, dash = false) => {
+    const w = fill ? -1 : Math.round(lw * 20) / 20, key = `${layer}|${fill ? 'fill' : w}${dash ? '|dash' : ''}`
+    let i = classIdx.get(key); if (i === undefined) { i = classes.length; classIdx.set(key, i); classes.push({ key, layer, lw: w, fill, len: 0, n: 0, ...(dash ? { dash: true } : {}) }) } return i
   }
   const zones: { layer: string; pts: number[] }[] = []
   const segs: number[] = [], segCls: number[] = [], fills: VecPage['fills'] = [], arcs: VecPage['arcs'] = [], runs: DrawRun[] = []
@@ -407,7 +416,7 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
     // độ dày nét in đúng theo bảng nét in của công ty (theo màu AutoCAD hiệu lực)
     const aci = p.color ?? layers[p.layer]?.color ?? 7
     const lwPt = Math.max(0.1, ((CTB_LW[aci - 1] ?? 0.09) / PT_MM) * 0.5)
-    const ci = clsOf(p.layer, lwPt, false), c = classes[ci]
+    const ci = clsOf(p.layer, lwPt, false, !!p.dash), c = classes[ci]
     const isZone = ZONE_LAYER.test(p.layer)
     if (p.closed && isZone && pts.length >= 6) zones.push({ layer: p.layer, pts })
     if (isZone) continue // ranh giới không gian chỉ để tính diện tích, không vẽ lên mặt bằng
@@ -462,7 +471,7 @@ export async function readDxfPage(data: ArrayBuffer, onLog?: (s: string) => void
         const holes = r.loops.filter((h, b) => dep[b] === dep[a] + 1 && inP(h[0], lp))
         regions.push({ loops: [lp, ...holes].map(toPt), solid: r.solid, pat: r.pat, blk: r.blk, pen: penMm(r.color, r.layer) }) }) }
   }
-  const closedRings: NonNullable<VecPage['rings']> = rings.filter(r => !/defpoints/i.test(r.layer) && inFrame(r.pts) && r.pts.length <= 400).slice(0, 40000).map(r => ({ pts: toPt(r.pts), pen: penMm(r.color, r.layer), blk: r.blk }))
+  const closedRings: NonNullable<VecPage['rings']> = rings.filter(r => !/defpoints/i.test(r.layer) && inFrame(r.pts) && r.pts.length <= 400).slice(0, 40000).map(r => ({ pts: toPt(r.pts), pen: penMm(r.color, r.layer), blk: r.blk, ...(r.dash ? { dash: true } : {}) }))
   // vật thể nhận từ khối (cửa 1/2 cánh, vách kính, thang…) → toạ độ trang (pt, y xuống)
   const P = (q?: Pt): [number, number] | undefined => (q ? [X(q[0]), Y(q[1])] : undefined)
   const objs = classifyBlocks(blk, mmU).filter(o => o.cx >= x0 && o.cx <= x1 && o.cy >= y0 && o.cy <= y1)

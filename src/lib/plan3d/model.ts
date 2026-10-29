@@ -110,14 +110,7 @@ export function modelFromVec(v: VecPage, den: number): Model {
   for (const o of objs) if (o.kind === 'spiral' || o.kind === 'lift' || o.kind === 'stair') {
     for (let i = vert.length - 1; i >= 0; i--) if (Math.hypot(vert[i].x - o.cx, vert[i].y - o.cy) < Math.max(o.w, o.d) * 0.6) vert.splice(i, 1)
     vert.push({ id: uid('f'), kind: o.kind, name: o.name.slice(0, 40), x: o.cx, y: o.cy, w: o.w, d: o.d, ang: o.rot, h: furnTypeOf(o.kind).h, auto: true }) }
-  orientStairs(vert, v, m)   // theo quy cách: chữ LÊN/UP › mũi tên đường đi › đường cắt › chiếu nghỉ (số bậc ở dưới, nếu có, được ưu tiên hơn)
-  // BẬC ĐẦU TIÊN của thang bộ: bản vẽ thường đánh số bậc (1, 2 … 18) – bậc "1" là bậc đầu (thấp nhất). Mô hình 3D dựng thấp ở phía −w → xoay 180° nếu số 1 nằm phía +w
-  { const nums = (v.texts ?? []).map(t => ({ n: /^\s*(\d{1,2})\s*$/.exec(t.t)?.[1], x: t.x * m, y: t.y * m })).filter(t => t.n).map(t => ({ n: +t.n!, x: t.x, y: t.y }))
-    for (const f of vert) { if (f.kind !== 'stair' || nums.length < 2) continue
-      const c = Math.cos(f.ang), s2 = Math.sin(f.ang), loc = nums.map(t => ({ n: t.n, u: (t.x - f.x) * c + (t.y - f.y) * s2, v: -(t.x - f.x) * s2 + (t.y - f.y) * c })).filter(t => Math.abs(t.u) <= f.w / 2 + 0.4 && Math.abs(t.v) <= f.d / 2 + 0.4)
-      if (loc.length < 2) continue
-      const lo = loc.reduce((a, b) => (b.n < a.n ? b : a)), hi = loc.reduce((a, b) => (b.n > a.n ? b : a))
-      if (lo.n !== hi.n && lo.u > hi.u) f.ang += Math.PI } }
+  orientStairs(vert, v, m)   // bậc đầu thang: đối chiếu nhiều dấu hiệu (số bậc, chữ LÊN/UP, chấm chân thang, mũi tên, đường cắt, chiếu nghỉ)
   // vách ngăn mỏng (WC…) vẽ bằng hai nét song song, không có hatch → thêm thành tường mỏng, cao 1.9 m
   { const rings = walls.filter(k => k.role !== 'col').map(k => ({ rs: footprint(k), bb: bbox(footprint(k)) }))
     const covered = (x: number, y: number) => rings.some(k => x >= k.bb.x0 - 0.02 && x <= k.bb.x1 + 0.02 && y >= k.bb.y0 - 0.02 && y <= k.bb.y1 + 0.02 && k.rs.reduce((n, r) => n + (inside([x, y], r) ? 1 : 0), 0) % 2 === 1)
@@ -238,7 +231,7 @@ export const GLASS_LAYER = /kinh|glass|glaz|curtain|storefront|mat.?dung/i
 export function detectGlass(v: VecPage, m: number): Wall[] {
   const seg: { a: Pt; b: Pt; L: number; ang: number }[] = []
   for (let i = 0; i < v.nSeg; i++) {
-    const c = v.classes[v.cls[i]]; if (!c || c.fill || !GLASS_LAYER.test(c.layer)) continue
+    const c = v.classes[v.cls[i]]; if (!c || c.fill || c.dash || !GLASS_LAYER.test(c.layer)) continue
     const a: Pt = [v.segs[i * 4] * m, v.segs[i * 4 + 1] * m], b: Pt = [v.segs[i * 4 + 2] * m, v.segs[i * 4 + 3] * m], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.15) continue
     let ang = Math.atan2(b[1] - a[1], b[0] - a[0]); if (ang < 0) ang += Math.PI; if (ang >= Math.PI - 1e-9) ang -= Math.PI
     seg.push({ a, b, L, ang })

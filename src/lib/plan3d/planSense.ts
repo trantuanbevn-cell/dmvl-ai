@@ -56,7 +56,8 @@ export function senseWalls(v: VecPage, m: number): Sense {
   const segs: Seg[] = []
   for (let i = 0; i < v.nSeg; i++) {
     const a: Pt = [v.segs[i * 4] * m, v.segs[i * 4 + 1] * m], b: Pt = [v.segs[i * 4 + 2] * m, v.segs[i * 4 + 3] * m], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (!(L >= 0.02)) continue   // bỏ cả nét lỗi (NaN)
-    const c = v.classes[v.cls[i]]; let ang = Math.atan2(b[1] - a[1], b[0] - a[0]); if (ang < 0) ang += Math.PI; if (ang >= Math.PI - 1e-9) ang -= Math.PI
+    const c = v.classes[v.cls[i]]; if (c?.dash) continue   // nét đứt: vật khuất / phía trên mặt cắt – không phải tường
+    let ang = Math.atan2(b[1] - a[1], b[0] - a[0]); if (ang < 0) ang += Math.PI; if (ang >= Math.PI - 1e-9) ang -= Math.PI
     segs.push({ a, b, L, ang, pen: c ? c.lw * (25.4 / 72) * 2 : 0.1 })
   }
   const { heavyMin } = penStats(segs), heavy = (p: number) => p >= heavyMin * 0.85
@@ -75,7 +76,7 @@ export function senseWalls(v: VecPage, m: number): Sense {
   // chỉ thành tường khi nối vào mạng có nét đậm (nét cắt). Bản vẽ không phân biệt nét đậm/mảnh: dựa vào độ dài mạng.
   const hasHeavy = isFinite(heavyMin)
   for (const r of v.regions ?? []) { const rs = r.loops.map(l => l.map(p => [p[0] * m, p[1] * m] as Pt)); shapeCand(rs, 'reg', !hasHeavy && !r.blk) }
-  for (const r of v.rings ?? []) shapeCand([r.pts.map(p => [p[0] * m, p[1] * m] as Pt)], 'ring', heavy(r.pen) && !r.blk)
+  for (const r of v.rings ?? []) if (!r.dash) shapeCand([r.pts.map(p => [p[0] * m, p[1] * m] as Pt)], 'ring', heavy(r.pen) && !r.blk)
   // ---- 2) hai nét song song cách 7–45 cm, không có nét song song thứ ba nằm giữa = một dải tường ----
   const thinPairs: { a: Pt; b: Pt; t: number; pen: number }[] = []
   {
@@ -177,49 +178,66 @@ export function senseWalls(v: VecPage, m: number): Sense {
 // ───────── BẬC ĐẦU CỦA THANG BỘ ─────────
 /** Xác định chiều đi lên của từng vế thang theo quy cách thể hiện; trả lời giải thích. Thang 3D dựng thấp ở phía −w (cục bộ). */
 export function orientStairs(stairs: Furn[], v: VecPage, m: number, log: string[] = []): void {
+  // ĐỌC NHIỀU DẤU HIỆU RỒI ĐỐI CHIẾU (như người đọc): mỗi dấu hiệu bỏ một phiếu có trọng số cho chiều đi lên.
+  //   số bậc (bậc nhỏ nhất = chân thang) 3 · chữ LÊN/UP, XUỐNG/DN 3 · vòng tròn/chấm chân thang 2,5 · mũi tên chữ V 2 · đường cắt 1
+  // Các phiếu khớp nhau → chắc chắn; trái nhau → theo tổng trọng số và ghi lại để người dùng kiểm tra.
   const segs: { a: Pt; b: Pt; L: number }[] = []
   for (let i = 0; i < v.nSeg; i++) { const a: Pt = [v.segs[i * 4] * m, v.segs[i * 4 + 1] * m], b: Pt = [v.segs[i * 4 + 2] * m, v.segs[i * 4 + 3] * m], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L >= 0.03 && L < 1e6) segs.push({ a, b, L }) }
-  const texts = (v.texts ?? []).map(t => ({ t: t.t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(), x: t.x * m, y: t.y * m }))
-  const fl = stairs.filter(f => f.kind === 'stair'), ev = new Map<Furn, 'start' | 'arrow' | 'cut'>()
+  const texts = (v.texts ?? []).map(t => ({ t: t.t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(), x: t.x * m, y: t.y * m }))
+  const blobs = [...(v.rings ?? []), ...(v.regions ?? []).filter(g => g.loops.length === 1).map(g => ({ pts: g.loops[0] }))].map(r => obb(r.pts.map(p => [p[0] * m, p[1] * m] as Pt))).filter(o => { const R = Math.max(o.w, o.d); return R <= 0.4 && R >= 0.06 && Math.abs(o.w - o.d) <= R * 0.2 })
+  const fl = stairs.filter(f => f.kind === 'stair')
+  const info = new Map<Furn, { start: boolean; score: number; lo?: number; hi?: number }>()
+  const numOf = new Map<Furn, { lo: number; hi: number }>()
   for (const f of fl) {
     const c = Math.cos(f.ang), s = Math.sin(f.ang), loc = (p: Pt) => ({ u: (p[0] - f.x) * c + (p[1] - f.y) * s, v: -(p[0] - f.x) * s + (p[1] - f.y) * c })
     const inR = (q: { u: number; v: number }, pad = 0.05) => Math.abs(q.u) <= f.w / 2 + pad && Math.abs(q.v) <= f.d / 2 + pad
-    let dir = 0, why = ''   // dir = +1: đi lên theo +u (giữ nguyên); −1: đảo
-    // 1) chữ LÊN / UP (đứng ở chân thang) – XUỐNG / DN (ở đầu trên)
+    const votes: { dir: number; w: number; why: string; start?: boolean }[] = []   // dir +1: đi lên theo +u
+    // số bậc
+    const nums = texts.map(t => ({ n: /^\d{1,2}$/.test(t.t) ? +t.t : NaN, q: loc([t.x, t.y]) })).filter(t => !isNaN(t.n) && inR(t.q, 0.4))
+    if (nums.length >= 2) { const lo = nums.reduce((a, b) => (b.n < a.n ? b : a)), hi = nums.reduce((a, b) => (b.n > a.n ? b : a)); if (lo.n !== hi.n && Math.abs(lo.q.u - hi.q.u) > f.w * 0.3) { votes.push({ dir: lo.q.u < hi.q.u ? 1 : -1, w: 3, why: `số bậc ${lo.n}→${hi.n}`, start: lo.n === 1 }); numOf.set(f, { lo: lo.n, hi: hi.n }) } }
+    // chữ LÊN/UP – XUỐNG/DN
     for (const t of texts) { const q = loc([t.x, t.y]); if (!inR(q, 0.8)) continue
-      if (/(^|\s)(len|up)(\s|$)/.test(t.t)) { dir = q.u < 0 ? 1 : -1; why = 'chữ LÊN/UP ở chân thang'; break }
-      if (/(^|\s)(xuong|dn|down)(\s|$)/.test(t.t)) { dir = q.u > 0 ? 1 : -1; why = 'chữ XUỐNG/DN ở đầu thang'; break } }
-    // 2) mũi tên đường đi: nét dọc theo hướng đi (song song trục u) cắt qua nhiều bậc; đầu có 2 nét ngắn xiên chụm lại = đầu mũi tên (phía trên)
-    if (!dir) {
-      const walk = segs.map(g => ({ g, A: loc(g.a), B: loc(g.b) })).filter(x => inR(x.A, 0.3) && inR(x.B, 0.3) && Math.abs(x.A.v - x.B.v) < 0.06 && Math.abs(x.A.u - x.B.u) > f.w * 0.4)
-      for (const w of walk) { for (const [E, O] of [[w.A, w.B], [w.B, w.A]] as const) {
-        const tips = segs.filter(g => { const a = loc(g.a), b = loc(g.b); if (g.L > 0.5) return false; const nearE = (q: { u: number; v: number }) => Math.hypot(q.u - E.u, q.v - E.v) < 0.05; const other = nearE(a) ? b : nearE(b) ? a : null; if (!other) return false
-          const back = (other.u - E.u) * Math.sign(O.u - E.u), side = Math.abs(other.v - E.v); return back > 0.03 && side > 0.02 && side < back * 1.8 })
-        if (tips.length >= 2) { dir = E.u > O.u ? 1 : -1; why = 'mũi tên đường đi lên'; break } } if (dir) break }
-    }
-    // 2b) chấm / vòng tròn nhỏ ở đầu đường đi = chân thang (quy ước ISO/DIN: tròn ở bậc đầu, mũi tên ở bậc cuối)
-    if (!dir) for (const r of v.rings ?? []) { const pts = r.pts.map(p => [p[0] * m, p[1] * m] as Pt), o = obb(pts), R = Math.max(o.w, o.d); if (R > 0.4 || R < 0.06 || Math.abs(o.w - o.d) > R * 0.2) continue
-      const q = loc([o.cx, o.cy]); if (!inR(q, 0.3) || Math.abs(q.u) < f.w / 4) continue
-      dir = q.u < 0 ? 1 : -1; why = 'vòng tròn đánh dấu chân thang'; break }
-    // 3) đường cắt: nét xiên (20–70° so với bậc) cắt ngang vế thang – bậc đầu ở đầu XA đường cắt
-    if (!dir) {
-      const cut = segs.map(g => ({ A: loc(g.a), B: loc(g.b), L: g.L })).filter(x => inR(x.A, 0.2) && inR(x.B, 0.2) && x.L > f.d * 0.4 && (() => { const ang = Math.abs(Math.atan2(x.B.u - x.A.u, x.B.v - x.A.v)) % Math.PI, a = Math.min(ang, Math.PI - ang) * 180 / Math.PI; return a >= 15 && a <= 75 })())
-      if (cut.length) { const uc = cut.reduce((n, x) => n + (x.A.u + x.B.u) / 2, 0) / cut.length; if (Math.abs(uc) > f.w * 0.05) { dir = uc > 0 ? 1 : -1; why = 'đường cắt thang (bậc đầu ở phía xa đường cắt)' } }
-    }
-    if (dir === -1) f.ang += Math.PI
-    if (dir) ev.set(f, /LÊN|XUỐNG|vòng tròn/.test(why) ? 'start' : /mũi tên/.test(why) ? 'arrow' : 'cut')
-    if (dir) log.push(`Thang ${f.w.toFixed(1)}×${f.d.toFixed(1)} m: bậc đầu theo ${why}`)
+      if (/(^|\s)(len|up)(\s|$)/.test(t.t)) { votes.push({ dir: q.u < 0 ? 1 : -1, w: 3, why: 'chữ LÊN/UP', start: true }); break }
+      if (/(^|\s)(xuong|dn|down)(\s|$)/.test(t.t)) { votes.push({ dir: q.u > 0 ? 1 : -1, w: 3, why: 'chữ XUỐNG/DN' }); break } }
+    // vòng tròn / chấm ở chân thang
+    for (const o of blobs) { const q = loc([o.cx, o.cy]); if (!inR(q, 0.3) || Math.abs(q.u) < f.w / 4) continue; votes.push({ dir: q.u < 0 ? 1 : -1, w: 2.5, why: 'chấm/vòng tròn chân thang', start: true }); break }
+    // mũi tên chữ V (đỉnh V = phía trên)
+    { const sh = segs.filter(g => g.L >= 0.08 && g.L <= 0.6).map(g => ({ A: loc(g.a), B: loc(g.b) })).filter(x => inR(x.A, 0.1) && inR(x.B, 0.1))
+      const same = (p: { u: number; v: number }, q: { u: number; v: number }) => Math.hypot(p.u - q.u, p.v - q.v) < 0.02
+      outer: for (let i = 0; i < sh.length; i++) for (let j = i + 1; j < sh.length; j++) {
+        const a = sh[i], b = sh[j]; let apex: { u: number; v: number } | null = null, pa = a.A, pb = b.A
+        if (same(a.A, b.A)) { apex = a.A; pa = a.B; pb = b.B } else if (same(a.A, b.B)) { apex = a.A; pa = a.B; pb = b.A } else if (same(a.B, b.A)) { apex = a.B; pa = a.A; pb = b.B } else if (same(a.B, b.B)) { apex = a.B; pa = a.A; pb = b.A }
+        if (!apex) continue
+        const v1 = [pa.u - apex.u, pa.v - apex.v], v2 = [pb.u - apex.u, pb.v - apex.v], n1 = Math.hypot(v1[0], v1[1]), n2 = Math.hypot(v2[0], v2[1])
+        const ang = Math.acos(Math.max(-1, Math.min(1, (v1[0] * v2[0] + v1[1] * v2[1]) / (n1 * n2)))) * 180 / Math.PI; if (ang < 30 || ang > 120 || Math.abs(n1 - n2) > Math.max(n1, n2) * 0.3) continue
+        const bu = v1[0] / n1 + v2[0] / n2, bv = v1[1] / n1 + v2[1] / n2; if (Math.abs(bu) < 2 * Math.abs(bv)) continue
+        votes.push({ dir: bu < 0 ? 1 : -1, w: 2, why: 'mũi tên chỉ hướng lên' }); break outer } }
+    // đường cắt xiên: bậc đầu ở phía xa đường cắt
+    { const cut = segs.map(g => ({ A: loc(g.a), B: loc(g.b), L: g.L })).filter(x => inR(x.A, 0.2) && inR(x.B, 0.2) && x.L > f.d * 0.4 && (() => { const ang = Math.abs(Math.atan2(x.B.u - x.A.u, x.B.v - x.A.v)) % Math.PI, a = Math.min(ang, Math.PI - ang) * 180 / Math.PI; return a >= 15 && a <= 75 })())
+      if (cut.length) { const uc = cut.reduce((n, x) => n + (x.A.u + x.B.u) / 2, 0) / cut.length; if (Math.abs(uc) > f.w * 0.05) votes.push({ dir: uc > 0 ? 1 : -1, w: 1, why: 'đường cắt thang' }) } }
+    if (!votes.length) continue
+    const score = votes.reduce((n, x) => n + x.dir * x.w, 0), agree = votes.every(x => Math.sign(x.dir) === Math.sign(score))
+    if (score < 0) f.ang += Math.PI
+    info.set(f, { start: votes.some(x => x.start && Math.sign(x.dir) === Math.sign(score)), score: Math.abs(score) })
+    log.push(`Thang ${f.w.toFixed(1)}×${f.d.toFixed(1)} m: bậc đầu theo ${votes.map(x => x.why).join(' + ')}${votes.length > 1 ? (agree ? ' (khớp nhau)' : ' (⚠ trái nhau – cần kiểm tra)') : ''}`)
   }
-  // 4) hai vế song song sát nhau, ngược chiều (thang 2 vế có chiếu nghỉ): vế thứ hai bắt đầu ở cao độ chiếu nghỉ
-  for (let i = 0; i < fl.length; i++) for (let j = 0; j < fl.length; j++) { if (i === j) continue
-    const a = fl[i], b = fl[j], da = Math.abs(Math.cos(a.ang - b.ang)); if (da < 0.97) continue
-    const c = Math.cos(a.ang), s = Math.sin(a.ang), dv = Math.abs(-(b.x - a.x) * s + (b.y - a.y) * c), du = (b.x - a.x) * c + (b.y - a.y) * s
-    if (dv > (a.d + b.d) / 2 + 0.4 || Math.abs(du) > Math.max(a.w, b.w)) continue
-    const opposite = Math.cos(a.ang - b.ang) < 0
-    // a đi lên về phía +u; đầu trên của a ≈ đầu dưới của b → b là vế 2
-    const aTop = a.x + c * a.w / 2, aTopY = a.y + s * a.w / 2, bBot = b.x - Math.cos(b.ang) * b.w / 2, bBotY = b.y - Math.sin(b.ang) * b.w / 2
-    // vế 1 là vế có dấu chân thang (chữ LÊN / vòng tròn); không có thì vế có đường cắt (quy ước: đường cắt vẽ trên vế đi lên từ tầng này)
-    const rank = (f: Furn) => ({ start: 3, arrow: 1, cut: 2 } as Record<string, number>)[ev.get(f) ?? ''] ?? 0
-    if (opposite && rank(a) > rank(b) && Math.hypot(aTop - bBot, aTopY - bBotY) < Math.max(a.d, b.d) + 1.2 && !b.z && !a.z) { b.z = a.h; log.push('Thang 2 vế: vế 2 bắt đầu từ chiếu nghỉ') }
-  }
+  // vế chưa có dấu hiệu, song song sát một vế đã biết chiều (thang 2 vế) → đi ngược chiều vế kia, bắt đầu ở chiếu nghỉ
+  for (const b of fl) { if (info.has(b)) continue
+    const a = fl.find(o => o !== b && info.has(o) && Math.abs(Math.cos(o.ang - b.ang)) > 0.97 && Math.abs(-(b.x - o.x) * Math.sin(o.ang) + (b.y - o.y) * Math.cos(o.ang)) <= (o.d + b.d) / 2 + 0.4)
+    if (!a) continue
+    b.ang = a.ang + Math.PI; info.set(b, { start: false, score: 0 }); log.push(`Thang ${b.w.toFixed(1)}×${b.d.toFixed(1)} m: vế 2, đi ngược vế 1 từ chiếu nghỉ`) }
+  // số bậc nối tiếp giữa các vế (vế 1: 1→9, vế 2: 13→23) → cao độ vế sau = (số bậc đầu − 1) × chiều cao bậc
+  for (const b of fl) { const nb = numOf.get(b); if (!nb || nb.lo <= 1 || b.z) continue
+    const a = fl.filter(o => o !== b && numOf.get(o) && numOf.get(o)!.lo < nb.lo && Math.hypot(o.x - b.x, o.y - b.y) < 6).sort((p, q) => numOf.get(p)!.lo - numOf.get(q)!.lo)[0]
+    if (!a) continue
+    const na = numOf.get(a)!, riser = Math.min(0.19, Math.max(0.14, a.h / Math.max(1, na.hi - na.lo + 1)))
+    b.z = (a.z ?? 0) + (nb.lo - na.lo) * riser; log.push(`Thang: vế bắt đầu từ bậc ${nb.lo} dựng ở cao độ ${b.z.toFixed(2)} m (theo số bậc)`) }
+  // thang 2 vế: vế 1 = vế có dấu chân thang (số 1, chữ LÊN, chấm tròn); vế 2 dựng từ cao độ chiếu nghỉ
+  for (const a of fl) for (const b of fl) { if (a === b || a.z || b.z) continue
+    if (Math.cos(a.ang - b.ang) > -0.97) continue   // phải song song NGƯỢC chiều
+    const c = Math.cos(a.ang), s = Math.sin(a.ang); if (Math.abs(-(b.x - a.x) * s + (b.y - a.y) * c) > (a.d + b.d) / 2 + 0.4) continue
+    const ia = info.get(a), ib = info.get(b); if (!ia || !ib || !ia.start || ib.start) continue
+    const aTop: Pt = [a.x + c * a.w / 2, a.y + s * a.w / 2], bBot: Pt = [b.x - Math.cos(b.ang) * b.w / 2, b.y - Math.sin(b.ang) * b.w / 2]
+    const along = Math.abs((bBot[0] - aTop[0]) * c + (bBot[1] - aTop[1]) * s); if (along > 1.8) continue
+    b.z = a.h; log.push('Thang 2 vế: vế 2 dựng từ cao độ chiếu nghỉ') }
 }

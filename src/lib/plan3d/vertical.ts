@@ -129,7 +129,7 @@ export function detectVertical(v: VecPage, m: number): Furn[] {
 export function detectThinPartitions(v: VecPage, m: number, covered: (x: number, y: number) => boolean): { a: [number, number]; b: [number, number]; t: number }[] {
   const n = v.nSeg ?? v.segs.length / 4, H: { c: number; a: number; b: number }[] = [], V: { c: number; a: number; b: number }[] = []
   for (let i = 0; i < n; i++) {
-    const ly = (v.classes[v.cls[i]]?.layer ?? '').replace(/^.*\$/, ''); if (/loose|furn|dim|text|tag|cua|door|noi.?that/i.test(ly)) continue
+    const ly = (v.classes[v.cls[i]]?.layer ?? '').replace(/^.*\$/, ''); if (/loose|furn|dim|text|tag|cua|door|noi.?that|net.?thay|i_thay/i.test(ly) || v.classes[v.cls[i]]?.dash) continue
     const x0 = v.segs[i * 4] * m, y0 = v.segs[i * 4 + 1] * m, x1 = v.segs[i * 4 + 2] * m, y1 = v.segs[i * 4 + 3] * m
     if (Math.abs(y1 - y0) < 0.004 && Math.abs(x1 - x0) >= 0.03) H.push({ c: (y0 + y1) / 2, a: Math.min(x0, x1), b: Math.max(x0, x1) })
     else if (Math.abs(x1 - x0) < 0.004 && Math.abs(y1 - y0) >= 0.03) V.push({ c: (x0 + x1) / 2, a: Math.min(y0, y1), b: Math.max(y0, y1) })
