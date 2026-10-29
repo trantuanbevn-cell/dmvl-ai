@@ -11,7 +11,7 @@ export type LayerRow = { layer: string; segs: number; fills: number; role: Role 
 
 const SKIP = /equip|noithat|furn|text|note|dim|gutter|interior|hood|pl_point|balloon|general|淘宝/i
 const WALL = /ktv-kt-tuong|k-wall|be ?tong|1-tuong|column|ktv-kt-hatch|1-hatch|lift|gsa03_net thay|gsa15_net manh|(^|[^a-z])tuong|tường|a-wall/i
-const DOOR = /door|cua di|cửa đi|9-door/i
+const DOOR = /door|cua di|cửa đi|9-door|(^|[-_ ])cua($|[-_ ])/i
 const ARC = /net ?khuat|netkhuat|net ?manh|net ?thay|nét khuất/i
 
 /** PDF không chia layer (mọi nét cùng layer rỗng): đặt tên theo bề dày nét / vùng tô để vẫn chọn được vai trò từng loại nét */
@@ -163,6 +163,11 @@ export async function readPlan(v: VecPage, roles: Record<string, Role>, den: num
     closures.push([A[0] / ppp, A[1] / ppp, B[0] / ppp, B[1] / ppp])
   }
   say(`Ô cửa không cung đóng bằng nét: ${closures.length}; cụm chưa rõ: ${unresolved.length}`)
+  // 5b) vật thể nhận từ khối DXF: ô cửa (bản lề → bản lề / đầu cánh) đóng bằng nét mỏng; vách kính khép phòng như tường mỏng
+  for (const o of v.objs ?? []) {
+    if ((o.kind === 'door' || o.kind === 'double') && o.H1 && o.H2) { cv.line(w2, px(o.H1), px(o.H2), new cv.Scalar(255), thin); closures.push([o.H1[0], o.H1[1], o.H2[0], o.H2[1]]) }
+    else if (o.kind === 'glass' || o.kind === 'window' || o.kind === 'slide') { const c = Math.cos(o.rot), s2 = Math.sin(o.rot), h = o.w / 2; cv.line(w2, px([o.cx - c * h, o.cy - s2 * h]), px([o.cx + c * h, o.cy + s2 * h]), new cv.Scalar(255), thin) }
+  }
   // 6) không gian = vùng trống kín; bỏ vùng ngoài toà nhà (chạm khung bao tường)
   const free = new cv.Mat(); cv.bitwise_not(w2, free)
   const lm = new cv.Mat(), st = new cv.Mat(), ce = new cv.Mat(); const nn = cv.connectedComponentsWithStats(free, lm, st, ce, 4, cv.CV_32S)

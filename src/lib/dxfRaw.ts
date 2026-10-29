@@ -120,7 +120,7 @@ export function rawExtras(L: string[]): RawExtras {
         if (cc === 8) e.layer = vv; else if (cc === 1) e.text = vv; else if (cc === 10) e.startPoint.x = +vv; else if (cc === 20) e.startPoint.y = +vv
         else if (cc === 11) e.endPoint = { x: +vv, y: 0 }; else if (cc === 21 && e.endPoint) e.endPoint.y = +vv
         else if (cc === 40) e.textHeight = +vv; else if (cc === 50) e.rotation = +vv; else if (cc === 70) flags = +vv; else if (cc === 72) e.halign = +vv; else if (cc === 74) e.valign = +vv
-        else if (cc === 230) e.negZ = +vv < -0.5; else if (cc === 67) e.inPaperSpace = +vv === 1; else if (cc === 62) e.colorIndex = +vv }
+        else if (cc === 60) flags |= +vv === 1 ? 1 : 0; else if (cc === 230) e.negZ = +vv < -0.5; else if (cc === 67) e.inPaperSpace = +vv === 1; else if (cc === 62) e.colorIndex = +vv }
       if (!(flags & 1) && e.text.trim()) push(e)   // thuộc tính ẩn (invisible) → bỏ
       continue
     }
@@ -138,12 +138,13 @@ export function rawExtras(L: string[]): RawExtras {
     const verts: { p: Pt; m: Pt; prm: number[] }[] = []
     let cur: { p: Pt; m: Pt; prm: number[] } | null = null, inPrm = false
     for (let j = i + 2; j + 1 < L.length; j += 2) { const cc = +L[j], vv = L[j + 1].trim(); if (cc === 0) break
+      if (cc === 60 && +vv === 1) { layer = '\u0000hidden'; break }
       if (cc === 8) layer = vv; else if (cc === 71) flags = +vv; else if (cc === 67) paper = +vv === 1; else if (cc === 62) color = +vv
       else if (cc === 11) { cur = { p: [+vv, 0], m: [0, 0], prm: [] }; verts.push(cur); inPrm = false } else if (cc === 21 && cur) cur.p[1] = +vv
       else if (cc === 13 && cur) cur.m[0] = +vv; else if (cc === 23 && cur) cur.m[1] = +vv
       else if (cc === 74 && cur) inPrm = true   // bắt đầu tham số một nét: tham số đầu = khoảng lệch dọc miter
       else if (cc === 41 && cur && inPrm) { cur.prm.push(+vv); inPrm = false } }
-    if (verts.length < 2) continue
+    if (verts.length < 2 || layer === '\u0000hidden') continue
     const n = Math.min(...verts.map(q => q.prm.length)); if (!n) continue
     const closed = !!(flags & 2)
     const line = (k: number): Pt[] => verts.map(q => [q.p[0] + q.m[0] * q.prm[k], q.p[1] + q.m[1] * q.prm[k]] as Pt)

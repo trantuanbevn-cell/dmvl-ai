@@ -9,7 +9,7 @@ const OPS = pdfjs.OPS as Record<string, number>
 export type VecClass = { key: string; layer: string; lw: number; fill: boolean; len: number; n: number }
 export type VecText = { t: string; x: number; y: number; h: number; rot?: number; ly?: string } // pt, gốc trên-trái; rot: độ (theo chiều kim đồng hồ)
 /** một đoạn vẽ liên tiếp cùng kiểu (giữ nguyên thứ tự vẽ của PDF) – để dựng lại mặt bằng dạng vector */
-export type DrawRun = { cls: number; sc?: string; fc?: string; lw: number; d: string; eo?: boolean; hp?: boolean; rl?: 'wall' | 'col' }
+export type DrawRun = { cls: number; sc?: string; fc?: string; lw: number; d: string; eo?: boolean; hp?: boolean; rl?: 'wall' | 'col'; /** mảng tường chắc chắn (đảo của hatch đặc lớn ở mặt bằng) */ sure?: boolean }
 export type VecPage = {
   w: number; h: number // pt
   segs: Float32Array; cls: Uint16Array // x0,y0,x1,y1 (pt, y hướng xuống) + chỉ số lớp
@@ -19,6 +19,8 @@ export type VecPage = {
   draw?: DrawRun[]
   /** đồ nội thất rời nhận từ DXF (pt, y xuống): tâm, kích thước theo 2 trục, góc xoay (rad) */
   furn?: { name: string; layer: string; cx: number; cy: number; w: number; d: number; rot: number; src: 'block' | 'loose' }[]
+  /** vật thể nhận từ khối DXF (pt, y xuống): cửa – H1/H2 hai đầu ô cửa (bản lề), O đầu cánh khi mở; vách/thang – hộp bao xoay */
+  objs?: { kind: string; name: string; layer: string; why: string; cx: number; cy: number; w: number; d: number; rot: number; t?: number; H1?: [number, number]; H2?: [number, number]; O?: [number, number] }[]
 }
 
 type M = [number, number, number, number, number, number]

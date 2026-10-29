@@ -61,12 +61,16 @@ export function modelFromVec(v: VecPage, den: number): Model {
       if (depth[i] % 2) return
       const holes = loops.filter((h, j) => depth[j] === depth[i] + 1 && inside(h[0], l))
       const role = r.rl === 'col' ? 'col' : 'wall'
-      if (role === 'wall') { // hatch nội thất / thiết bị (ghế, sofa, bàn, bồn cầu…) KHÔNG phải tường: chuyển thành đồ rời, không đùn cao bằng tường
+      if (role === 'wall') { // mảng đặc quá dày (bề dày trung bình 2A/P > 0,6 m, rộng > 1,5 m²) = ký hiệu (ô thông tầng, mảng tô trên thang), không phải tường
+        const per = (q: Pt[]) => q.reduce((n, a, k) => n + Math.hypot(q[(k + 1) % q.length][0] - a[0], q[(k + 1) % q.length][1] - a[1]), 0)
+        const Ae = Math.abs(area(l)) - holes.reduce((n, h) => n + Math.abs(area(h)), 0), P = per(l) + holes.reduce((n, h) => n + per(h), 0)
+        if (Ae > 1.5 && (2 * Ae) / Math.max(P, 1e-6) > 0.6) return }   // tam giác đặc lớn (ký hiệu cắt thang / ô thông tầng) – không phải tường
+      if (role === 'wall' && !r.sure) { // hatch nội thất / thiết bị (ghế, sofa, bàn, bồn cầu…) KHÔNG phải tường: chuyển thành đồ rời, không đùn cao bằng tường
         const o = obb(l), thin = Math.min(o.w, o.d) < 0.32
         if (l.length <= 4 && Math.abs(area(l)) / Math.max(1e-6, o.w * o.d) < 0.7) return   // tam giác chéo: ký hiệu, bỏ
         if (FURN_LAYER.test(ly) || (!wallish && !thin && Math.max(o.w, o.d) <= 3.5)) { hatchFurn.push({ ...o, layer: ly }); return }
       }
-      if (role === 'wall') { // mảng tô đặc chéo / tam giác (ký hiệu thang, hatch trang trí) không phải tường: tường luôn mảnh (kể cả chữ L/U, vòng kín có lỗ)
+      if (role === 'wall' && !r.sure) { // mảng tô đặc chéo / tam giác (ký hiệu thang, hatch trang trí) không phải tường: tường luôn mảnh (kể cả chữ L/U, vòng kín có lỗ)
         const o = obb(l), perim = (q: Pt[]) => q.reduce((n, a, k) => n + Math.hypot(q[(k + 1) % q.length][0] - a[0], q[(k + 1) % q.length][1] - a[1]), 0)
         const A = Math.abs(area(l)), Ah = holes.reduce((n, h) => n + Math.abs(area(h)), 0), Ae = A - Ah, P = perim(l) + holes.reduce((n, h) => n + perim(h), 0)
         if ((2 * Ae) / Math.max(P, 1e-6) > 0.5 && A / Math.max(1e-6, o.w * o.d) < 0.7 && Ae > 1) return
@@ -74,10 +78,32 @@ export function modelFromVec(v: VecPage, den: number): Model {
       walls.push({ id: uid('w'), role, kind: role === 'col' ? 'concrete' : 'brick', shape: { type: 'poly', rings: [l, ...holes] } })
     })
   }
-  const glass = detectGlass(v, m); walls.push(...glass)
-  const doors = detectDoors(v.arcs ?? [], m, walls)
+  // VẬT THỂ NHẬN TỪ KHỐI (tên + layer + hình học) – chắc chắn hơn dò nét: ưu tiên, bỏ kết quả dò nét trùng chỗ
+  const objs = (v.objs ?? []).map(o => ({ ...o, cx: o.cx * m, cy: o.cy * m, w: o.w * m, d: o.d * m, t: o.t !== undefined ? o.t * m : undefined, H1: o.H1 ? [o.H1[0] * m, o.H1[1] * m] as Pt : undefined, H2: o.H2 ? [o.H2[0] * m, o.H2[1] * m] as Pt : undefined, O: o.O ? [o.O[0] * m, o.O[1] * m] as Pt : undefined }))
+  const objGlass: Wall[] = objs.filter(o => o.kind === 'glass' || o.kind === 'window').map(o => { const c = Math.cos(o.rot), s2 = Math.sin(o.rot), h = o.w / 2
+    return { id: uid('w'), role: 'wall' as const, kind: (o.t ?? 0.02) >= 0.04 ? 'curtain' : 'glass', name: o.kind === 'window' ? 'Cửa sổ' : 'Vách kính', panel: 1.2, auto: true, shape: { type: 'seg' as const, a: [o.cx - c * h, o.cy - s2 * h] as Pt, b: [o.cx + c * h, o.cy + s2 * h] as Pt, t: Math.max(0.012, Math.min(0.3, o.t ?? 0.02)) } } })
+  const nearObjGlass = (w: Wall) => { if (w.shape.type !== 'seg') return false; const mx = (w.shape.a[0] + w.shape.b[0]) / 2, my = (w.shape.a[1] + w.shape.b[1]) / 2
+    return objGlass.some(g => { if (g.shape.type !== 'seg') return false; const { a, b } = g.shape, dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((mx - a[0]) * dx + (my - a[1]) * dy) / L2)); return Math.hypot(mx - (a[0] + t * dx), my - (a[1] + t * dy)) < 0.2 }) }
+  const glass = [...objGlass, ...detectGlass(v, m).filter(g => !nearObjGlass(g))]; walls.push(...glass)
+  const sideOf = (H: Pt, C: Pt, O: Pt) => { const ux = C[0] - H[0], uy = C[1] - H[1]; return ((O[0] - H[0]) * -uy + (O[1] - H[1]) * ux) > 0 ? 1 : -1 }
+  const objDoors: Door[] = objs.filter(o => (o.kind === 'door' || o.kind === 'double') && o.H1 && o.H2 && o.O).map(o => {
+    const H = o.H1!, C = o.H2!, w = Math.hypot(C[0] - H[0], C[1] - H[1]), kind = o.kind as DoorKind
+    const lib = kind === 'double' ? (w < 1.4 ? 'dr-dbl12' : w < 1.7 ? 'dr-dbl16' : 'dr-dbl18') : (w < 0.85 ? 'dr-flush08' : 'dr-flush09')
+    return { id: uid('d'), kind, lib, name: o.name.slice(0, 40), x: (H[0] + C[0]) / 2, y: (H[1] + C[1]) / 2, ang: Math.atan2(C[1] - H[1], C[0] - H[0]), w: Math.round(w * 100) / 100, h: 2.1, sill: 0, flip: sideOf(H, C, o.O!) < 0, auto: true, t: 0.2 }
+  })
+  const doors = [...objDoors, ...detectDoors(v.arcs ?? [], m, walls).filter(d => !objDoors.some(o => Math.hypot(o.x - d.x, o.y - d.y) < Math.max(0.6, o.w * 0.6)))]
   for (let i = 0; i < doors.length; i++) doors[i] = centerDoor(walls, doors[i])
   const vert = detectVertical(v, m)
+  for (const o of objs) if (o.kind === 'spiral' || o.kind === 'lift' || o.kind === 'stair') {
+    for (let i = vert.length - 1; i >= 0; i--) if (Math.hypot(vert[i].x - o.cx, vert[i].y - o.cy) < Math.max(o.w, o.d) * 0.6) vert.splice(i, 1)
+    vert.push({ id: uid('f'), kind: o.kind, name: o.name.slice(0, 40), x: o.cx, y: o.cy, w: o.w, d: o.d, ang: o.rot, h: furnTypeOf(o.kind).h, auto: true }) }
+  // BẬC ĐẦU TIÊN của thang bộ: bản vẽ thường đánh số bậc (1, 2 … 18) – bậc "1" là bậc đầu (thấp nhất). Mô hình 3D dựng thấp ở phía −w → xoay 180° nếu số 1 nằm phía +w
+  { const nums = (v.texts ?? []).map(t => ({ n: /^\s*(\d{1,2})\s*$/.exec(t.t)?.[1], x: t.x * m, y: t.y * m })).filter(t => t.n).map(t => ({ n: +t.n!, x: t.x, y: t.y }))
+    for (const f of vert) { if (f.kind !== 'stair' || nums.length < 2) continue
+      const c = Math.cos(f.ang), s2 = Math.sin(f.ang), loc = nums.map(t => ({ n: t.n, u: (t.x - f.x) * c + (t.y - f.y) * s2, v: -(t.x - f.x) * s2 + (t.y - f.y) * c })).filter(t => Math.abs(t.u) <= f.w / 2 + 0.4 && Math.abs(t.v) <= f.d / 2 + 0.4)
+      if (loc.length < 2) continue
+      const lo = loc.reduce((a, b) => (b.n < a.n ? b : a)), hi = loc.reduce((a, b) => (b.n > a.n ? b : a))
+      if (lo.n !== hi.n && lo.u > hi.u) f.ang += Math.PI } }
   // vách ngăn mỏng (WC…) vẽ bằng hai nét song song, không có hatch → thêm thành tường mỏng, cao 1.9 m
   { const rings = walls.filter(k => k.role !== 'col').map(k => ({ rs: footprint(k), bb: bbox(footprint(k)) }))
     const covered = (x: number, y: number) => rings.some(k => x >= k.bb.x0 - 0.02 && x <= k.bb.x1 + 0.02 && y >= k.bb.y0 - 0.02 && y <= k.bb.y1 + 0.02 && k.rs.reduce((n, r) => n + (inside([x, y], r) ? 1 : 0), 0) % 2 === 1)
@@ -99,7 +125,7 @@ export function modelFromVec(v: VecPage, den: number): Model {
   for (const o of hatchFurn) { if (furn.some(f => inRect(f, o.cx, o.cy))) continue
     const kind = classifyFurn('', o.layer, o.w, o.d); furn.push({ id: uid('f'), kind, x: o.cx, y: o.cy, w: o.w, d: o.d, ang: o.rot, h: furnTypeOf(kind).h, auto: true }) }
   for (let i = furn.length - 1; i >= 0; i--) { const a = furn[i]; if (furn.some((b, j) => j < i && Math.hypot(a.x - b.x, a.y - b.y) < 0.08 && Math.abs(Math.max(a.w, a.d) - Math.max(b.w, b.d)) < 0.1 && Math.abs(Math.min(a.w, a.d) - Math.min(b.w, b.d)) < 0.1)) furn.splice(i, 1) } // bỏ món trùng hệt
-  const labels: Label[] = (v.texts ?? []).slice(0, 600).map(t => ({ t: t.t.replace(/\s+/g, ' ').trim(), x: t.x * m, y: t.y * m, h: t.h * m, pri: /ten.?phong|room|space|name/i.test(t.ly ?? '') })).filter(t => t.t && t.t.length <= 60)
+  const labels: Label[] = (v.texts ?? []).filter(t => !/^\s*\d{1,2}\s*$/.test(t.t)).slice(0, 600).map(t => ({ t: t.t.replace(/\s+/g, ' ').trim(), x: t.x * m, y: t.y * m, h: t.h * m, pri: /ten.?phong|room|space|name/i.test(t.ly ?? '') })).filter(t => t.t && t.t.length <= 60)
   return { v: 1, walls, doors, furn, labels, dims: [], rooms: [], hWall: 3.3, hCol: 3.3, mPt: m, w: v.w * m, h: v.h * m }
 }
 
