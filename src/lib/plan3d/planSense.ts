@@ -90,8 +90,10 @@ export function senseWalls(v: VecPage, m: number): Sense {
       for (let i = 0; i < pr.length; i++) {
         const P1 = pr[i]; if (!own.has(P1.s)) continue
         for (let j = i + 1; j < pr.length; j++) {
-          const P2 = pr[j], d = P2.o - P1.o; if (d > 0.45) break; if (d < 0.008) continue
-          const u0 = Math.max(P1.u0, P2.u0), u1 = Math.min(P1.u1, P2.u1), ov = u1 - u0; if (ov < 0.3 || ov < 0.5 * Math.min(P1.u1 - P1.u0, P2.u1 - P2.u0)) continue
+          const P2 = pr[j], d = P2.o - P1.o; if (d > 1.0) break; if (d < 0.008) continue
+          // 45 cm–1 m: tường bê tông dày (tường vây tầng hầm, vách lõi) – chỉ nhận khi cả hai nét đều đậm (nét cắt) và chạy dài ≥ 2 m (không nhầm khe/hộp kỹ thuật)
+          if (d > 0.45 && !(heavy(P1.s.pen) && heavy(P2.s.pen))) continue
+          const u0 = Math.max(P1.u0, P2.u0), u1 = Math.min(P1.u1, P2.u1), ov = u1 - u0; if (ov < 0.3 || ov < 0.5 * Math.min(P1.u1 - P1.u0, P2.u1 - P2.u0) || (d > 0.45 && ov < 2)) continue
           // không có nét song song nào nằm giữa (bậc thang, mép bàn… có nhiều nét cách đều nhau)
           let between = false; for (let q = i + 1; q < j; q++) { const P3 = pr[q]; if (P3.o - P1.o > 0.004 && P2.o - P3.o > 0.004 && Math.min(u1, P3.u1) - Math.max(u0, P3.u0) > 0.3 * ov) { between = true; break } }
           if (between) continue

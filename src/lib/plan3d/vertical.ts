@@ -64,6 +64,12 @@ export function detectVertical(v: VecPage, m: number): Furn[] {
       const da = Math.abs(t.a - s.a); if (Math.min(da, Math.PI - da) < 0.35 || taken('lift', mx, my, 0.8)) continue
       const xs = [s.x0, s.x1, t.x0, t.x1], ys = [s.y0, s.y1, t.y0, t.y1], w = Math.max(...xs) - Math.min(...xs), d = Math.max(...ys) - Math.min(...ys)
       if (w < 1.1 || d < 1.1 || w > 3.6 || d > 3.6) continue
+      // đối chiếu: chữ X của thang máy nằm trong một hộp (vách giếng thang) – ký hiệu la bàn (X trong vòng tròn) thì không có cạnh hộp
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys)
+      const side = (horiz: boolean, at: number) => baseAll.some(q => { if (q === s || q === t) return false
+        if (horiz) { if (Math.abs(q.y0 - at) > 0.12 || Math.abs(q.y1 - at) > 0.12) return false; return Math.min(Math.max(q.x0, q.x1), x1) - Math.max(Math.min(q.x0, q.x1), x0) > w * 0.6 }
+        if (Math.abs(q.x0 - at) > 0.12 || Math.abs(q.x1 - at) > 0.12) return false; return Math.min(Math.max(q.y0, q.y1), y1) - Math.max(Math.min(q.y0, q.y1), y0) > d * 0.6 })
+      if ([side(true, y0), side(true, y1), side(false, x0), side(false, x1)].filter(Boolean).length < 3) continue
       out.push(mk('lift', mx, my, w, d, 0, 'Thang máy')) } }
 
   // ---- thang xoắn: nhiều nét toả tia, đường kéo dài của chúng cắt nhau ở một tâm
