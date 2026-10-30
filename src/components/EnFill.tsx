@@ -16,7 +16,7 @@ export default function EnFill({ d, lang }: { d: ProjectData; lang: Lang }) {
   const tried = useRef('')
   const [times, setTimes] = useState<ChangeTimes | undefined>()
   const pid = d.project?.id
-  useEffect(() => { if (lang !== 'vn' && canEdit && pid) loadChangeTimes(pid).then(setTimes).catch(() => {}) }, [pid, lang, canEdit, d.entries.length])
+  useEffect(() => { if (canEdit && pid) loadChangeTimes(pid).then(setTimes).catch(() => {}) }, [pid, canEdit, d.entries.length])
   const all = useMemo(() => (canEdit ? planFill(d, false, times) : []), [d.entries, d.rooms, canEdit, times])
   // tự động (kể cả khi đang xem tiếng Việt): ô EN còn TRỐNG + ô EN do phần mềm dịch mà tiếng Việt vừa được sửa (EN chưa ai sửa tay)
   // → sửa tiếng Việt xong là tiếng Anh tự dịch lại theo, không phải nhớ bấm “Dịch lại”
@@ -31,7 +31,7 @@ export default function EnFill({ d, lang }: { d: ProjectData; lang: Lang }) {
     ;(async () => {
       setBusy(true); setErr('')
       try {
-        const { done, failed } = await syncEnglish(d, setMsg, false, lang === 'vn' ? 'safe' : true)
+        const { done, failed } = await syncEnglish(d, setMsg, false, lang === 'vn' ? 'safe' : true, times)
         if (failed > 0) setErr(`AI chưa dịch được ${failed} ô (có thể do hạn mức miễn phí) – bấm Thử lại sau ít phút`)
         if (done) toast(`Đã đồng bộ ${done} ô tiếng Anh theo tiếng Việt`, 'ok')
         await d.reload()

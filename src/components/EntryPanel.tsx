@@ -1,3 +1,4 @@
+import { syncCellNow } from '../lib/translateEn'
 import { bulletOf } from '../lib/spell'
 import OpRuleBadge from './OpRuleBadge'
 import OpFlagBadge from './OpFlagBadge'
@@ -33,7 +34,10 @@ function Field({ e, k, label, area, onSaved, type = 'text', bad }: { e: Entry; k
     if (String(old) === v) return
     const val = type === 'number' ? (v === '' ? null : Number(v)) : v || null
     const error = await saveEntry(e, { [k]: val })
-    if (error) alert(error.message); else onSaved()
+    if (error) { alert(error.message); return }
+    onSaved()
+    // SONG NGỮ: sửa / xoá tiếng Việt → tiếng Anh dịch lại / xoá theo ngay
+    if (String(k).endsWith('_vn') && String(k).replace(/_vn$/, '_en') in e) syncCellNow(e, String(k), val as string | null).then(onSaved).catch(err => alert('Chưa dịch được tiếng Anh: ' + String((err as Error).message ?? err)))
   }
   const focus = () => undefined
   const blur = () => undefined

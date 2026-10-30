@@ -1,5 +1,6 @@
 import { bulletOf } from '../lib/spell'
 import { useErrHl, HlBackdrop } from './ErrHighlight'
+import { syncCellNow } from '../lib/translateEn'
 import OpRuleBadge from './OpRuleBadge'
 import OpFlagBadge from './OpFlagBadge'
 import { syncLibrary } from '../lib/matLibrary'
@@ -47,11 +48,10 @@ function Ed({ e, k, area, ph, num, w, miss }: { e: Entry; k: K; area?: boolean; 
     if (String((e[k] as any) ?? '') === v) return
     const val = num ? (v === '' ? null : Number(v)) : v || null
     const patch: Record<string, unknown> = { [k]: val }
-    // xoá hết ô tiếng Việt → bản tiếng Anh do phần mềm dịch từ nó cũng bỏ theo (không để sót bản dịch “mồ côi”); EN người dùng tự gõ thì giữ
-    const ef = String(k).endsWith('_vn') ? String(k).replace(/_vn$/, '_en') : ''
-    if (ef && !val && (e as any)[ef]) { const src = (e.en_src as any)?.[ef]; if (src && src.en === (e as any)[ef]) { patch[ef] = null; const ns = { ...(e.en_src as any) }; delete ns[ef]; patch.en_src = ns } }
     const error = await saveEntry(e, patch)
-    if (error) alert(error.message)
+    if (error) { alert(error.message); return }
+    // SONG NGỮ: sửa / xoá tiếng Việt → tiếng Anh dịch lại / xoá theo ngay
+    if (String(k).endsWith('_vn') && String(k).replace(/_vn$/, '_en') in e) syncCellNow(e, String(k), val as string | null).catch(err => toast('Chưa dịch được tiếng Anh: ' + String((err as Error).message ?? err)))
   }
   const dl = String(k).endsWith('_vn') ? 'vn' : String(k).endsWith('_en') ? 'en' : ['product_code', 'color_hex', 'product_url'].includes(String(k)) || num ? 'none' : 'name'
   const common = { value: v, placeholder: ph, 'data-lang': dl, 'data-bullet': bulletOf(String(k)), readOnly: !canEdit, className: miss ? 'miss' : undefined, title: miss ? 'Thiếu thông tin – cần điền' : undefined, onChange: (x: any) => setV(x.target.value), onBlur: save, onClick: (x: any) => x.stopPropagation(), style: w ? { width: w } : undefined }

@@ -8,8 +8,10 @@ import { translateViText } from './viEn'
 import type { ProjectData } from './useProject'
 import type { EnSrc } from './types'
 
-export type TrItem = { key: string; kind: 'entry' | 'room'; id: string; field: string; vi: string; draft: string; ok: boolean; label: string; prevEn?: string; src?: EnSrc | null; /** ô EN do phần mềm dịch, chưa ai sửa tay, nay tiếng Việt đổi → dịch lại tự động được (không mất công sửa của ai) */ safe?: boolean }
+export type TrItem = { key: string; kind: 'entry' | 'room'; id: string; field: string; vi: string; draft: string; ok: boolean; label: string; prevEn?: string; src?: EnSrc | null; /** ô EN do phần mềm dịch, chưa ai sửa tay, nay tiếng Việt đổi → dịch lại tự động được (không mất công sửa của ai) */ safe?: boolean; /** tiếng Việt đã bị xoá → xoá ô EN theo */ clear?: boolean }
 const norm = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim()
+/** So nội dung tiếng Việt bỏ qua cách trình bày (gạch đầu dòng, khoảng trắng) – chỉ đổi trình bày thì không phải dịch lại */
+const same = (a: unknown, b: unknown) => { const f = (v: unknown) => String(v ?? '').split('\n').map(l => l.replace(/^\s*(?:[-–—•*·+]\s*)/, '').trim()).filter(Boolean).join(' ').replace(/\s+/g, ' ').toLowerCase(); return f(a) === f(b) }
 const EF: [string, string, string][] = [['name_vn', 'name_en', 'tên'], ['part_vn', 'part_en', 'bộ phận'], ['material_vn', 'material_en', 'vật liệu'], ['desc_vn', 'desc_en', 'thông số'], ['perf_vn', 'perf_en', 'tính chất'], ['note_vn', 'note_en', 'ghi chú'], ['loc_note_vn', 'loc_note_en', 'ghi chú vị trí']]
 /** Số từ tiếng Việt (có dấu) lẫn trong một ô tiếng Anh */
 const viWords = (v: unknown) => (String(v ?? '').match(/[\p{L}]*[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ][\p{L}]*/giu) ?? []).length
@@ -36,16 +38,23 @@ export function planFill(d: ProjectData, force = false, times?: ChangeTimes): Tr
     const r = translateViText(s)
     out.push({ key: `${row.id}:${ef}:${norm(s)}`, kind, id: row.id, field: ef, vi: s, draft: r.en, ok: !forceAI && r.ok && !!r.en, label, prevEn, src: row.en_src ?? null, safe })
   }
+  // NGUYÊN TẮC SONG NGỮ: tiếng Việt là bản gốc, tiếng Anh là bản dịch đi kèm – VN sửa thì EN dịch lại, VN xoá thì EN xoá theo, tức thì.
   const check = (kind: 'entry' | 'room', row: any, label: string, vf: string, ef: string) => {
-    if (blank(row[vf])) { if (viWords(row[ef]) >= 2) add(kind, row, label, ef, row[ef], row[ef], true); return }   // không có bản Việt: dịch chính ô EN đang lẫn tiếng Việt
-    if (blank(row[ef])) return add(kind, row, label, ef, row[vf])
-    // force: tiếng Việt là bản gốc – mọi ô EN không phải do bước dịch này tạo ra (AI phân tích sinh riêng, nhập từ thư viện, sửa tay…) đều dịch lại theo VN
-    if (force) { const sc = (row.en_src as EnSrc | null)?.[ef]; if (!(sc && sc.en === row[ef] && norm(sc.vi) === norm(row[vf]))) return add(kind, row, label, ef, row[vf], row[ef], true) }
-    const src = (row.en_src as EnSrc | null)?.[ef]
-    if (src && src.en === row[ef] && norm(src.vi) !== norm(row[vf])) return add(kind, row, label, ef, row[vf], row[ef], false, true)
-    // đối chiếu lịch sử sửa: tiếng Việt được sửa SAU lần tiếng Anh được ghi gần nhất → đã đổi, cần dịch lại
-    const tt = times?.get(row.id), tv = tt?.[vf], te = tt?.[ef]
-    if (tv && (!te || tv > te)) return add(kind, row, label, ef, row[vf], row[ef], true)
+    const src = (row.en_src as EnSrc | null)?.[ef], tt = times?.get(row.id), tv = tt?.[vf], te = tt?.[ef]
+    if (blank(row[vf])) {
+      if (blank(row[ef])) return
+      // tiếng Việt đã có rồi bị xoá (có dấu vết dịch, hoặc lịch sử cho thấy VN bị sửa sau lần EN được ghi) → xoá EN theo
+      if (src || (tv && (!te || tv > te))) { out.push({ key: `${row.id}:${ef}:clear`, kind, id: row.id, field: ef, vi: '', draft: '', ok: true, label, prevEn: row[ef], src: row.en_src ?? null, safe: true, clear: true }); return }
+      if (viWords(row[ef]) >= 2) add(kind, row, label, ef, row[ef], row[ef], true)   // không có bản Việt: ô EN đang lẫn tiếng Việt → dịch chính nó
+      return   // EN có từ trước mà chưa từng có VN (nhập / AI sinh riêng): để người dùng quyết (cảnh báo ở ô + phần kiểm lỗi)
+    }
+    if (blank(row[ef])) return add(kind, row, label, ef, row[vf], undefined, false, true)
+    // force: mọi ô EN không phải do bước dịch này tạo ra đều dịch lại theo VN
+    if (force) { if (!(src && src.en === row[ef] && norm(src.vi) === norm(row[vf]))) return add(kind, row, label, ef, row[vf], row[ef], true) }
+    // tiếng Việt khác với bản đã dùng để dịch → dịch lại (kể cả EN từng được sửa tay: VN đổi thì EN phải đổi theo)
+    if (src && !same(src.vi, row[vf])) return add(kind, row, label, ef, row[vf], row[ef], false, true)
+    // chưa có dấu vết dịch: lịch sử cho thấy VN được sửa SAU lần EN được ghi gần nhất → dịch lại
+    if (!src && tv && (!te || tv > te)) return add(kind, row, label, ef, row[vf], row[ef], true, true)
     // Ô tiếng Anh đang lẫn chữ tiếng Việt (chép nguyên từ bản Việt / trang hãng, chưa dịch) → dịch lại bằng AI
     if (viWords(row[ef]) >= 2) add(kind, row, label, ef, row[vf], row[ef], true)
   }
@@ -55,9 +64,13 @@ export function planFill(d: ProjectData, force = false, times?: ChangeTimes): Tr
 }
 
 /** Ghi bản dịch vào ô EN – chỉ khi ô đó vẫn đang trống trong cơ sở dữ liệu */
-async function put(it: TrItem, en: string) {
+async function put(it: TrItem, en: string | null) {
   const table = it.kind === 'room' ? 'rooms' : 'entries'
-  const patch = { [it.field]: en, en_src: { ...(it.src ?? {}), [it.field]: { vi: it.vi, en } } }
+  // lấy dấu vết dịch MỚI NHẤT (nhiều ô của cùng một dòng có thể vừa được dịch) rồi gộp, không đè mất của ô khác
+  const { data: cur } = await supabase.from(table).select('en_src').eq('id', it.id).maybeSingle()
+  const ens: Record<string, unknown> = { ...((cur as any)?.en_src ?? it.src ?? {}) }
+  if (en == null) delete ens[it.field]; else ens[it.field] = { vi: it.vi, en }
+  const patch = { [it.field]: en, en_src: ens }
   let q = supabase.from(table).update(patch).eq('id', it.id)
   // chỉ ghi khi ô tiếng Anh vẫn đúng như lúc kiểm (trống, hoặc đúng bản tự dịch cũ) – tránh đè lên bản người khác vừa sửa
   q = it.prevEn != null ? q.eq(it.field, it.prevEn) : q.or(`${it.field}.is.null,${it.field}.eq.`)
@@ -113,9 +126,27 @@ async function callTranslate(context: string | undefined, items: { id: string; v
 /** Đồng bộ toàn bộ tiếng Anh với tiếng Việt: dịch ô trống + dịch lại ô tự dịch cũ mà tiếng Việt đã đổi. Dùng khi chuyển EN/song ngữ và trước khi xuất file. */
 export async function syncEnglish(d: ProjectData, log: (s: string) => void = () => {}, force = false, onlyBlank: boolean | 'safe' = false, times?: ChangeTimes): Promise<{ done: number; failed: number }> {
   // onlyBlank: chế độ tự động – ô EN trống + ô EN do phần mềm dịch mà tiếng Việt đã đổi sau đó (chưa ai sửa tay)
-  const plan = planFill(d, force, times).filter(i => !onlyBlank || i.safe || (onlyBlank === true && i.prevEn == null))   // 'safe': chỉ ô đã dịch mà VN vừa đổi; if (!plan.length) return { done: 0, failed: 0 }
+  const all = planFill(d, force, times).filter(i => !onlyBlank || i.safe || (onlyBlank === true && i.prevEn == null))   // 'safe': theo đúng VN (VN đổi / xoá / EN trống)
+  if (!all.length) return { done: 0, failed: 0 }
+  let n0 = 0
+  if (all.some(i => i.clear)) await autoBackup(d.project ?? { id: d.entries[0]?.project_id }, 'Tự động trước khi xoá ô EN theo VN', { minGapMs: 30 * 60_000 })
+  for (const it of all.filter(i => i.clear)) { await put(it, null); n0++ }   // VN đã xoá → xoá EN
+  const plan = all.filter(i => !i.clear)
   const n1 = await fillByDictionary(d, plan)
   const left = plan.filter(i => !i.ok)
   const n2 = left.length ? await fillByAI(d, left, log) : 0
-  return { done: n1 + n2, failed: left.length - n2 }
+  return { done: n0 + n1 + n2, failed: left.length - n2 }
+}
+
+/** Đồng bộ NGAY một ô vừa sửa tiếng Việt (gọi khi rời ô): VN trống → xoá EN; VN có → dịch lại EN (từ điển, phần khó thì AI) */
+export async function syncCellNow(row: any, vf: string, vi: string | null, kind: 'entry' | 'room' = 'entry', projectName?: string): Promise<void> {
+  const ef = vf.replace(/_vn$/, '_en'); if (ef === vf) return
+  const prevEn = row[ef] ?? null
+  if (blank(vi)) { if (!blank(prevEn)) await put({ key: '', kind, id: row.id, field: ef, vi: '', draft: '', ok: true, label: '', prevEn, src: row.en_src ?? null, clear: true }, null); return }
+  const s = String(vi).trim(), r = translateViText(s)
+  const it: TrItem = { key: '', kind, id: row.id, field: ef, vi: s, draft: r.en, ok: r.ok && !!r.en, label: '', prevEn: blank(prevEn) ? undefined : prevEn, src: row.en_src ?? null, safe: true }
+  await loadEnglish()
+  if (it.ok) { await put(it, polish(it.draft, ef, s)); return }
+  const res = await callTranslate(projectName ? `Dự án: ${projectName}` : undefined, [{ id: '0', kind: ef.replace('_en', ''), vi: s, draft: r.en && r.en !== s ? r.en : undefined }])
+  const en = res[0]?.en?.trim(); if (en) await put(it, polish(en, ef, s))
 }
