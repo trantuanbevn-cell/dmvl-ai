@@ -32,8 +32,11 @@ export function isRepeat(r: Sig & { status?: string }, n: Sig): boolean {
 const shownCode = (e: Entry, sym: string) => vlLines(e.product_code, sym).join('\n')
 /** Gợi ý AI cũ đã lỗi thời: báo ô mã vật liệu “lệch số” với ký hiệu bản vẽ, nhưng bảng đã tự đồng bộ số (mã cùng tiền tố luôn hiển thị theo ký hiệu) */
 export function staleFinding(f: Finding, d: ProjectData, sym = symbolMap(d.entries)): boolean {
-  if (f.field !== 'product_code' || f.status !== 'open') return false
+  if (f.status !== 'open') return false
   const e = d.entries.find(x => x.id === f.entry_id); if (!e) return false
+  // đoạn bị chỉ ra không còn trong ô (đã sửa tay / đã dịch lại sau lần AI soát) → gợi ý lỗi thời, ẩn đi
+  if (f.field && f.field !== 'product_code' && (FIELDS as readonly string[]).includes(f.field) && f.current_text && !String((e as any)[f.field] ?? '').includes(f.current_text)) return true
+  if (f.field !== 'product_code') return false
   const s = sym.get(e.id) ?? e.code, cur = String(f.current_text ?? '').trim()
   if (!cur) return false
   const shown = vlLines(e.product_code, s)

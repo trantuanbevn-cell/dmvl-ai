@@ -17,19 +17,21 @@ export default function EnFill({ d, lang }: { d: ProjectData; lang: Lang }) {
   const [times, setTimes] = useState<ChangeTimes | undefined>()
   const pid = d.project?.id
   useEffect(() => { if (lang !== 'vn' && canEdit && pid) loadChangeTimes(pid).then(setTimes).catch(() => {}) }, [pid, lang, canEdit, d.entries.length])
-  const all = useMemo(() => (lang === 'vn' ? [] : planFill(d, false, times)), [d.entries, d.rooms, lang, times])
-  const plan = useMemo(() => all.filter(i => i.prevEn == null), [all])   // tự động chỉ điền ô EN còn TRỐNG
-  const changed = useMemo(() => all.filter(i => i.prevEn != null), [all]) // ô VN đã đổi so với lần dịch trước (hoặc EN còn lẫn tiếng Việt) → chờ người dùng bấm
+  const all = useMemo(() => (canEdit ? planFill(d, false, times) : []), [d.entries, d.rooms, canEdit, times])
+  // tự động (kể cả khi đang xem tiếng Việt): ô EN còn TRỐNG + ô EN do phần mềm dịch mà tiếng Việt vừa được sửa (EN chưa ai sửa tay)
+  // → sửa tiếng Việt xong là tiếng Anh tự dịch lại theo, không phải nhớ bấm “Dịch lại”
+  const plan = useMemo(() => all.filter(i => i.prevEn == null ? lang !== 'vn' : i.safe), [all, lang])
+  const changed = useMemo(() => all.filter(i => i.prevEn != null && !i.safe), [all]) // ô VN đã đổi so với lần dịch trước (hoặc EN còn lẫn tiếng Việt) → chờ người dùng bấm
   const planSig = plan.map(i => i.key).join(',')
   useEffect(() => {
-    if (lang === 'vn' || !canEdit || !plan.length || busy) return
+    if (!canEdit || !plan.length || busy) return
     const sig = planSig + '#' + nonce
     if (tried.current === sig) return            // đã thử đúng bộ ô này (tránh lặp vô hạn khi lỗi)
     tried.current = sig
     ;(async () => {
       setBusy(true); setErr('')
       try {
-        const { done, failed } = await syncEnglish(d, setMsg, false, true)
+        const { done, failed } = await syncEnglish(d, setMsg, false, lang === 'vn' ? 'safe' : true)
         if (failed > 0) setErr(`AI chưa dịch được ${failed} ô (có thể do hạn mức miễn phí) – bấm Thử lại sau ít phút`)
         if (done) toast(`Đã đồng bộ ${done} ô tiếng Anh theo tiếng Việt`, 'ok')
         await d.reload()

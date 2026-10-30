@@ -8,7 +8,7 @@ import { translateViText } from './viEn'
 import type { ProjectData } from './useProject'
 import type { EnSrc } from './types'
 
-export type TrItem = { key: string; kind: 'entry' | 'room'; id: string; field: string; vi: string; draft: string; ok: boolean; label: string; prevEn?: string; src?: EnSrc | null }
+export type TrItem = { key: string; kind: 'entry' | 'room'; id: string; field: string; vi: string; draft: string; ok: boolean; label: string; prevEn?: string; src?: EnSrc | null; /** ô EN do phần mềm dịch, chưa ai sửa tay, nay tiếng Việt đổi → dịch lại tự động được (không mất công sửa của ai) */ safe?: boolean }
 const norm = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim()
 const EF: [string, string, string][] = [['name_vn', 'name_en', 'tên'], ['part_vn', 'part_en', 'bộ phận'], ['material_vn', 'material_en', 'vật liệu'], ['desc_vn', 'desc_en', 'thông số'], ['perf_vn', 'perf_en', 'tính chất'], ['note_vn', 'note_en', 'ghi chú'], ['loc_note_vn', 'loc_note_en', 'ghi chú vị trí']]
 /** Số từ tiếng Việt (có dấu) lẫn trong một ô tiếng Anh */
@@ -31,10 +31,10 @@ export async function loadChangeTimes(projectId: string): Promise<ChangeTimes> {
 }
 export function planFill(d: ProjectData, force = false, times?: ChangeTimes): TrItem[] {
   const out: TrItem[] = []
-  const add = (kind: 'entry' | 'room', row: any, label: string, ef: string, vi: unknown, prevEn?: string, forceAI = false) => {
+  const add = (kind: 'entry' | 'room', row: any, label: string, ef: string, vi: unknown, prevEn?: string, forceAI = false, safe = false) => {
     const s = String(vi ?? '').trim(); if (!s) return
     const r = translateViText(s)
-    out.push({ key: `${row.id}:${ef}:${norm(s)}`, kind, id: row.id, field: ef, vi: s, draft: r.en, ok: !forceAI && r.ok && !!r.en, label, prevEn, src: row.en_src ?? null })
+    out.push({ key: `${row.id}:${ef}:${norm(s)}`, kind, id: row.id, field: ef, vi: s, draft: r.en, ok: !forceAI && r.ok && !!r.en, label, prevEn, src: row.en_src ?? null, safe })
   }
   const check = (kind: 'entry' | 'room', row: any, label: string, vf: string, ef: string) => {
     if (blank(row[vf])) { if (viWords(row[ef]) >= 2) add(kind, row, label, ef, row[ef], row[ef], true); return }   // không có bản Việt: dịch chính ô EN đang lẫn tiếng Việt
@@ -42,7 +42,7 @@ export function planFill(d: ProjectData, force = false, times?: ChangeTimes): Tr
     // force: tiếng Việt là bản gốc – mọi ô EN không phải do bước dịch này tạo ra (AI phân tích sinh riêng, nhập từ thư viện, sửa tay…) đều dịch lại theo VN
     if (force) { const sc = (row.en_src as EnSrc | null)?.[ef]; if (!(sc && sc.en === row[ef] && norm(sc.vi) === norm(row[vf]))) return add(kind, row, label, ef, row[vf], row[ef], true) }
     const src = (row.en_src as EnSrc | null)?.[ef]
-    if (src && src.en === row[ef] && norm(src.vi) !== norm(row[vf])) return add(kind, row, label, ef, row[vf], row[ef])
+    if (src && src.en === row[ef] && norm(src.vi) !== norm(row[vf])) return add(kind, row, label, ef, row[vf], row[ef], false, true)
     // đối chiếu lịch sử sửa: tiếng Việt được sửa SAU lần tiếng Anh được ghi gần nhất → đã đổi, cần dịch lại
     const tt = times?.get(row.id), tv = tt?.[vf], te = tt?.[ef]
     if (tv && (!te || tv > te)) return add(kind, row, label, ef, row[vf], row[ef], true)
@@ -111,8 +111,9 @@ async function callTranslate(context: string | undefined, items: { id: string; v
 }
 
 /** Đồng bộ toàn bộ tiếng Anh với tiếng Việt: dịch ô trống + dịch lại ô tự dịch cũ mà tiếng Việt đã đổi. Dùng khi chuyển EN/song ngữ và trước khi xuất file. */
-export async function syncEnglish(d: ProjectData, log: (s: string) => void = () => {}, force = false, onlyBlank = false, times?: ChangeTimes): Promise<{ done: number; failed: number }> {
-  const plan = planFill(d, force, times).filter(i => !onlyBlank || i.prevEn == null); if (!plan.length) return { done: 0, failed: 0 }
+export async function syncEnglish(d: ProjectData, log: (s: string) => void = () => {}, force = false, onlyBlank: boolean | 'safe' = false, times?: ChangeTimes): Promise<{ done: number; failed: number }> {
+  // onlyBlank: chế độ tự động – ô EN trống + ô EN do phần mềm dịch mà tiếng Việt đã đổi sau đó (chưa ai sửa tay)
+  const plan = planFill(d, force, times).filter(i => !onlyBlank || i.safe || (onlyBlank === true && i.prevEn == null))   // 'safe': chỉ ô đã dịch mà VN vừa đổi; if (!plan.length) return { done: 0, failed: 0 }
   const n1 = await fillByDictionary(d, plan)
   const left = plan.filter(i => !i.ok)
   const n2 = left.length ? await fillByAI(d, left, log) : 0
