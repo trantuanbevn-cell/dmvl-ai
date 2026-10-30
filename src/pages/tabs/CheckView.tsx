@@ -17,7 +17,7 @@ import { spellScan } from '../../lib/spellScan'
 import { loadEnglish } from '../../lib/spell'
 import { cleanEntries } from '../../lib/qc'
 import { judgePair, clusterOf, type Verdict } from '../../lib/pairJudge'
-import { runAiQc, loadFindings, resolveFinding, KIND_LABEL, type Finding } from '../../lib/aiQc'
+import { runAiQc, loadFindings, resolveFinding, staleFinding, KIND_LABEL, type Finding } from '../../lib/aiQc'
 import { saveEntry } from '../../lib/entryLink'
 import { applyFinishFix, dismissFinish } from '../../lib/finishCheck'
 import { addIgnore, addIgnores, isIgnored, pairKey, useIgnoreVersion } from '../../lib/qcIgnore'
@@ -90,7 +90,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
   const [aiMsg, setAiMsg] = useState<string | null>(null)
   const pid = d.project?.id
   useEffect(() => { if (pid) loadFindings(pid).then(setFinds) }, [pid, tick])
-  const openFinds = finds.filter(f => f.status === 'open')
+  const openFinds = useMemo(() => { const sm = symbolMap(d.entries); return finds.filter(f => f.status === 'open' && !staleFinding(f, d, sm)) }, [finds, d])   // bỏ gợi ý lỗi thời: mã VL đã tự đồng bộ số theo ký hiệu
   const runAi = async () => {
     if (aiMsg) return
     setAiMsg('Đang chuẩn bị…')

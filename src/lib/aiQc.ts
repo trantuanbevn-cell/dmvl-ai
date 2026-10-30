@@ -1,7 +1,7 @@
 // QC cuối bằng AI (chỉ admin chạy): đối chiếu danh mục ↔ phân tích phối cảnh ↔ quy định vận hành, trả về gợi ý để mọi người xác nhận.
 import { supabase, FUNCTIONS_URL } from './supabase'
 import { rulesFor, EL_VN } from './opRules'
-import { symbolMap } from './sections'
+import { symbolMap, vlLines } from './sections'
 import type { ProjectData } from './useProject'
 import type { Entry } from './types'
 
@@ -26,6 +26,18 @@ export function isRepeat(r: Sig & { status?: string }, n: Sig): boolean {
   // đã bấm “AI sai – bỏ” cho một điểm không có đoạn trích (thiếu / lệch phối cảnh / vi phạm quy định…): không báo lại cùng loại ở cùng mã
   if (r.status === 'dismissed' && !a && !b) return true
   return false
+}
+
+/** Cột KÍ HIỆU VL đúng như trên bảng: mã cùng tiền tố với ký hiệu bản vẽ tự nhảy số theo ký hiệu (dữ liệu gốc có thể còn số cũ) – AI phải thấy đúng cái người dùng thấy */
+const shownCode = (e: Entry, sym: string) => vlLines(e.product_code, sym).join('\n')
+/** Gợi ý AI cũ đã lỗi thời: báo ô mã vật liệu “lệch số” với ký hiệu bản vẽ, nhưng bảng đã tự đồng bộ số (mã cùng tiền tố luôn hiển thị theo ký hiệu) */
+export function staleFinding(f: Finding, d: ProjectData, sym = symbolMap(d.entries)): boolean {
+  if (f.field !== 'product_code' || f.status !== 'open') return false
+  const e = d.entries.find(x => x.id === f.entry_id); if (!e) return false
+  const s = sym.get(e.id) ?? e.code, cur = String(f.current_text ?? '').trim()
+  if (!cur) return false
+  const shown = vlLines(e.product_code, s)
+  return !shown.includes(cur) || (vlLines(cur, s)[0] === s && shown.includes(s))
 }
 
 async function callQc(payload: unknown): Promise<{ issues?: any[] }> {
@@ -56,7 +68,7 @@ export async function runAiQc(d: ProjectData, onProgress: (msg: string) => void)
     const notes = [...new Set(occ.map(o => cut(o.note, 160)).filter(Boolean))].slice(0, 3)
     const rl = rulesFor(d, e.id).map(h => h.rule.id.slice(0, 6))
     const o: Record<string, unknown> = { code: S(e), group: e.group_code, rooms: rm.join(','), source: e.source }
-    for (const f of FIELDS) { const v = (e as any)[f]; if (v && String(v).trim()) o[f] = cut(v, 1500) }
+    for (const f of FIELDS) { const v = f === 'product_code' ? shownCode(e, S(e)) : (e as any)[f]; if (v && String(v).trim()) o[f] = cut(v, 1500) }
     if (notes.length) o.render_note = notes.join(' / ')
     if (rl.length) o.rule_ids = rl.join(',')
     return o
@@ -75,7 +87,7 @@ export async function runAiQc(d: ProjectData, onProgress: (msg: string) => void)
       const field = FIELDS.includes(it.field) ? it.field : (it.field ?? null)
       const cur = it.current ? String(it.current) : null
       // đoạn trích phải có thật trong ô → chống AI bịa
-      if (cur && (FIELDS as readonly string[]).includes(field)) { const v = String((e as any)[field] ?? ''); if (!v.includes(cur)) continue }
+      if (cur && (FIELDS as readonly string[]).includes(field)) { const v = field === 'product_code' ? shownCode(e, S(e)) : String((e as any)[field] ?? ''); if (!v.includes(cur)) continue }
       const sug = it.suggestion ? String(it.suggestion) : null
       if (sug && cur && sug.trim() === cur.trim()) continue
       const related = ((it.related ?? []) as string[]).filter(c => byCode.has(c) && c !== S(e))

@@ -2,6 +2,7 @@ import { setNameOverrides, setCustomSections, setSectionLayout } from './section
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase, signedUrls } from './supabase'
 import { toast } from './toast'
+import { syncSymbols } from './symSync'
 import type { Project, Room, Page, Entry, Occurrence, Warning, FloorPlan, ProjectRule } from './types'
 
 export type ProjectData = {
@@ -46,6 +47,8 @@ export function useProject(id: string): ProjectData {
     setSectionLayout((p.data as any)?.section_layout)
     const next = { project: p.data as Project, rooms: (r.data ?? []) as Room[], pages, entries, occ, warnings: (w.data ?? []) as Warning[], floors, rules: (ru.data ?? []) as ProjectRule[], urls, loading: false }
     latestRef.current = next; setS(next)
+    // ký hiệu vật liệu vừa nhảy số → đổi theo mọi chỗ nhắc ký hiệu trong nội dung chữ (lỗi quyền = người chỉ xem: bỏ qua)
+    syncSymbols(next.project, entries).then(n => { if (n) toast(`Đã cập nhật ${n} chỗ nhắc ký hiệu vật liệu theo số mới`, 'ok') }).catch(() => {})
   }, [id])
   useEffect(() => { reload() }, [reload])
   // Đồng bộ trực tiếp: ai sửa gì, mọi người thấy ngay (gộp nhiều thay đổi liên tiếp thành 1 lần tải lại)
