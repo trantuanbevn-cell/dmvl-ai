@@ -33,7 +33,8 @@ export async function buildScheduleHtml(d: ExportData, o: ExportOpts, print: boo
   const H = [hd('STT', 'No.'), hd('KÍ HIỆU BẢN VẼ', 'DRAWING CODE'), hd('KÍ HIỆU VL', 'MATERIAL CODE'), hd('Hạng mục', 'Item'), hd('Vị trí', 'Location'), hd('Hình ảnh phối cảnh', 'Render image'), hd('Thông số kỹ thuật', 'Technical specification'), hd('Xuất xứ/ Thương hiệu', 'Origin / Brand'), hd('Hình ảnh vật liệu', 'Material image'), hd('Ghi chú', 'Remarks'),
     ...(o.quote ? [hd('Số lượng', 'Quantity'), hd('ĐVT', 'Unit'), hd('Đơn giá (VNĐ)', 'Unit price (VND)'), hd('Thành tiền (VNĐ)', 'Amount (VND)')] : [])]
   const bandRow = `<tr>${[[6, 'NỘI DUNG', 'CONTENT', '#B22A2A'], [4, 'VẬT LIỆU ĐỊNH HƯỚNG', 'DESIGNER-SPECIFIED MATERIAL', '#B22A2A'], ...(o.quote ? [[4, 'BÁO GIÁ', 'PRICING', '#2E6B3A']] : [])].map(([n, a, b, c]) => `<th colspan="${n}" style="background:${c};text-align:center">${hd(a as string, b as string)}</th>`).join('')}</tr>`
-  const sym = exportSymbols(list, o.renumber)
+  // KÝ HIỆU PHẢI GIỐNG HỆT TRONG PHẦN MỀM: đánh số trên toàn bộ vật liệu đang dùng (như bảng), không đánh lại theo phần được xuất và không dùng mã gốc trong dữ liệu
+  const sym = exportSymbols(d.entries.filter(e => e.status !== 'rejected'), true)
   const catL = (k: string) => { const c = CATEGORIES.find(x => x.key === k); return c ? tx(c.vn, c.en, L) : k }
   // ảnh từng dòng dựng SONG SONG (6 luồng) trước khi ghép bảng – trước đây dựng tuần tự nên 100 mã chạy rất lâu
   const prep = async (e: typeof list[number]) => {

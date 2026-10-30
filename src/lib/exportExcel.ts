@@ -181,7 +181,8 @@ export async function exportExcel(d: ExportData, o: ExportOpts) {
   const wb = new ExcelJS.Workbook(); wb.creator = 'DMVL AI'
   // 1) Gom TOÀN BỘ phòng: mỗi mã chỉ một dòng, vị trí liệt kê đủ các phòng; ký hiệu đồng bộ trong cả file
   const list = filterEntries(d.entries, o.includePending)
-  const sym = exportSymbols(list, o.renumber)
+  // KÝ HIỆU PHẢI GIỐNG HỆT TRONG PHẦN MỀM: đánh số trên toàn bộ vật liệu đang dùng (như bảng), không đánh lại theo phần được xuất và không dùng mã gốc trong dữ liệu
+  const sym = exportSymbols(d.entries.filter(e => e.status !== 'rejected'), true)
   const pageById = new Map(d.pages.map(p => [p.id, p]))
   const urls = await signedUrls([...new Set([...d.occ.filter(x => x.page_id).map(x => pageById.get(x.page_id!)?.image_path), ...d.occ.map(x => x.view?.img), ...d.entries.map(x => x.mat_view?.img), ...d.entries.flatMap(x => extraPaths(x))].filter(Boolean) as string[])])
   const ctx: Ctx = { wb, d, o, sym, urls, pageById, h }
