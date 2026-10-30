@@ -177,13 +177,27 @@ export default function RoomSections({ d, room, lang, filter, sel, onPick, onDet
     if (!clip || clip.col !== col || clip.id === e.id) return
     const sym = symMap.get(e.id) ?? e.code
     if (col === 'loc') {
-      const rooms = (clip.data.rooms as string[]).filter(r => !d.occ.some(o => o.entry_id === e.id && o.room_id === r))
-      if (!rooms.length) { toast(`${sym} đã có đủ các phòng của ${clip.sym}.`); return }
-      if (!confirm(`Thêm ${rooms.length} phòng (kèm hình phối cảnh) của ${clip.sym} vào ${sym}? ${clip.sym} giữ nguyên.`)) return
+      const all = clip.data.rooms as string[]
+      const rooms = all.filter(r => !d.occ.some(o => o.entry_id === e.id && o.room_id === r))
+      // phòng ĐÃ có ở mã đích nhưng chưa có hình phối cảnh (hoặc thiếu vùng khoanh mà mã nguồn có) → chép thêm các vùng khoanh còn thiếu
+      const sameBox = (a: { page_id: string | null; bbox: number[] | null }, b: { page_id: string | null; bbox: number[] | null }) => a.page_id === b.page_id && JSON.stringify(a.bbox) === JSON.stringify(b.bbox)
+      const crops = all.filter(r => !rooms.includes(r)).flatMap(r => d.occ.filter(o => o.entry_id === clip.id && o.room_id === r && o.bbox && !d.occ.some(t => t.entry_id === e.id && t.room_id === r && sameBox(t, o))))
+      if (!rooms.length && !crops.length) { toast(`${sym} đã có đủ các phòng và hình phối cảnh của ${clip.sym}.`); return }
+      if (!confirm(`Dán vị trí + hình phối cảnh của ${clip.sym} vào ${sym}: ${[rooms.length ? `thêm ${rooms.length} phòng` : '', crops.length ? `thêm ${crops.length} hình phối cảnh vào phòng đã có` : ''].filter(Boolean).join(', ')}? ${clip.sym} giữ nguyên.`)) return
       const recs: MoveRec[] = []
-      try { for (const r of rooms) recs.push(await moveRoom(d.occ, clip.id, r, e, true)) } catch (err) { toast(String((err as Error).message ?? err)); d.reload(); return }
+      try {
+        for (const r of rooms) recs.push(await moveRoom(d.occ, clip.id, r, e, true))
+        if (crops.length) {
+          const rec: MoveRec = { label: 'Chép hình phối cảnh', moved: [], removed: [], inserted: [] }
+          const cat = d.occ.find(x => x.entry_id === e.id && x.category)?.category ?? e.category ?? crops[0].category ?? 'decor'
+          for (const o of crops) { const { data, error } = await supabase.from('occurrences').insert({ entry_id: e.id, room_id: o.room_id, page_id: o.page_id, bbox: o.bbox, view: o.view, qty: null, confidence: o.confidence, category: cat, origin: 'manual' }).select('id'); if (error) throw new Error(error.message); if (data?.[0]) rec.inserted.push(data[0].id) }
+          // ô phòng “trống” (chưa khoanh) ở các phòng vừa có hình → bỏ, để không còn báo “chưa khoanh”
+          for (const b of d.occ.filter(t => t.entry_id === e.id && !t.bbox && crops.some(o => o.room_id === t.room_id))) { const { error } = await supabase.from('occurrences').delete().eq('id', b.id); if (!error) rec.removed.push(b as unknown as Record<string, unknown>) }
+          recs.push(rec)
+        }
+      } catch (err) { toast(String((err as Error).message ?? err)); d.reload(); return }
       await d.reload()
-      toast(`Đã thêm ${rooms.length} phòng vào ${sym}`, 'ok', { label: '↶ Hoàn tác', run: async () => { for (const r of recs) await undoMove(r); toast('Đã hoàn tác', 'ok'); d.reload() } })
+      toast(`Đã dán vào ${sym}: ${rooms.length} phòng mới, ${crops.length} hình phối cảnh`, 'ok', { label: '↶ Hoàn tác', run: async () => { for (const r of recs) await undoMove(r); toast('Đã hoàn tác', 'ok'); d.reload() } })
       return
     }
     if (!confirm(`Dán ${COLS[col].label} của ${clip.sym} vào ${sym}? Nội dung cột này của ${sym} sẽ được thay; các cột khác giữ nguyên.`)) return
