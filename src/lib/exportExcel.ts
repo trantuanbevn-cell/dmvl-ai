@@ -146,10 +146,7 @@ async function fillSheet(ws: ExcelJS.Worksheet, groups: Grp[], x: Ctx, title: st
             if (best.note) { const nc = row.getCell(rc); nc.value = best.note; nc.font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FFC00000' } }; nc.alignment = { vertical: 'bottom', horizontal: 'left', wrapText: true } }
           } catch { /* bỏ qua ảnh lỗi */ }
         }
-      } else {
-        row.getCell(rc).value = h('(không thể hiện trong phối cảnh)', '(not shown in render)')
-        row.getCell(rc).font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF7F6000' } }
-      }
+      }   // không có ảnh phối cảnh: để trống ô (chủ sản phẩm yêu cầu, không ghi chú gì)
       let mapB64: string | null = null
       try { const mm = await matMontage(e, urls); if (mm) mapB64 = mm.split(',')[1] } catch { /* */ }
       const mvSrc = e.mat_view?.img ? urls[e.mat_view.img] : e.product_image_url
