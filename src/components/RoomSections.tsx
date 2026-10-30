@@ -66,7 +66,7 @@ function Ed({ e, k, area, ph, num, w, miss }: { e: Entry; k: K; area?: boolean; 
   // ô tiếng Anh còn chữ nhưng ô tiếng Việt tương ứng trống → bản dịch cũ còn sót: cảnh báo ngay tại ô
   const vk = String(k).endsWith('_en') ? String(k).replace(/_en$/, '_vn') : ''
   const orphan = !!vk && vk in e && !String((e as any)[vk] ?? '').trim() && !!v.trim() && !String(k).startsWith('name')
-  if (orphan && !hl) return <span className="hl-wrap">{ta}<span className="hl-why">⚠ Không có tiếng Việt tương ứng – bản dịch cũ còn sót?{canEdit && <a style={{ marginLeft: 6, cursor: 'pointer', textDecoration: 'underline' }} onClick={async x => { x.stopPropagation(); const ns = { ...((e.en_src as any) ?? {}) }; delete ns[k as string]; setV(''); const err = await saveEntry(e, { [k]: null, en_src: ns }); if (err) alert(err.message) }}>Xoá ô EN này</a>}</span></span>
+  if (orphan && !hl) return <span className="hl-wrap">{ta}<span className="hl-why">⚠ Không có tiếng Việt – ô tiếng Anh sẽ tự xoá theo (tiếng Việt là bản gốc: nhập tiếng Việt trước, tiếng Anh tự dịch){canEdit && <a style={{ marginLeft: 6, cursor: 'pointer', textDecoration: 'underline' }} onClick={async x => { x.stopPropagation(); const ns = { ...((e.en_src as any) ?? {}) }; delete ns[k as string]; setV(''); const err = await saveEntry(e, { [k]: null, en_src: ns }); if (err) alert(err.message) }}>Xoá ô EN này</a>}</span></span>
   if (!hl) return ta
   // ô đang có lỗi (mở từ phần kiểm lỗi): tô đỏ đúng đoạn sai ngay trong ô, vẫn sửa trực tiếp được
   return <span className="hl-wrap">{ta}{hl.text && <HlBackdrop target={ref} value={v} hl={hl} />}{hl.why && <span className="hl-why">⚠ {hl.why}</span>}</span>

@@ -43,10 +43,8 @@ export function planFill(d: ProjectData, force = false, times?: ChangeTimes): Tr
     const src = (row.en_src as EnSrc | null)?.[ef], tt = times?.get(row.id), tv = tt?.[vf], te = tt?.[ef]
     if (blank(row[vf])) {
       if (blank(row[ef])) return
-      // tiếng Việt đã có rồi bị xoá (có dấu vết dịch, hoặc lịch sử cho thấy VN bị sửa sau lần EN được ghi) → xoá EN theo
-      if (src || (tv && (!te || tv > te))) { out.push({ key: `${row.id}:${ef}:clear`, kind, id: row.id, field: ef, vi: '', draft: '', ok: true, label, prevEn: row[ef], src: row.en_src ?? null, safe: true, clear: true }); return }
-      if (viWords(row[ef]) >= 2) add(kind, row, label, ef, row[ef], row[ef], true)   // không có bản Việt: ô EN đang lẫn tiếng Việt → dịch chính nó
-      return   // EN có từ trước mà chưa từng có VN (nhập / AI sinh riêng): để người dùng quyết (cảnh báo ở ô + phần kiểm lỗi)
+      // tiếng Việt trống (đã xoá, hay chưa từng có) → ô tiếng Anh cũng phải trống: xoá EN theo (chủ sản phẩm chốt: VN là gốc, không có ô EN “lẻ”)
+      out.push({ key: `${row.id}:${ef}:clear`, kind, id: row.id, field: ef, vi: '', draft: '', ok: true, label, prevEn: row[ef], src: row.en_src ?? null, safe: true, clear: true }); return
     }
     if (blank(row[ef])) return add(kind, row, label, ef, row[vf], undefined, false, true)
     // force: mọi ô EN không phải do bước dịch này tạo ra đều dịch lại theo VN
