@@ -16,7 +16,7 @@ export type BulletMode = 'auto' | 'dash' | 'none'
 /** like: bản tiếng Việt của cùng ô – bản tiếng Anh trình bày THEO bản tiếng Việt (gạch đầu dòng giống nhau), không tự đặt quy cách riêng */
 export type SpellOpts = { cap?: boolean; bullet?: BulletMode; like?: string | null }
 /** Quy chuẩn trình bày chung toàn dự án theo tên cột – dùng chung cho ô nhập, quét chính tả và bản dịch tiếng Anh */
-export const bulletOf = (field: string): BulletMode | undefined => (/^(desc|perf|note|material)_(vn|en)$/.test(field) ? 'auto' : /^(name|part)_(vn|en)$/.test(field) ? 'none' : undefined)
+export const bulletOf = (field: string): BulletMode | undefined => (/^(desc|material)_(vn|en)$/.test(field) ? 'dash' : /^(perf|note)_(vn|en)$/.test(field) ? 'auto' : /^(name|part)_(vn|en)$/.test(field) ? 'none' : undefined)   // cột Thông số kỹ thuật (vật liệu + thông số): LUÔN gạch đầu dòng, cả VN lẫn EN
 const MARK = /^(?:[•*·●▪▫■□◦‣⁃]\s*|[-–—+]\s+|[-–—](?=\p{L}))/u
 const DASHED = /^\s*(?:[•*·●▪▫■□◦‣⁃]|[-–—+]\s|[-–—](?=\p{L}))/u
 /** Kiểu gạch đầu dòng của một đoạn: dash = mọi dòng nội dung đều có gạch; plain = không dòng nào có; mixed */
@@ -172,7 +172,7 @@ export function fixText(text: string, lang: SpellLang, opts: SpellOpts = {}): Sp
   if (opts.bullet) {
     // bản tiếng Anh theo bản tiếng Việt: VN có gạch đầu dòng → EN cũng có; VN không có → EN cũng không
     let mode = opts.bullet
-    if (opts.like && mode !== 'none') { const st = dashStyle(opts.like); if (st === 'dash') mode = 'dash'; else if (st === 'plain') mode = 'none' }
+    if (opts.like && mode === 'auto') { const st = dashStyle(opts.like); if (st === 'dash') mode = 'dash'; else if (st === 'plain') mode = 'none' }
     const f = formatBullets(lines, raw.map(l => /^ {2,}\S/.test(l)), mode)
     if (opts.cap) for (let i = 0; i < f.length; i++) f[i] = f[i].replace(/^((?:- )?)(\p{Ll})/u, (_, a, c) => a + c.toUpperCase())
     if (f.join('\n') !== lines.join('\n')) fixes.push({ from: lines.join('\n'), to: f.join('\n'), kind: 'format' })

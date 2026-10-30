@@ -36,7 +36,7 @@ export default function SpellReview({ d, items, onClose, onOpenEntry }: { d: Pro
           <h3 style={{ margin: 0 }}>✍️ Chính tả & dấu câu · {list.length} mục</h3>
           <div className="row gap">{auto.length > 0 && <button className="btn primary" disabled={busy} onClick={all}>✓ Sửa tất cả tự động ({auto.length})</button>}<button className="btn ghost sm" onClick={onClose}>✕</button></div>
         </div>
-        <p className="small muted">Phần mềm tự sửa dấu câu, khoảng trắng, viết hoa đầu câu, vị trí dấu thanh và lỗi gõ chắc chắn. Từ nghi sai nhưng chưa chắc thì hiện gợi ý để bạn bấm chọn. Tên hãng, mã, tên riêng giữa câu được bỏ qua. Quy cách trình bày: ô nhiều dòng (thông số, vật liệu, tính chất, ghi chú) mỗi dòng bắt đầu “- ”; ô một dòng giữ như người viết; ô tiếng Anh trình bày theo ô tiếng Việt (cùng luật với lúc dịch).</p>
+        <p className="small muted">Phần mềm tự sửa dấu câu, khoảng trắng, viết hoa đầu câu, vị trí dấu thanh và lỗi gõ chắc chắn. Từ nghi sai nhưng chưa chắc thì hiện gợi ý để bạn bấm chọn. Tên hãng, mã, tên riêng giữa câu được bỏ qua. Quy cách trình bày: cột Thông số kỹ thuật (vật liệu + thông số) luôn có gạch đầu dòng “- ” ở mọi dòng, cả tiếng Việt lẫn tiếng Anh; tính chất / ghi chú: nhiều dòng thì gạch, một dòng giữ như người viết, tiếng Anh theo tiếng Việt (cùng luật với lúc dịch).</p>
         {!list.length && <div className="ok-text">✓ Không còn lỗi chính tả hoặc dấu câu.</div>}
         {list.map(i => (
           <div key={i.key} className="sp-item">
