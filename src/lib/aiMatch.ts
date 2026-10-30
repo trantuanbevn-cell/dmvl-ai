@@ -56,7 +56,9 @@ export async function aiPickByPattern(key: string, query: HTMLCanvasElement, can
   return out
 }
 
-const friendly = (m: string) => /429|spending cap|RESOURCE_EXHAUSTED/i.test(m) ? 'Google từ chối: dự án Gemini đã chạm Spend cap (hạn mức chi tiêu của DỰ ÁN, tách khỏi số dư billing). Mở https://ai.studio/spend → nâng Spend cap của dự án rồi bấm ↻ so lại.' : m
+/** Lỗi AI dễ hiểu: hết hạn mức chi tiêu tháng (spend cap) khác với quá tải tạm thời */
+export const friendly = (m: string) => /spending cap|spend cap/i.test(m) ? 'AI (Gemini) đã hết HẠN MỨC CHI TIÊU THÁNG của dự án Google – không phải lỗi phần mềm. Cách xử lý: mở https://ai.studio/spend → nâng Spend cap của dự án, rồi bấm lại. (Hạn mức tự làm mới đầu tháng sau.)'
+  : /429|RESOURCE_EXHAUSTED|quota/i.test(m) ? 'AI (Gemini) đang quá tải / chạm giới hạn tạm thời – thử lại sau vài phút.' : m
 async function callFn(name: string, body: unknown) {
   const { data: { session } } = await _sb.auth.getSession()
   const res = await fetch(`${FUNCTIONS_URL}/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY }, body: JSON.stringify(body) })

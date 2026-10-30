@@ -1,3 +1,4 @@
+import { friendly } from './aiMatch'
 // Tự điền các ô tiếng Anh còn TRỐNG từ tiếng Việt. Không bao giờ ghi đè ô tiếng Anh đã có.
 //  1) Từ điển chuyên ngành (viEn.ts) – chạy trong trình duyệt, không AI, dùng cho cụm ngắn đơn giản.
 //  2) Phần còn lại (cụm dài/phức tạp/từ lạ): AI dịch (chỉ quản trị viên) kèm bản nháp của từ điển, rồi qua bộ sửa chính tả tiếng Anh.
@@ -117,7 +118,7 @@ async function callTranslate(context: string | undefined, items: { id: string; v
     body: JSON.stringify({ context, items }),
   })
   const j = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(`AI dịch lỗi: ${j.error ?? res.status}`)
+  if (!res.ok) throw new Error(friendly(`AI dịch lỗi: ${j.error ?? res.status}`))
   return j.items ?? []
 }
 

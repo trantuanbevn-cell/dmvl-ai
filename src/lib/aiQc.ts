@@ -1,3 +1,4 @@
+import { friendly } from './aiMatch'
 // QC cuối bằng AI (chỉ admin chạy): đối chiếu danh mục ↔ phân tích phối cảnh ↔ quy định vận hành, trả về gợi ý để mọi người xác nhận.
 import { supabase, FUNCTIONS_URL } from './supabase'
 import { rulesFor, EL_VN } from './opRules'
@@ -47,7 +48,7 @@ async function callQc(payload: unknown): Promise<{ issues?: any[] }> {
   const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch(`${FUNCTIONS_URL}/qc`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY }, body: JSON.stringify({ payload }) })
   const j = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(`AI soát lỗi: ${j.error ?? j.message ?? res.status}`)
+  if (!res.ok) throw new Error(friendly(`AI soát lỗi: ${j.error ?? j.message ?? res.status}`))
   return j
 }
 
