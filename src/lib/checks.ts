@@ -11,8 +11,12 @@ import { finishCtx, finishIssues, type FinishFix } from './finishCheck'
 import { symbolMap } from './sections'
 
 /** keys = ô cần tô đỏ trong khung sửa: tên cột của mã (name_vn, product_code…) hoặc 'loc' | 'shot' | 'group' | 'category' | 'link' | 'qty' */
-export type Issue = { kind: 'err' | 'miss' | 'info'; text: string; keys: string[]; fix?: 'category'; finishFix?: FinishFix; finishKey?: string }
+export type Issue = { kind: 'err' | 'miss' | 'info'; text: string; keys: string[]; fix?: 'category'; /** ô tiếng Anh còn nội dung trong khi ô tiếng Việt tương ứng trống */ orphanEn?: string[]; finishFix?: FinishFix; finishKey?: string }
 export type EntryIssues = { e: Entry; issues: Issue[] }
+const ORPH_LABEL: Record<string, string> = { name_en: 'tên', part_en: 'bộ phận', material_en: 'vật liệu', desc_en: 'thông số', perf_en: 'tính chất', note_en: 'ghi chú', loc_note_en: 'ghi chú vị trí' }
+const blankV = (v: unknown) => v == null || String(v).trim() === ''
+/** Các ô EN còn chữ trong khi ô VN cùng loại trống */
+export const orphanEnFields = (e: Entry): string[] => Object.keys(ORPH_LABEL).filter(ef => blankV((e as any)[ef.replace(/_en$/, '_vn')]) && !blankV((e as any)[ef]))
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase()
 
 /** Loại “Bề mặt / mục” đúng với nhóm mã (vd nhóm FF – Đồ rời ⇒ “Đồ rời”); undefined nếu nhóm không gắn với loại nào (đá, kim loại, ốp tường… dùng được ở nhiều loại) */
@@ -36,6 +40,9 @@ export function checkEntries(d: ProjectData, lang: Lang): EntryIssues[] {
     const issues: Issue[] = []
     const m = missingOf(e, lang)
     if (m.length) issues.push({ kind: 'miss', text: 'Thiếu: ' + missText(m), keys: m.map(x => String(x.key)) })
+    // Ô tiếng Anh “mồ côi”: tiếng Việt (bản gốc) trống nhưng tiếng Anh vẫn còn – thường do đã xoá / chuyển nội dung tiếng Việt sang ô khác mà bản dịch cũ còn sót → hiện 2 bản tiếng Anh trùng ý
+    const orph = orphanEnFields(e)
+    if (orph.length) issues.push({ kind: 'err', text: `Ô tiếng Anh không có tiếng Việt tương ứng (${orph.map(f => ORPH_LABEL[f] ?? f).join(', ')}) – tiếng Việt đã bị xoá/chuyển sang ô khác nhưng bản dịch cũ còn sót`, keys: orph, orphanEn: orph })
     const occ = d.occ.filter(o => o.entry_id === e.id)
     if (!occ.some(o => o.room_id)) issues.push({ kind: 'err', text: 'Chưa gán vào phòng nào – thêm phòng ở ô “Vị trí”', keys: ['loc'] })
     const mine = realCodes(e, sets)

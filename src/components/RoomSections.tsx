@@ -46,7 +46,11 @@ function Ed({ e, k, area, ph, num, w, miss }: { e: Entry; k: K; area?: boolean; 
   const save = async () => {
     if (String((e[k] as any) ?? '') === v) return
     const val = num ? (v === '' ? null : Number(v)) : v || null
-    const error = await saveEntry(e, { [k]: val })
+    const patch: Record<string, unknown> = { [k]: val }
+    // xoá hết ô tiếng Việt → bản tiếng Anh do phần mềm dịch từ nó cũng bỏ theo (không để sót bản dịch “mồ côi”); EN người dùng tự gõ thì giữ
+    const ef = String(k).endsWith('_vn') ? String(k).replace(/_vn$/, '_en') : ''
+    if (ef && !val && (e as any)[ef]) { const src = (e.en_src as any)?.[ef]; if (src && src.en === (e as any)[ef]) { patch[ef] = null; const ns = { ...(e.en_src as any) }; delete ns[ef]; patch.en_src = ns } }
+    const error = await saveEntry(e, patch)
     if (error) alert(error.message)
   }
   const dl = String(k).endsWith('_vn') ? 'vn' : String(k).endsWith('_en') ? 'en' : ['product_code', 'color_hex', 'product_url'].includes(String(k)) || num ? 'none' : 'name'
@@ -59,6 +63,10 @@ function Ed({ e, k, area, ph, num, w, miss }: { e: Entry; k: K; area?: boolean; 
   const hl = useErrHl(e.id, String(k))
   if (num) return <input {...common} type="number" />
   const ta = <textarea {...common} className={[common.className, hl ? 'hl-err' : ''].filter(Boolean).join(' ') || undefined} title={hl ? (hl.why ?? 'Lỗi được chỉ ra ở đây') : common.title} ref={ref} rows={area ? 2 : 1} style={{ ...(common.style ?? {}), overflow: 'hidden', resize: 'none' }} onKeyDown={area ? undefined : (x: any) => { if (x.key === 'Enter') { x.preventDefault(); x.target.blur() } }} />
+  // ô tiếng Anh còn chữ nhưng ô tiếng Việt tương ứng trống → bản dịch cũ còn sót: cảnh báo ngay tại ô
+  const vk = String(k).endsWith('_en') ? String(k).replace(/_en$/, '_vn') : ''
+  const orphan = !!vk && vk in e && !String((e as any)[vk] ?? '').trim() && !!v.trim() && !String(k).startsWith('name')
+  if (orphan && !hl) return <span className="hl-wrap">{ta}<span className="hl-why">⚠ Không có tiếng Việt tương ứng – bản dịch cũ còn sót?{canEdit && <a style={{ marginLeft: 6, cursor: 'pointer', textDecoration: 'underline' }} onClick={async x => { x.stopPropagation(); const ns = { ...((e.en_src as any) ?? {}) }; delete ns[k as string]; setV(''); const err = await saveEntry(e, { [k]: null, en_src: ns }); if (err) alert(err.message) }}>Xoá ô EN này</a>}</span></span>
   if (!hl) return ta
   // ô đang có lỗi (mở từ phần kiểm lỗi): tô đỏ đúng đoạn sai ngay trong ô, vẫn sửa trực tiếp được
   return <span className="hl-wrap">{ta}{hl.text && <HlBackdrop target={ref} value={v} hl={hl} />}{hl.why && <span className="hl-why">⚠ {hl.why}</span>}</span>
