@@ -64,7 +64,7 @@ async function put(it: TrItem, en: string) {
   const { error } = await q
   if (error) throw new Error(error.message)
 }
-const polish = (en: string, field: string) => fixText(en, 'en', { cap: true, bullet: bulletOf(field) }).text
+const polish = (en: string, field: string, vi?: string) => fixText(en, 'en', { cap: true, bullet: bulletOf(field), like: vi }).text   // trình bày theo bản tiếng Việt – cùng luật với phần kiểm chính tả
 
 /** Điền các ô đã dịch chắc bằng từ điển. Trả về số ô đã điền. */
 export async function fillByDictionary(d: ProjectData, items: TrItem[]): Promise<number> {
@@ -72,7 +72,7 @@ export async function fillByDictionary(d: ProjectData, items: TrItem[]): Promise
   await autoBackup(d.project ?? { id: d.entries[0]?.project_id }, 'Tự động trước khi dịch tiếng Anh', { minGapMs: 30 * 60_000 })
   await loadEnglish()
   let n = 0
-  for (const it of todo) { await put(it, polish(it.draft, it.field)); n++ }
+  for (const it of todo) { await put(it, polish(it.draft, it.field, it.vi)); n++ }
   return n
 }
 
@@ -92,7 +92,7 @@ export async function fillByAI(d: ProjectData, items: TrItem[], log: (s: string)
       try { res = await callTranslate(ctx, part.map((p, k) => ({ id: String(k), kind: p.field.replace('_en', ''), vi: p.vi, draft: p.draft && p.draft !== p.vi ? p.draft : undefined }))); lastErr = ''; break }
       catch (e) { lastErr = String((e as Error).message ?? e); await new Promise(r => setTimeout(r, 4000 * (t + 1))) }
     }
-    for (const x of res) { const it = part[Number(x.id)]; if (it && x.en?.trim()) { await put(it, polish(x.en.trim(), it.field)); n++ } }
+    for (const x of res) { const it = part[Number(x.id)]; if (it && x.en?.trim()) { await put(it, polish(x.en.trim(), it.field, it.vi)); n++ } }
   }
   if (!n && lastErr) throw new Error(lastErr)
   return n

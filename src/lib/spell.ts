@@ -10,15 +10,25 @@ export type Fix = { from: string; to: string; kind: FixKind }
 export type Flag = { word: string; suggestions: string[] }
 export type SpellResult = { text: string; fixes: Fix[]; flags: Flag[] }
 export type SpellLang = 'vi' | 'en' | null
-/** bullet: 'dash' = mỗi dòng bắt đầu “- ” + viết hoa (ô thông số/ghi chú nhiều dòng); 'none' = không gạch đầu dòng (ô tên/vật liệu) */
-export type BulletMode = 'dash' | 'none'
-export type SpellOpts = { cap?: boolean; bullet?: BulletMode }
-/** Quy chuẩn trình bày chung toàn dự án theo tên cột */
-export const bulletOf = (field: string): BulletMode | undefined => (/^(desc|perf|note)_(vn|en)$/.test(field) ? 'dash' : /^(name|part|material)_(vn|en)$/.test(field) ? 'none' : undefined)
+/** bullet: 'auto' = ô danh sách (thông số, vật liệu, tính chất, ghi chú): NHIỀU dòng → mỗi dòng “- ”; MỘT dòng → giữ đúng như người viết (có/không gạch đều được);
+ *  'dash' = luôn “- ”; 'none' = không gạch đầu dòng (ô tên, bộ phận) */
+export type BulletMode = 'auto' | 'dash' | 'none'
+/** like: bản tiếng Việt của cùng ô – bản tiếng Anh trình bày THEO bản tiếng Việt (gạch đầu dòng giống nhau), không tự đặt quy cách riêng */
+export type SpellOpts = { cap?: boolean; bullet?: BulletMode; like?: string | null }
+/** Quy chuẩn trình bày chung toàn dự án theo tên cột – dùng chung cho ô nhập, quét chính tả và bản dịch tiếng Anh */
+export const bulletOf = (field: string): BulletMode | undefined => (/^(desc|perf|note|material)_(vn|en)$/.test(field) ? 'auto' : /^(name|part)_(vn|en)$/.test(field) ? 'none' : undefined)
 const MARK = /^(?:[•*·●▪▫■□◦‣⁃]\s*|[-–—+]\s+|[-–—](?=\p{L}))/u
+const DASHED = /^\s*(?:[•*·●▪▫■□◦‣⁃]|[-–—+]\s|[-–—](?=\p{L}))/u
+/** Kiểu gạch đầu dòng của một đoạn: dash = mọi dòng nội dung đều có gạch; plain = không dòng nào có; mixed */
+export function dashStyle(t: string): 'dash' | 'plain' | 'mixed' {
+  const ls = t.split('\n').filter(l => l.trim() && !/^ {2,}\S/.test(l) && !/:\s*$/.test(l.trim()))
+  const n = ls.filter(l => DASHED.test(l)).length
+  return !ls.length || n === 0 ? 'plain' : n === ls.length ? 'dash' : 'mixed'
+}
 /** Chuẩn hoá đầu dòng: dòng thường → “- …”; dòng tiêu đề kết thúc bằng “:” (ngay trước dòng khác) và dòng thụt lề giữ nguyên; bỏ dòng trống */
 function formatBullets(lines: string[], origIndent: boolean[], mode: BulletMode): string[] {
   const keep = lines.map((l, i) => ({ l, nested: origIndent[i] })).filter(x => x.l.trim() !== '')
+  if (mode === 'auto' && keep.length < 2) return keep.map(x => (DASHED.test(x.l) ? '- ' + x.l.replace(MARK, '').trim() : x.l))   // một dòng: giữ như người viết, chỉ thống nhất ký hiệu gạch
   return keep.map((x, i) => {
     const body = x.l.replace(MARK, '').trim()
     if (!body) return ''
@@ -39,7 +49,7 @@ const DOMAIN = `décor decor inox melamine laminate mdf mfc hdf hpl pu led gypsu
   headboard nightstand armchair banquette bolster cushion drapery sheer blackout curtain valance tieback anodized anodised brushed powdercoated galvanised
   sanitary lavatory basin faucet shower bidet cistern urinal vanity countertop backsplash splashback tempered laminated frosted opaque translucent
   hinge handle pull knob latch deadbolt cabinet wardrobe closet drawer shelving shelf bracket cornice coving architrave plinth threshold
-  mitred mitered grey colour colours coloured colourless cementitious flohydric seater seaters inchem niken crom crôm inox sus polymer polymeric bevelled chamfered rebated rebate toughened epoxy bullnose tongue groove flush recessed concealed hairline satin sandblasted bush-hammered honed flamed lappato tumbled martindale wyzenbeek useable perchloroethylene oeko greenguard vietnam vietnamese hanoi danang indonesia malaysia thailand italy italian china chinese korea korean japan japanese germany german spain spanish`.split(/\s+/)
+  mitred mitered grey colour colours coloured colourless cementitious flohydric seater seaters inchem niken crom crôm inox sus polymer polymeric bevelled chamfered rebated rebate toughened epoxy bullnose tongue groove flush recessed concealed hairline satin sandblasted bush-hammered honed flamed lappato tumbled martindale wyzenbeek alkalis diffuser diffusers coved pcs mpa kpa useable perchloroethylene oeko greenguard vietnam vietnamese hanoi danang indonesia malaysia thailand italy italian china chinese korea korean japan japanese germany german spain spanish`.split(/\s+/)
 export function loadEnglish(): Promise<void> {
   if (en) return Promise.resolve()
   return (enLoading ??= (async () => {
@@ -125,7 +135,8 @@ function spellWords(text: string, lang: SpellLang, fixes: Fix[], flags: Flag[]) 
     const skip = inUrl || w.length < 2 || isUpperWord(w) || /[\d_/@#.]/.test(prev) || /[\d_/@#]/.test(next) || (next === '.' && /\p{L}/u.test(text[i + w.length + 1] ?? '')) || known(w)
     if (!skip) {
       const lineStart = /^\s*(?:[-•*·–]\s*)?$/.test(text.slice(0, i).split('\n').pop() ?? '') || /[.!?]\s+$/.test(text.slice(0, i))
-      const proper = w[0] !== w[0].toLowerCase() && (!lineStart || next === ':') && w.slice(1) === w.slice(1).toLowerCase()   // Tên riêng/hãng giữa câu, hoặc nhãn thông số đầu dòng dạng “Martindale: 80000”
+      const nextW = /^\s+(\p{Lu})/u.exec(text.slice(i + w.length))
+      const proper = w[0] !== w[0].toLowerCase() && (!lineStart || next === ':' || !!nextW) && w.slice(1) === w.slice(1).toLowerCase()   // tên riêng giữa câu, nhãn “Martindale: …”, hoặc cụm tên hãng viết hoa liền nhau (Vinh Tuong TowLINE)   // Tên riêng/hãng giữa câu, hoặc nhãn thông số đầu dòng dạng “Martindale: 80000”
       if (lang === 'vi') {
         const r = checkVi(w)
         if (r.ok) { if (r.fixed !== w) { fixes.push({ from: w, to: r.fixed, kind: 'tone' }); rep = r.fixed } }
@@ -159,7 +170,10 @@ export function fixText(text: string, lang: SpellLang, opts: SpellOpts = {}): Sp
   const raw = nfc.split('\n')
   let lines = raw.map(l => tidyLine(l, lang, opts, fixes))
   if (opts.bullet) {
-    const f = formatBullets(lines, raw.map(l => /^ {2,}\S/.test(l)), opts.bullet)
+    // bản tiếng Anh theo bản tiếng Việt: VN có gạch đầu dòng → EN cũng có; VN không có → EN cũng không
+    let mode = opts.bullet
+    if (opts.like && mode !== 'none') { const st = dashStyle(opts.like); if (st === 'dash') mode = 'dash'; else if (st === 'plain') mode = 'none' }
+    const f = formatBullets(lines, raw.map(l => /^ {2,}\S/.test(l)), mode)
     if (opts.cap) for (let i = 0; i < f.length; i++) f[i] = f[i].replace(/^((?:- )?)(\p{Ll})/u, (_, a, c) => a + c.toUpperCase())
     if (f.join('\n') !== lines.join('\n')) fixes.push({ from: lines.join('\n'), to: f.join('\n'), kind: 'format' })
     lines = f

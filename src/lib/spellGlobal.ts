@@ -29,7 +29,7 @@ function onFocusOut(ev: FocusEvent) {
   if (!mode && SKIP_PH.test(el.placeholder ?? '')) return
   const lang: SpellLang = mode === 'vn' ? 'vi' : mode === 'en' ? 'en' : mode === 'name' ? null : detectLang(value)
   const natural = mode === 'vn' || mode === 'en' || el.dataset.cap !== undefined
-  const b = el.dataset.bullet, r = fixText(value, lang, { cap: natural, bullet: b === 'dash' || b === 'none' ? b : undefined })
+  const b = el.dataset.bullet, r = fixText(value, lang, { cap: natural, bullet: b === 'dash' || b === 'none' || b === 'auto' ? b : undefined })
   if (r.text !== value) { setNative(el, r.text); toast(summary(r.fixes), 'ok') }
   if (r.flags.length) el.setAttribute('data-spell-warn', r.flags.map(f => f.word + (f.suggestions[0] ? ` → ${f.suggestions[0]}` : '')).join('; '))
   else el.removeAttribute('data-spell-warn')

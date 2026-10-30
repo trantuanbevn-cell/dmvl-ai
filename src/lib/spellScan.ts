@@ -49,13 +49,14 @@ export function planPropagate(src: SpellItem, finalText: string, items: SpellIte
 
 export function spellScan(d: ProjectData): SpellItem[] {
   const out: SpellItem[] = []
-  const run = (kind: 'entry' | 'room', id: string, label: string, field: string, fieldLabel: string, lang: SpellLang, cap: boolean, v: unknown) => {
+  const run = (kind: 'entry' | 'room', id: string, label: string, field: string, fieldLabel: string, lang: SpellLang, cap: boolean, v: unknown, like?: unknown) => {
     const before = String(v ?? ''); if (!before.trim()) return
     const key = `${id}:${field}:${before}`; if (isIgnored('spell', key)) return
-    const r = fixText(before, lang, { cap, bullet: bulletOf(field) })
+    // ô tiếng Anh: trình bày theo ô tiếng Việt (giống hệt cách bản dịch được tạo ra) – không tự mâu thuẫn với bản dịch
+    const r = fixText(before, lang, { cap, bullet: bulletOf(field), like: lang === 'en' && like ? String(like) : null })
     if (r.text !== before || r.flags.length) out.push({ key, kind, id, label, field, fieldLabel, lang, cap, before, after: r.text, fixes: r.fixes, flags: r.flags })
   }
-  for (const e of d.entries) if (e.status !== 'rejected') for (const [f, fl, lang, cap] of ENTRY_FIELDS) run('entry', e.id, `${e.code} · ${e.name_vn}`, f, fl, lang, cap, (e as any)[f])
+  for (const e of d.entries) if (e.status !== 'rejected') for (const [f, fl, lang, cap] of ENTRY_FIELDS) run('entry', e.id, `${e.code} · ${e.name_vn}`, f, fl, lang, cap, (e as any)[f], f.endsWith('_en') ? (e as any)[f.replace(/_en$/, '_vn')] : null)
   for (const r of d.rooms) { run('room', r.id, `${r.code}`, 'name_vn', 'Tên phòng (VN)', 'vi', true, r.name_vn); run('room', r.id, `${r.code}`, 'name_en', 'Room name (EN)', 'en', true, r.name_en) }
   return out
 }
