@@ -20,7 +20,8 @@ export default function EnFill({ d, lang }: { d: ProjectData; lang: Lang }) {
   const all = useMemo(() => (canEdit ? planFill(d, false, times) : []), [d.entries, d.rooms, canEdit, times])
   // tự động (kể cả khi đang xem tiếng Việt): ô EN còn TRỐNG + ô EN do phần mềm dịch mà tiếng Việt vừa được sửa (EN chưa ai sửa tay)
   // → sửa tiếng Việt xong là tiếng Anh tự dịch lại theo, không phải nhớ bấm “Dịch lại”
-  const plan = useMemo(() => all.filter(i => i.prevEn == null ? lang !== 'vn' : i.safe), [all, lang])
+  // việc tự đồng bộ (VN đổi → EN dịch lại, VN xoá → EN xoá, EN trống → dịch) nay chạy chung ở useProject cho MỌI màn hình; ở đây chỉ còn phần chờ người bấm
+  const plan = useMemo(() => all.filter(i => !i.safe && i.prevEn == null && lang !== 'vn'), [all, lang])
   const changed = useMemo(() => all.filter(i => i.prevEn != null && !i.safe), [all]) // ô VN đã đổi so với lần dịch trước (hoặc EN còn lẫn tiếng Việt) → chờ người dùng bấm
   const planSig = plan.map(i => i.key).join(',')
   useEffect(() => {

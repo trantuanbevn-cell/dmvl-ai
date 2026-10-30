@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase, signedUrls } from './supabase'
 import { toast } from './toast'
 import { syncSymbols } from './symSync'
+import { syncEnglish, loadChangeTimes, type ChangeTimes } from './translateEn'
+import { useAuth } from './auth'
 import type { Project, Room, Page, Entry, Occurrence, Warning, FloorPlan, ProjectRule } from './types'
 
 export type ProjectData = {
@@ -15,6 +17,9 @@ export type ProjectData = {
 export function useProject(id: string): ProjectData {
   const [s, setS] = useState<Omit<ProjectData, 'reload' | 'latest'>>({ project: null, rooms: [], pages: [], entries: [], occ: [], warnings: [], floors: [], rules: [], urls: {}, loading: true })
   const latestRef = useRef<Omit<ProjectData, 'reload' | 'latest'> | null>(null)
+  const { canEdit } = useAuth()
+  const editRef = useRef(canEdit); editRef.current = canEdit
+  const enRef = useRef<{ busy: boolean; times?: ChangeTimes; at: number }>({ busy: false, at: 0 })
   const reload = useCallback(async () => {
     const [p, r, pg, e, w, fl, ru] = await Promise.all([
       supabase.from('projects').select('*').eq('id', id).single(),
@@ -49,6 +54,19 @@ export function useProject(id: string): ProjectData {
     latestRef.current = next; setS(next)
     // ký hiệu vật liệu vừa nhảy số → đổi theo mọi chỗ nhắc ký hiệu trong nội dung chữ (lỗi quyền = người chỉ xem: bỏ qua)
     syncSymbols(next.project, entries).then(n => { if (n) toast(`Đã cập nhật ${n} chỗ nhắc ký hiệu vật liệu theo số mới`, 'ok') }).catch(() => {})
+    // SONG NGỮ (ở mọi màn hình, không cần mở bảng tiếng Anh): VN đổi → EN dịch lại, VN trống → EN xoá theo
+    const en = enRef.current
+    if (editRef.current && !en.busy && next.project) {
+      en.busy = true
+      ;(async () => {
+        try {
+          if (!en.times || Date.now() - en.at > 10 * 60_000) { en.times = await loadChangeTimes(id); en.at = Date.now() }
+          const { done, failed } = await syncEnglish({ ...next, reload, latest: () => next } as ProjectData, () => {}, false, 'safe', en.times)
+          if (done) toast(`Đã đồng bộ ${done} ô tiếng Anh theo tiếng Việt`, 'ok')
+          if (failed) toast(`Còn ${failed} ô tiếng Anh chưa dịch được (AI đang bận) – sẽ thử lại lần tải sau`)
+        } catch { /* lần tải sau thử lại */ } finally { en.busy = false }
+      })()
+    }
   }, [id])
   useEffect(() => { reload() }, [reload])
   // Đồng bộ trực tiếp: ai sửa gì, mọi người thấy ngay (gộp nhiều thay đổi liên tiếp thành 1 lần tải lại)
