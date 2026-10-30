@@ -4,9 +4,18 @@ import { applySpell, confirmNotError, planPropagate, type SpellItem } from '../l
 import { addUserWord } from '../lib/spell'
 import { toast } from '../lib/toast'
 import { MarkedBefore } from './MarkedText'
+import type { ErrHl } from './ErrHighlight'
+/** Đoạn cần tô đỏ trong ô: từ nghi sai, hoặc đoạn đầu tiên khác giữa bản gốc và bản sửa */
+function spellSnippet(i: SpellItem): string | null {
+  const w = i.flags.map(f => f.word).find(x => !x.startsWith('⚠')); if (w) return w
+  const a = i.before, b = i.after; let p = 0; while (p < a.length && p < b.length && a[p] === b[p]) p++
+  let q = 0; while (q < a.length - p && q < b.length - p && a[a.length - 1 - q] === b[b.length - 1 - q]) q++
+  const s = Math.max(0, a.lastIndexOf('\n', p - 1) + 1), e0 = a.indexOf('\n', a.length - q); const seg = a.slice(s, e0 < 0 ? a.length : e0)
+  return seg.trim() ? seg : null   // cả dòng có chỗ sai (dấu cách thừa, thiếu gạch đầu dòng…)
+}
 
 /** Danh sách lỗi chính tả / dấu câu: xem trước → sau, sửa tay, chọn gợi ý, sửa tất cả các lỗi tự sửa được */
-export default function SpellReview({ d, items, onClose, onOpenEntry }: { d: ProjectData; items: SpellItem[]; onClose: () => void; onOpenEntry: (id: string) => void }) {
+export default function SpellReview({ d, items, onClose, onOpenEntry }: { d: ProjectData; items: SpellItem[]; onClose: () => void; onOpenEntry: (id: string, hl?: ErrHl) => void }) {
   const [edit, setEdit] = useState<Record<string, string>>({})
   const [gone, setGone] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
@@ -41,7 +50,7 @@ export default function SpellReview({ d, items, onClose, onOpenEntry }: { d: Pro
         {list.map(i => (
           <div key={i.key} className="sp-item">
             <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}><div><b>{i.label}</b> <span className="chk-tag chk-info">{i.fieldLabel}</span></div>
-              <div className="row gap">{i.kind === 'entry' && <button className="btn ghost sm" onClick={() => onOpenEntry(i.id)}>Mở & sửa</button>}<button className="btn ghost sm" title="Xác nhận đây không phải lỗi: ẩn mục này và coi các từ bị nghi là đúng – dùng lại ở bất kỳ đâu cũng không báo nữa (lưu chung cho cả nhóm)" onClick={() => skip(i)}>✓ Không phải lỗi</button></div></div>
+              <div className="row gap">{i.kind === 'entry' && <button className="btn ghost sm" onClick={() => onOpenEntry(i.id, { entryId: i.id, field: i.field, text: spellSnippet(i), why: i.flags.length ? 'Nghi sai chính tả: ' + i.flags.map(f => f.word).filter(w => !w.startsWith('⚠')).join(', ') : 'Sửa thành: ' + i.after.slice(0, 120) })}>Mở & sửa</button>}<button className="btn ghost sm" title="Xác nhận đây không phải lỗi: ẩn mục này và coi các từ bị nghi là đúng – dùng lại ở bất kỳ đâu cũng không báo nữa (lưu chung cho cả nhóm)" onClick={() => skip(i)}>✓ Không phải lỗi</button></div></div>
             <MarkedBefore before={i.before} after={i.after} flags={i.flags.map(f => f.word).filter(w => !w.startsWith('⚠'))} />
             {i.after !== i.before && <div className="sp-diff small"><span className="sp-arrow">Sau khi sửa →</span><span className="sp-new">{i.after}</span></div>}
             <textarea data-lang={i.lang === 'vi' ? 'vn' : i.lang === 'en' ? 'en' : 'name'} rows={Math.min(5, Math.max(1, Math.ceil(val(i).length / 90)))} value={val(i)} onChange={e => setEdit(x => ({ ...x, [i.key]: e.target.value }))} />

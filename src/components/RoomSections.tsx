@@ -1,4 +1,5 @@
 import { bulletOf } from '../lib/spell'
+import { useErrHl, HlBackdrop } from './ErrHighlight'
 import OpRuleBadge from './OpRuleBadge'
 import OpFlagBadge from './OpFlagBadge'
 import { syncLibrary } from '../lib/matLibrary'
@@ -55,13 +56,18 @@ function Ed({ e, k, area, ph, num, w, miss }: { e: Entry; k: K; area?: boolean; 
   const fit = () => { const t = ref.current; if (!t) return; t.style.height = 'auto'; t.style.height = t.scrollHeight + 2 + 'px' }
   useLayoutEffect(fit, [v])
   useEffect(() => { const t = ref.current; if (!t || typeof ResizeObserver === 'undefined') return; let w = t.clientWidth; const ro = new ResizeObserver(() => { if (t.clientWidth !== w) { w = t.clientWidth; fit() } }); ro.observe(t); return () => ro.disconnect() }, [])
+  const hl = useErrHl(e.id, String(k))
   if (num) return <input {...common} type="number" />
-  return <textarea {...common} ref={ref} rows={area ? 2 : 1} style={{ ...(common.style ?? {}), overflow: 'hidden', resize: 'none' }} onKeyDown={area ? undefined : (x: any) => { if (x.key === 'Enter') { x.preventDefault(); x.target.blur() } }} />
+  const ta = <textarea {...common} className={[common.className, hl ? 'hl-err' : ''].filter(Boolean).join(' ') || undefined} title={hl ? (hl.why ?? 'Lỗi được chỉ ra ở đây') : common.title} ref={ref} rows={area ? 2 : 1} style={{ ...(common.style ?? {}), overflow: 'hidden', resize: 'none' }} onKeyDown={area ? undefined : (x: any) => { if (x.key === 'Enter') { x.preventDefault(); x.target.blur() } }} />
+  if (!hl) return ta
+  // ô đang có lỗi (mở từ phần kiểm lỗi): tô đỏ đúng đoạn sai ngay trong ô, vẫn sửa trực tiếp được
+  return <span className="hl-wrap">{ta}{hl.text && <HlBackdrop target={ref} value={v} hl={hl} />}{hl.why && <span className="hl-why">⚠ {hl.why}</span>}</span>
 }
 /** Ô mã vật liệu: một vật có thể có NHIỀU mã (mỗi mã một ô). Lưu trong cột product_code, mỗi mã một dòng. */
 function CodeList({ e, miss, sym }: { e: Entry; miss?: boolean; sym: string }) {
   const { canEdit } = useAuth()
   const shown = () => { const a = vlLines(e.product_code, sym); return a.length ? a : [''] }
+  const hl = useErrHl(e.id, 'product_code'), raw = (e.product_code ?? '').split('\n')
   const [rows, setRows] = useState<string[]>(shown)
   const sig = (e.product_code ?? '') + '|' + sym
   useEffect(() => setRows(shown()), [sig])   // ký hiệu bản vẽ đổi số → ô này tự đổi theo
@@ -73,7 +79,7 @@ function CodeList({ e, miss, sym }: { e: Entry; miss?: boolean; sym: string }) {
   }
   return <div className="code-list" onClick={x => x.stopPropagation()}>
     {rows.map((v, i) => <div key={i} className="row gap sm-gap" style={{ flexWrap: 'nowrap' }}>
-      <input value={v} placeholder={i === 0 ? 'Mã vật liệu' : 'Mã thêm'} data-lang="none" readOnly={!canEdit} className={miss && !v ? 'miss' : undefined} title={miss && !v ? 'Thiếu thông tin – cần điền' : undefined}
+      <input value={v} placeholder={i === 0 ? 'Mã vật liệu' : 'Mã thêm'} data-lang="none" readOnly={!canEdit} className={(hl && (!hl.text || v.trim() === hl.text.trim() || (raw[i] ?? '').trim() === hl.text.trim())) ? 'hl-err hl-code' : miss && !v ? 'miss' : undefined} title={miss && !v ? 'Thiếu thông tin – cần điền' : undefined}
         onChange={x => setRows(r => r.map((y, j) => (j === i ? x.target.value : y)))} onBlur={() => save(rows)} />
       {canEdit && rows.length > 1 && <a className="loc-x" title="Bỏ mã này" onClick={() => { const n = rows.filter((_, j) => j !== i); setRows(n); save(n) }}>✕</a>}
     </div>)}

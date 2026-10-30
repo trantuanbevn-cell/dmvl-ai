@@ -499,3 +499,13 @@ input[data-lang="en"], textarea[data-lang="en"] { font-style: italic }
 /* Đánh dấu vật liệu đã chỉnh sửa */
 .sec-table tr.chg td, .sec-table tr.chg td.c-code, .sec-table tr.chg.st-approved td.c-code { background: #fff3b0 }
 .chg-tick { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 4px; cursor: pointer; border-radius: 4px; color: #7a5a00; white-space: nowrap } .chg-tick input { width: auto !important; margin: 0 } .chg-tick.on { background: #ffe58a; font-weight: 600 }
+
+/* Lỗi chỉ ra từ phần kiểm lỗi: tô đỏ đúng đoạn sai trong ô của bảng vật liệu */
+.hl-wrap { position: relative; display: block }
+.hl-back { position: absolute; z-index: 0; overflow: hidden; white-space: pre-wrap; overflow-wrap: break-word; word-wrap: break-word; color: transparent; border-style: solid; border-color: transparent; box-sizing: border-box; pointer-events: none }
+.hl-back mark { background: #f8b4b4; color: transparent; border-radius: 2px; box-shadow: 0 0 0 1px #d93025 }
+.hl-wrap textarea { position: relative; z-index: 1; background: transparent !important }
+textarea.hl-err, input.hl-err { box-shadow: 0 0 0 2px #d93025; border-radius: 4px; animation: hl-pulse 1.2s ease-in-out 3 }
+input.hl-code { background: #fde2e1 !important; color: #b3261e; font-weight: 600 }
+.hl-why { display: block; margin-top: 3px; font-size: 11px; color: #b3261e; line-height: 1.3 }
+@keyframes hl-pulse { 50% { box-shadow: 0 0 0 5px rgba(217, 48, 37, .25) } }

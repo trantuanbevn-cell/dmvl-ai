@@ -1,3 +1,4 @@
+import { ErrHlCtx, type ErrHl } from './ErrHighlight'
 import { useEffect, useMemo, useState } from 'react'
 import { symbolMap, symbolOf } from '../lib/sections'
 import RoomSections from './RoomSections'
@@ -8,9 +9,9 @@ import type { ProjectData } from '../lib/useProject'
 import type { Lang } from '../lib/sections'
 
 /** Bảng vật liệu phóng to ở giữa màn hình: đúng một dòng của "Theo vật liệu" (đủ thông tin, ảnh phối cảnh, vị trí các phòng) – để đối chiếu trực quan vị trí khoanh với vật liệu */
-export default function MaterialPopup({ d, entryId, lang: l0, onClose, onDetail, actions, focusOcc }: { d: ProjectData; entryId: string; lang: Lang; onClose: () => void; onDetail: (id: string) => void; actions?: React.ReactNode; focusOcc?: string }) {
+export default function MaterialPopup({ d, entryId, lang: l0, onClose, onDetail, actions, focusOcc, hl }: { d: ProjectData; entryId: string; lang: Lang; onClose: () => void; onDetail: (id: string) => void; actions?: React.ReactNode; focusOcc?: string; /** lỗi cần tô đỏ trong bảng (mở từ phần kiểm lỗi) */ hl?: ErrHl | null }) {
   const { canEdit } = useAuth()
-  const [lang, setLang] = useState<Lang>(l0)
+  const [lang, setLang] = useState<Lang>(hl?.field?.endsWith('_en') && l0 === 'vn' ? 'both' : l0)   // lỗi ở ô tiếng Anh → mở song ngữ để thấy
   const e = d.entries.find(x => x.id === entryId)
   const symMap = useMemo(() => symbolMap(d.entries), [d.entries])
   useEffect(() => { const k = (ev: KeyboardEvent) => { if (ev.key === 'Escape') onClose() }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k) }, [onClose])
@@ -32,7 +33,8 @@ export default function MaterialPopup({ d, entryId, lang: l0, onClose, onDetail,
           </div>
         </div>
         {actions}
-        <RoomSections d={d} room={null} lang={lang} filter="all" sel={null} entryId={entryId} focusOcc={focusOcc} onPick={() => {}} onDetail={onDetail} onRemove={() => {}} onAdd={() => {}} />
+        {hl && <div className="small" style={{ margin: '4px 0', color: '#b3261e' }}>🔴 Chỗ lỗi được tô đỏ trong bảng{hl.why ? ': ' + hl.why : ''}</div>}
+        <ErrHlCtx.Provider value={hl ?? null}><RoomSections d={d} room={null} lang={lang} filter="all" sel={null} entryId={entryId} focusOcc={focusOcc} onPick={() => {}} onDetail={onDetail} onRemove={() => {}} onAdd={() => {}} /></ErrHlCtx.Provider>
       </div>
     </div>
   )

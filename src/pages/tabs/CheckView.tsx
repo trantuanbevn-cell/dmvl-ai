@@ -22,6 +22,7 @@ import { saveEntry } from '../../lib/entryLink'
 import { applyFinishFix, dismissFinish } from '../../lib/finishCheck'
 import { addIgnore, addIgnores, isIgnored, pairKey, useIgnoreVersion } from '../../lib/qcIgnore'
 import { MarkedField } from '../../components/MarkedText'
+import type { ErrHl } from '../../components/ErrHighlight'
 
 function Side({ d, e, tag, onKeep, busy, label }: { d: ProjectData; e: Entry; tag: string; onKeep?: () => void; busy: boolean; label?: string }) {
   const shots = d.occ.filter(o => o.entry_id === e.id && o.bbox && o.page_id)
@@ -46,6 +47,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
   const ign = (kind: 'dup' | 'link', a: string, b: string) => isIgnored(kind, pairKey(a, b)) || isIgnored(kind, a + b) || isIgnored(kind, b + a)
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState<string | null>(null) // khoá cặp đang xem chi tiết
+  const [hl, setHl] = useState<ErrHl | null>(null)   // lỗi cần tô đỏ khi mở bảng vật liệu
   const [lang, setLang] = useState<Lang>('vn')
   const [sel, setSel] = useState<string | null>(null)   // mở bảng vật liệu (như tab Theo vật liệu)
   const [det, setDet] = useState<string | null>(null)   // khung chỉnh chi tiết (EntryPanel)
@@ -215,7 +217,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
                   <td>{f.message}{e && f.field && f.current_text && (e as any)[f.field] ? <MarkedField value={String((e as any)[f.field])} snippet={f.current_text} /> : f.current_text ? <div className="muted">“{f.current_text}”</div> : null}{f.suggestion ? <div className="small">→ <b>{f.suggestion}</b></div> : null}{f.related?.length ? <div className="muted">Liên quan: {f.related.join(', ')}</div> : null}</td>
                   <td className="row gap sm-gap" style={{ flexWrap: 'wrap' }}>
                     {canEdit && canApply && <button className="btn sm primary" onClick={() => applyFind(f)}>✓ Áp dụng</button>}
-                    {e && <button className="btn sm" onClick={() => setSel(e.id)}>Mở & sửa</button>}
+                    {e && <button className="btn sm" onClick={() => { setHl(f.field ? { entryId: e.id, field: f.field, text: f.current_text, why: f.message } : null); setSel(e.id) }}>Mở & sửa</button>}
                     {canEdit && <button className="btn sm" title="Đã tự sửa/đã xử lý xong" onClick={() => doFind(f, 'accepted')}>Đã xử lý</button>}
                     {canEdit && <button className="btn ghost sm" title="AI nhận định sai" onClick={() => doFind(f, 'dismissed')}>AI sai – bỏ</button>}
                   </td>
@@ -223,7 +225,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
             </table></div>}
           </div>
         </div>)}
-      {modal === 'spell' && <SpellReview d={d} items={spellItems} onClose={() => { setModal(null); setTick(t => t + 1) }} onOpenEntry={setSel} />}
+      {modal === 'spell' && <SpellReview d={d} items={spellItems} onClose={() => { setModal(null); setTick(t => t + 1) }} onOpenEntry={(id, h) => { setHl(h ?? null); setSel(id) }} />}
       {lpair && (
         <div className="modal-bg center" onMouseDown={() => setLopen(null)}>
           <div className="modal dup-modal" onMouseDown={e => e.stopPropagation()}>
@@ -253,7 +255,7 @@ export default function CheckView({ d }: { d: ProjectData }) {
             </div>
           </div>
         </div>)}
-      {sel && d.entries.some(e => e.id === sel) && <MaterialPopup d={d} entryId={sel} lang="vn" onClose={() => setSel(null)} onDetail={id => { setSel(null); setDet(id) }} />}
+      {sel && d.entries.some(e => e.id === sel) && <MaterialPopup d={d} entryId={sel} lang="vn" hl={hl && hl.entryId === sel ? hl : null} onClose={() => { setSel(null); setHl(null) }} onDetail={id => { setSel(null); setDet(id) }} />}
       {selEntry && <div className="drawer-bg" onMouseDown={() => setDet(null)}><div className="drawer" onMouseDown={e => e.stopPropagation()}><EntryPanel d={d} entry={selEntry} issues={issues.find(r => r.e.id === selEntry.id)?.issues} onClose={() => setDet(null)} /></div></div>}
     </div>
   )
